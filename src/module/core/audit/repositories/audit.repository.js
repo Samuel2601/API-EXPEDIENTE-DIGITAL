@@ -1,6 +1,6 @@
 import mongoose, { Types } from "mongoose";
 import mongoosePaginate from "mongoose-paginate-v2";
-import { Audit } from "../../models/AuditSchema.js";
+import { Audit } from "../models/audit.scheme.js";
 
 Audit.schema.plugin(mongoosePaginate);
 

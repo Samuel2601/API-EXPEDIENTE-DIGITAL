@@ -3,7 +3,7 @@
 // Con capacidades avanzadas de agregación y búsquedas complejas
 // =============================================================================
 import { Types } from "mongoose";
-import { AuditRepository } from "../../../security/audit/repositories/audit.repository.js";
+import { AuditRepository } from "../../audit/repositories/audit.repository.js";
 
 export class BaseRepository {
   constructor(model) {

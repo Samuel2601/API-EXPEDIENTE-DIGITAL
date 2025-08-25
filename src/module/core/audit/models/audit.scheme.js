@@ -1,8 +1,9 @@
 "use strict";
 
 import mongoose from "mongoose";
-import { stripMetaFields } from "../../../utils/MetaField.js";
+
 import mongoosePaginate from "mongoose-paginate-v2";
+import { stripMetaFields } from "../../../../../utils/meta-field";
 
 const { Schema } = mongoose;
 
