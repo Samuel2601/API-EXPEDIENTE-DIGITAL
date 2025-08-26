@@ -9,8 +9,6 @@ import { ACCESS_LEVELS, SYSTEM_ACTIONS } from "../models/module-permission.schem
 export class ModulePermissionController {
   constructor() {
     this.service = ModulePermissionService;
-    this.modulePermissionName = 'ModuleExpDigital';
-    this.modulePermissionMethod = 'GET';
   }
 
 

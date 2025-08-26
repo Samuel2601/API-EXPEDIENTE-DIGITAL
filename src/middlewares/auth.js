@@ -11,17 +11,21 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+
+
   // ===== MIDDLEWARE DE VERIFICACIÓN DE MÓDULO =====
 
   /**
    * Middleware para verificar acceso al módulo
    */
-  verifyModuleAccess = async (req, res, next) => {
+export const verifyModuleAccess = async (req, res, next) => {
+        const modulePermissionName = 'ModuleExpDigital';
+    const modulePermissionMethod = 'GET';
     try {
       // Primero autenticar al usuario
       await auth(req, res, async () => {
         // Luego verificar permisos del módulo
-        await permissUser(this.modulePermissionName, this.modulePermissionMethod)(req, res, next);
+        await permissUser(modulePermissionName, modulePermissionMethod)(req, res, next);
       });
     } catch (error) {
       console.error("Error en verificación de módulo:", error);
