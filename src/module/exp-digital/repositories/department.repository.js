@@ -25,8 +25,10 @@ export class DepartmentRepository extends BaseRepository {
         foreignField: "_id",
         as: "parentInfo",
         pipeline: [
-          { $project: { code: 1, name: 1, shortName: 1, level: 1, isActive: 1 } }
-        ]
+          {
+            $project: { code: 1, name: 1, shortName: 1, level: 1, isActive: 1 },
+          },
+        ],
       },
       children: {
         from: "departments",
@@ -35,10 +37,18 @@ export class DepartmentRepository extends BaseRepository {
         as: "childrenInfo",
         pipeline: [
           { $match: { isActive: true } },
-          { $project: { code: 1, name: 1, shortName: 1, level: 1, displayOrder: 1 } },
-          { $sort: { displayOrder: 1, name: 1 } }
-        ]
-      }
+          {
+            $project: {
+              code: 1,
+              name: 1,
+              shortName: 1,
+              level: 1,
+              displayOrder: 1,
+            },
+          },
+          { $sort: { displayOrder: 1, name: 1 } },
+        ],
+      },
     };
   }
 
@@ -49,12 +59,15 @@ export class DepartmentRepository extends BaseRepository {
    */
   async findByCode(code) {
     try {
-      const department = await this.model.findOne({ 
-        code: code.toUpperCase(),
-        isActive: true
-      }).populate([
-        { path: 'parentDepartment', select: 'code name shortName level' }
-      ]).lean();
+      const department = await this.model
+        .findOne({
+          code: code.toUpperCase(),
+          isActive: true,
+        })
+        .populate([
+          { path: "parentDepartment", select: "code name shortName level" },
+        ])
+        .lean();
 
       if (!department) {
         throw new Error(`Departamento con código ${code} no encontrado`);
@@ -75,8 +88,8 @@ export class DepartmentRepository extends BaseRepository {
     const baseQuery = {
       $or: [
         { parentDepartment: null },
-        { parentDepartment: { $exists: false } }
-      ]
+        { parentDepartment: { $exists: false } },
+      ],
     };
 
     const lookups = [];
@@ -86,12 +99,12 @@ export class DepartmentRepository extends BaseRepository {
 
     return await this.searchWithAggregation({
       filters: baseQuery,
-      options: { 
-        page, 
-        limit, 
-        sort: { displayOrder: 1, name: 1 } 
+      options: {
+        page,
+        limit,
+        sort: { displayOrder: 1, name: 1 },
       },
-      lookups
+      lookups,
     });
   }
 
@@ -99,10 +112,15 @@ export class DepartmentRepository extends BaseRepository {
    * Buscar departamentos por nivel jerárquico
    */
   async findByLevel(level, options = {}) {
-    const { page = 1, limit = 50, includeChildren = false, includeParent = false } = options;
+    const {
+      page = 1,
+      limit = 50,
+      includeChildren = false,
+      includeParent = false,
+    } = options;
 
     if (level < 0 || level > 10) {
-      throw new Error('El nivel debe estar entre 0 y 10');
+      throw new Error("El nivel debe estar entre 0 y 10");
     }
 
     const lookups = [];
@@ -111,12 +129,12 @@ export class DepartmentRepository extends BaseRepository {
 
     return await this.searchWithAggregation({
       filters: { level },
-      options: { 
-        page, 
-        limit, 
-        sort: { displayOrder: 1, name: 1 } 
+      options: {
+        page,
+        limit,
+        sort: { displayOrder: 1, name: 1 },
       },
-      lookups
+      lookups,
     });
   }
 
@@ -133,12 +151,12 @@ export class DepartmentRepository extends BaseRepository {
 
     return await this.searchWithAggregation({
       filters: baseQuery,
-      options: { 
-        page, 
-        limit, 
-        sort: { displayOrder: 1, name: 1 } 
+      options: {
+        page,
+        limit,
+        sort: { displayOrder: 1, name: 1 },
       },
-      lookups: [this.departmentLookups.children]
+      lookups: [this.departmentLookups.children],
     });
   }
 
@@ -148,26 +166,26 @@ export class DepartmentRepository extends BaseRepository {
   async getAllDescendants(parentId, maxDepth = 10) {
     try {
       if (!Types.ObjectId.isValid(parentId)) {
-        throw new Error('ID de departamento no válido');
+        throw new Error("ID de departamento no válido");
       }
 
       const pipeline = [
         {
           $match: {
             _id: new Types.ObjectId(parentId),
-            isActive: true
-          }
+            isActive: true,
+          },
         },
         {
           $graphLookup: {
-            from: 'departments',
-            startWith: '$_id',
-            connectFromField: '_id',
-            connectToField: 'parentDepartment',
-            as: 'descendants',
+            from: "departments",
+            startWith: "$_id",
+            connectFromField: "_id",
+            connectToField: "parentDepartment",
+            as: "descendants",
             maxDepth: maxDepth - 1,
-            restrictSearchWithMatch: { isActive: true }
-          }
+            restrictSearchWithMatch: { isActive: true },
+          },
         },
         {
           $project: {
@@ -178,25 +196,24 @@ export class DepartmentRepository extends BaseRepository {
             level: 1,
             descendants: {
               $map: {
-                input: '$descendants',
-                as: 'desc',
+                input: "$descendants",
+                as: "desc",
                 in: {
-                  _id: '$$desc._id',
-                  code: '$$desc.code',
-                  name: '$$desc.name',
-                  shortName: '$$desc.shortName',
-                  level: '$$desc.level',
-                  parentDepartment: '$$desc.parentDepartment'
-                }
-              }
-            }
-          }
-        }
+                  _id: "$$desc._id",
+                  code: "$$desc.code",
+                  name: "$$desc.name",
+                  shortName: "$$desc.shortName",
+                  level: "$$desc.level",
+                  parentDepartment: "$$desc.parentDepartment",
+                },
+              },
+            },
+          },
+        },
       ];
 
       const result = await this.model.aggregate(pipeline);
       return result[0] || null;
-
     } catch (error) {
       throw new Error(`Error obteniendo descendientes: ${error.message}`);
     }
@@ -208,25 +225,25 @@ export class DepartmentRepository extends BaseRepository {
   async getAncestors(departmentId) {
     try {
       if (!Types.ObjectId.isValid(departmentId)) {
-        throw new Error('ID de departamento no válido');
+        throw new Error("ID de departamento no válido");
       }
 
       const pipeline = [
         {
           $match: {
             _id: new Types.ObjectId(departmentId),
-            isActive: true
-          }
+            isActive: true,
+          },
         },
         {
           $graphLookup: {
-            from: 'departments',
-            startWith: '$parentDepartment',
-            connectFromField: 'parentDepartment',
-            connectToField: '_id',
-            as: 'ancestors',
-            restrictSearchWithMatch: { isActive: true }
-          }
+            from: "departments",
+            startWith: "$parentDepartment",
+            connectFromField: "parentDepartment",
+            connectToField: "_id",
+            as: "ancestors",
+            restrictSearchWithMatch: { isActive: true },
+          },
         },
         {
           $project: {
@@ -238,25 +255,24 @@ export class DepartmentRepository extends BaseRepository {
             parentDepartment: 1,
             ancestors: {
               $map: {
-                input: '$ancestors',
-                as: 'anc',
+                input: "$ancestors",
+                as: "anc",
                 in: {
-                  _id: '$$anc._id',
-                  code: '$$anc.code',
-                  name: '$$anc.name',
-                  shortName: '$$anc.shortName',
-                  level: '$$anc.level',
-                  parentDepartment: '$$anc.parentDepartment'
-                }
-              }
-            }
-          }
-        }
+                  _id: "$$anc._id",
+                  code: "$$anc.code",
+                  name: "$$anc.name",
+                  shortName: "$$anc.shortName",
+                  level: "$$anc.level",
+                  parentDepartment: "$$anc.parentDepartment",
+                },
+              },
+            },
+          },
+        },
       ];
 
       const result = await this.model.aggregate(pipeline);
       return result[0] || null;
-
     } catch (error) {
       throw new Error(`Error obteniendo ancestros: ${error.message}`);
     }
@@ -275,29 +291,28 @@ export class DepartmentRepository extends BaseRepository {
         { $match: matchStage },
         {
           $lookup: {
-            from: 'departments',
-            localField: 'parentDepartment',
-            foreignField: '_id',
-            as: 'parent'
-          }
+            from: "departments",
+            localField: "parentDepartment",
+            foreignField: "_id",
+            as: "parent",
+          },
         },
         {
           $addFields: {
-            isRoot: { $eq: [{ $size: '$parent' }, 0] }
-          }
+            isRoot: { $eq: [{ $size: "$parent" }, 0] },
+          },
         },
         {
           $sort: {
             level: 1,
             displayOrder: 1,
-            name: 1
-          }
-        }
+            name: 1,
+          },
+        },
       ];
 
       const departments = await this.model.aggregate(pipeline);
       return this.buildTreeStructure(departments, maxDepth);
-
     } catch (error) {
       throw new Error(`Error construyendo árbol: ${error.message}`);
     }
@@ -311,15 +326,15 @@ export class DepartmentRepository extends BaseRepository {
     const tree = [];
 
     // Crear mapa de departamentos
-    departments.forEach(dept => {
+    departments.forEach((dept) => {
       departmentMap.set(dept._id.toString(), {
         ...dept,
-        children: []
+        children: [],
       });
     });
 
     // Construir relaciones padre-hijo
-    departments.forEach(dept => {
+    departments.forEach((dept) => {
       if (dept.parentDepartment) {
         const parent = departmentMap.get(dept.parentDepartment.toString());
         if (parent && dept.level <= maxDepth) {
@@ -343,17 +358,17 @@ export class DepartmentRepository extends BaseRepository {
     const { page = 1, limit = 50 } = options;
 
     const filters = {
-      'budgetConfig.canApproveContracts': true,
-      'budgetConfig.maxApprovalAmount': { $gte: minAmount }
+      "budgetConfig.canApproveContracts": true,
+      "budgetConfig.maxApprovalAmount": { $gte: minAmount },
     };
 
     return await this.searchWithAggregation({
       filters,
-      options: { 
-        page, 
-        limit, 
-        sort: { 'budgetConfig.maxApprovalAmount': -1 } 
-      }
+      options: {
+        page,
+        limit,
+        sort: { "budgetConfig.maxApprovalAmount": -1 },
+      },
     });
   }
 
@@ -364,16 +379,16 @@ export class DepartmentRepository extends BaseRepository {
     const { page = 1, limit = 50 } = options;
 
     const filters = {
-      'budgetConfig.canApproveContracts': true,
-      'budgetConfig.maxApprovalAmount': {
+      "budgetConfig.canApproveContracts": true,
+      "budgetConfig.maxApprovalAmount": {
         $gte: minAmount,
-        $lte: maxAmount
-      }
+        $lte: maxAmount,
+      },
     };
 
     return await this.searchWithAggregation({
       filters,
-      options: { page, limit, sort: { 'budgetConfig.maxApprovalAmount': -1 } }
+      options: { page, limit, sort: { "budgetConfig.maxApprovalAmount": -1 } },
     });
   }
 
@@ -385,23 +400,22 @@ export class DepartmentRepository extends BaseRepository {
 
     try {
       const query = {
-        'budgetConfig.canApproveContracts': true,
-        'budgetConfig.maxApprovalAmount': { $gte: amount },
-        isActive: true
+        "budgetConfig.canApproveContracts": true,
+        "budgetConfig.maxApprovalAmount": { $gte: amount },
+        isActive: true,
       };
 
-      const sortOrder = preferHigherLevel ? 
-        { level: 1, 'budgetConfig.maxApprovalAmount': 1 } : 
-        { 'budgetConfig.maxApprovalAmount': 1, level: 1 };
+      const sortOrder = preferHigherLevel
+        ? { level: 1, "budgetConfig.maxApprovalAmount": 1 }
+        : { "budgetConfig.maxApprovalAmount": 1, level: 1 };
 
       const department = await this.model
         .findOne(query)
         .sort(sortOrder)
-        .populate('parentDepartment', 'code name level')
+        .populate("parentDepartment", "code name level")
         .lean();
 
       return department;
-
     } catch (error) {
       throw new Error(`Error buscando aprobador: ${error.message}`);
     }
@@ -426,7 +440,7 @@ export class DepartmentRepository extends BaseRepository {
         responsibleName,
         responsibleEmail,
         tags,
-        textSearch
+        textSearch,
       } = searchParams;
 
       const {
@@ -434,22 +448,22 @@ export class DepartmentRepository extends BaseRepository {
         limit = 20,
         sort = { displayOrder: 1, name: 1 },
         includeInactive = false,
-        includeHierarchy = false
+        includeHierarchy = false,
       } = options;
 
       // Construir filtros
       const filters = {};
-      
+
       if (!includeInactive) {
         filters.isActive = true;
       }
 
       if (code) {
-        filters.code = { $regex: code, $options: 'i' };
+        filters.code = { $regex: code, $options: "i" };
       }
 
       if (name) {
-        filters.name = { $regex: name, $options: 'i' };
+        filters.name = { $regex: name, $options: "i" };
       }
 
       if (level !== undefined) {
@@ -461,32 +475,38 @@ export class DepartmentRepository extends BaseRepository {
       }
 
       if (hasOwnBudget !== undefined) {
-        filters['budgetConfig.hasOwnBudget'] = hasOwnBudget;
+        filters["budgetConfig.hasOwnBudget"] = hasOwnBudget;
       }
 
       if (canApprove !== undefined) {
-        filters['budgetConfig.canApproveContracts'] = canApprove;
+        filters["budgetConfig.canApproveContracts"] = canApprove;
       }
 
       if (minApprovalAmount !== undefined) {
-        filters['budgetConfig.maxApprovalAmount'] = { 
-          $gte: minApprovalAmount 
+        filters["budgetConfig.maxApprovalAmount"] = {
+          $gte: minApprovalAmount,
         };
       }
 
       if (maxApprovalAmount !== undefined) {
-        filters['budgetConfig.maxApprovalAmount'] = {
-          ...filters['budgetConfig.maxApprovalAmount'],
-          $lte: maxApprovalAmount
+        filters["budgetConfig.maxApprovalAmount"] = {
+          ...filters["budgetConfig.maxApprovalAmount"],
+          $lte: maxApprovalAmount,
         };
       }
 
       if (responsibleName) {
-        filters['responsible.name'] = { $regex: responsibleName, $options: 'i' };
+        filters["responsible.name"] = {
+          $regex: responsibleName,
+          $options: "i",
+        };
       }
 
       if (responsibleEmail) {
-        filters['responsible.email'] = { $regex: responsibleEmail, $options: 'i' };
+        filters["responsible.email"] = {
+          $regex: responsibleEmail,
+          $options: "i",
+        };
       }
 
       if (tags && Array.isArray(tags) && tags.length > 0) {
@@ -506,14 +526,14 @@ export class DepartmentRepository extends BaseRepository {
         customPipeline.push({
           $match: {
             $or: [
-              { code: { $regex: textSearch, $options: 'i' } },
-              { name: { $regex: textSearch, $options: 'i' } },
-              { shortName: { $regex: textSearch, $options: 'i' } },
-              { description: { $regex: textSearch, $options: 'i' } },
-              { 'responsible.name': { $regex: textSearch, $options: 'i' } },
-              { 'contact.address': { $regex: textSearch, $options: 'i' } }
-            ]
-          }
+              { code: { $regex: textSearch, $options: "i" } },
+              { name: { $regex: textSearch, $options: "i" } },
+              { shortName: { $regex: textSearch, $options: "i" } },
+              { description: { $regex: textSearch, $options: "i" } },
+              { "responsible.name": { $regex: textSearch, $options: "i" } },
+              { "contact.address": { $regex: textSearch, $options: "i" } },
+            ],
+          },
         });
       }
 
@@ -521,9 +541,8 @@ export class DepartmentRepository extends BaseRepository {
         filters,
         options: { page, limit, sort },
         lookups,
-        customPipeline
+        customPipeline,
       });
-
     } catch (error) {
       throw new Error(`Error en búsqueda avanzada: ${error.message}`);
     }
@@ -543,23 +562,22 @@ export class DepartmentRepository extends BaseRepository {
             _id: null,
             totalDepartments: { $sum: 1 },
             departmentsByLevel: {
-              $push: '$level'
+              $push: "$level",
             },
             withOwnBudget: {
-              $sum: { $cond: ['$budgetConfig.hasOwnBudget', 1, 0] }
+              $sum: { $cond: ["$budgetConfig.hasOwnBudget", 1, 0] },
             },
             canApproveContracts: {
-              $sum: { $cond: ['$budgetConfig.canApproveContracts', 1, 0] }
+              $sum: { $cond: ["$budgetConfig.canApproveContracts", 1, 0] },
             },
-            maxApprovalAmount: { $max: '$budgetConfig.maxApprovalAmount' },
-            avgApprovalAmount: { $avg: '$budgetConfig.maxApprovalAmount' }
-          }
-        }
+            maxApprovalAmount: { $max: "$budgetConfig.maxApprovalAmount" },
+            avgApprovalAmount: { $avg: "$budgetConfig.maxApprovalAmount" },
+          },
+        },
       ];
 
       const result = await this.model.aggregate(pipeline);
       return result[0] || {};
-
     } catch (error) {
       throw new Error(`Error obteniendo estadísticas: ${error.message}`);
     }
@@ -574,23 +592,22 @@ export class DepartmentRepository extends BaseRepository {
         { $match: { isActive: true } },
         {
           $group: {
-            _id: '$level',
+            _id: "$level",
             count: { $sum: 1 },
             withBudget: {
-              $sum: { $cond: ['$budgetConfig.hasOwnBudget', 1, 0] }
+              $sum: { $cond: ["$budgetConfig.hasOwnBudget", 1, 0] },
             },
             canApprove: {
-              $sum: { $cond: ['$budgetConfig.canApproveContracts', 1, 0] }
+              $sum: { $cond: ["$budgetConfig.canApproveContracts", 1, 0] },
             },
-            avgApprovalAmount: { $avg: '$budgetConfig.maxApprovalAmount' },
-            maxApprovalAmount: { $max: '$budgetConfig.maxApprovalAmount' }
-          }
+            avgApprovalAmount: { $avg: "$budgetConfig.maxApprovalAmount" },
+            maxApprovalAmount: { $max: "$budgetConfig.maxApprovalAmount" },
+          },
         },
-        { $sort: { _id: 1 } }
+        { $sort: { _id: 1 } },
       ];
 
       return await this.model.aggregate(pipeline);
-
     } catch (error) {
       throw new Error(`Error en estadísticas por nivel: ${error.message}`);
     }
@@ -605,16 +622,16 @@ export class DepartmentRepository extends BaseRepository {
         {
           $match: {
             isActive: true,
-            'budgetConfig.canApproveContracts': true
-          }
+            "budgetConfig.canApproveContracts": true,
+          },
         },
         {
           $lookup: {
-            from: 'departments',
-            localField: 'parentDepartment',
-            foreignField: '_id',
-            as: 'parent'
-          }
+            from: "departments",
+            localField: "parentDepartment",
+            foreignField: "_id",
+            as: "parent",
+          },
         },
         {
           $project: {
@@ -622,21 +639,20 @@ export class DepartmentRepository extends BaseRepository {
             name: 1,
             shortName: 1,
             level: 1,
-            'budgetConfig.maxApprovalAmount': 1,
-            parentName: { $arrayElemAt: ['$parent.name', 0] },
-            parentCode: { $arrayElemAt: ['$parent.code', 0] }
-          }
+            "budgetConfig.maxApprovalAmount": 1,
+            parentName: { $arrayElemAt: ["$parent.name", 0] },
+            parentCode: { $arrayElemAt: ["$parent.code", 0] },
+          },
         },
         {
           $sort: {
             level: 1,
-            'budgetConfig.maxApprovalAmount': -1
-          }
-        }
+            "budgetConfig.maxApprovalAmount": -1,
+          },
+        },
       ];
 
       return await this.model.aggregate(pipeline);
-
     } catch (error) {
       throw new Error(`Error obteniendo mapa de aprobación: ${error.message}`);
     }
@@ -649,9 +665,9 @@ export class DepartmentRepository extends BaseRepository {
    */
   async isCodeAvailable(code, excludeId = null) {
     try {
-      const query = { 
+      const query = {
         code: code.toUpperCase(),
-        isActive: true
+        isActive: true,
       };
 
       if (excludeId) {
@@ -660,7 +676,6 @@ export class DepartmentRepository extends BaseRepository {
 
       const existingDepartment = await this.model.findOne(query);
       return !existingDepartment;
-
     } catch (error) {
       throw new Error(`Error verificando código: ${error.message}`);
     }
@@ -679,14 +694,15 @@ export class DepartmentRepository extends BaseRepository {
 
       // Verificar que el departamento propuesto como padre no sea descendiente
       const descendants = await this.getAllDescendants(departmentId);
-      
+
       if (descendants && descendants.descendants) {
-        const descendantIds = descendants.descendants.map(d => d._id.toString());
+        const descendantIds = descendants.descendants.map((d) =>
+          d._id.toString()
+        );
         return !descendantIds.includes(proposedParentId.toString());
       }
 
       return true;
-
     } catch (error) {
       throw new Error(`Error validando jerarquía: ${error.message}`);
     }
@@ -701,7 +717,6 @@ export class DepartmentRepository extends BaseRepository {
 
       const parent = await this.findById(parentDepartmentId);
       return parent.level + 1;
-
     } catch (error) {
       throw new Error(`Error calculando nivel: ${error.message}`);
     }
@@ -716,13 +731,16 @@ export class DepartmentRepository extends BaseRepository {
       const descendants = await this.getAllDescendants(departmentId);
 
       if (descendants && descendants.descendants) {
-        const updates = descendants.descendants.map(desc => {
-          const newLevel = this.calculateLevelFromPath(desc, descendants.descendants);
+        const updates = descendants.descendants.map((desc) => {
+          const newLevel = this.calculateLevelFromPath(
+            desc,
+            descendants.descendants
+          );
           return {
             updateOne: {
               filter: { _id: desc._id },
-              update: { $set: { level: newLevel } }
-            }
+              update: { $set: { level: newLevel } },
+            },
           };
         });
 
@@ -730,7 +748,6 @@ export class DepartmentRepository extends BaseRepository {
           await this.model.bulkWrite(updates);
         }
       }
-
     } catch (error) {
       throw new Error(`Error actualizando niveles: ${error.message}`);
     }
@@ -744,10 +761,10 @@ export class DepartmentRepository extends BaseRepository {
     let current = department;
 
     while (current.parentDepartment) {
-      const parent = allDescendants.find(d => 
-        d._id.toString() === current.parentDepartment.toString()
+      const parent = allDescendants.find(
+        (d) => d._id.toString() === current.parentDepartment.toString()
       );
-      
+
       if (parent) {
         level++;
         current = parent;
@@ -767,13 +784,12 @@ export class DepartmentRepository extends BaseRepository {
       const updates = departmentIds.map((id, index) => ({
         updateOne: {
           filter: { _id: new Types.ObjectId(id) },
-          update: { $set: { displayOrder: startOrder + index } }
-        }
+          update: { $set: { displayOrder: startOrder + index } },
+        },
       }));
 
       await this.model.bulkWrite(updates);
       return true;
-
     } catch (error) {
       throw new Error(`Error reordenando departamentos: ${error.message}`);
     }
@@ -785,14 +801,16 @@ export class DepartmentRepository extends BaseRepository {
   async getBreadcrumb(departmentId) {
     try {
       const ancestors = await this.getAncestors(departmentId);
-      
+
       if (!ancestors) return [];
 
       const breadcrumb = [];
-      
+
       // Agregar ancestros en orden correcto (de raíz a padre)
       if (ancestors.ancestors) {
-        const sortedAncestors = ancestors.ancestors.sort((a, b) => a.level - b.level);
+        const sortedAncestors = ancestors.ancestors.sort(
+          (a, b) => a.level - b.level
+        );
         breadcrumb.push(...sortedAncestors);
       }
 
@@ -802,11 +820,10 @@ export class DepartmentRepository extends BaseRepository {
         code: ancestors.code,
         name: ancestors.name,
         shortName: ancestors.shortName,
-        level: ancestors.level
+        level: ancestors.level,
       });
 
       return breadcrumb;
-
     } catch (error) {
       throw new Error(`Error obteniendo breadcrumb: ${error.message}`);
     }

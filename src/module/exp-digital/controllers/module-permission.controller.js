@@ -4,14 +4,15 @@
 // =============================================================================
 
 import ModulePermissionService from "../services/module-permission.service.js";
-import { ACCESS_LEVELS, SYSTEM_ACTIONS } from "../models/module-permission.scheme.js";
+import {
+  ACCESS_LEVELS,
+  SYSTEM_ACTIONS,
+} from "../models/module-permission.scheme.js";
 
 export class ModulePermissionController {
   constructor() {
     this.service = ModulePermissionService;
   }
-
-
 
   // ===== CONTROLADORES PARA USER DEPARTMENT ACCESS =====
 
@@ -24,27 +25,32 @@ export class ModulePermissionController {
 
       // Validar datos requeridos
       if (!body.user || !body.department || !body.accessLevel) {
-        return res.status(400).json({ message: "Usuario, departamento y nivel de acceso son requeridos" });
+        return res.status(400).json({
+          message: "Usuario, departamento y nivel de acceso son requeridos",
+        });
       }
 
       const userData = {
         userId: user.sub,
         userName: user.name,
-        userEmail: user.email
+        userEmail: user.email,
       };
 
-      const access = await this.service.createUserDepartmentAccess(body, userData);
+      const access = await this.service.createUserDepartmentAccess(
+        body,
+        userData
+      );
 
       res.status(201).json({
         success: true,
         data: access,
-        message: "Acceso de usuario creado exitosamente"
+        message: "Acceso de usuario creado exitosamente",
       });
     } catch (error) {
       console.error("Error en controlador creando acceso:", error);
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -63,9 +69,9 @@ export class ModulePermissionController {
 
       const options = {
         status,
-        includeInactive: includeInactive === 'true',
+        includeInactive: includeInactive === "true",
         page: parseInt(page) || 1,
-        limit: parseInt(limit) || 10
+        limit: parseInt(limit) || 10,
       };
 
       const accesses = await this.service.getUserAccesses(userId, options);
@@ -73,13 +79,13 @@ export class ModulePermissionController {
       res.status(200).json({
         success: true,
         data: accesses,
-        message: "Accesos de usuario obtenidos exitosamente"
+        message: "Accesos de usuario obtenidos exitosamente",
       });
     } catch (error) {
       console.error("Error en controlador obteniendo accesos:", error);
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -100,13 +106,13 @@ export class ModulePermissionController {
       res.status(200).json({
         success: true,
         data: dashboard,
-        message: "Dashboard de permisos obtenido exitosamente"
+        message: "Dashboard de permisos obtenido exitosamente",
       });
     } catch (error) {
       console.error("Error en controlador obteniendo dashboard:", error);
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -120,7 +126,9 @@ export class ModulePermissionController {
       const { category, permission, contractId } = req.query;
 
       if (!userId || !departmentId || !category || !permission) {
-        return res.status(400).json({ message: "Parámetros requeridos faltantes" });
+        return res
+          .status(400)
+          .json({ message: "Parámetros requeridos faltantes" });
       }
 
       const result = await this.service.checkUserPermission(
@@ -134,13 +142,13 @@ export class ModulePermissionController {
       res.status(200).json({
         success: true,
         data: result,
-        message: "Verificación de permisos completada"
+        message: "Verificación de permisos completada",
       });
     } catch (error) {
       console.error("Error en controlador verificando permisos:", error);
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -156,7 +164,7 @@ export class ModulePermissionController {
       const options = {
         page: parseInt(page) || 1,
         limit: parseInt(limit) || 10,
-        sort: sort || '-createdAt'
+        sort: sort || "-createdAt",
       };
 
       const result = await this.service.searchAccesses(filters, options);
@@ -164,13 +172,13 @@ export class ModulePermissionController {
       res.status(200).json({
         success: true,
         data: result,
-        message: "Búsqueda de accesos completada exitosamente"
+        message: "Búsqueda de accesos completada exitosamente",
       });
     } catch (error) {
       console.error("Error en controlador buscando accesos:", error);
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -190,21 +198,25 @@ export class ModulePermissionController {
       const userData = {
         userId: user.sub,
         userName: user.name,
-        userEmail: user.email
+        userEmail: user.email,
       };
 
-      const updatedAccess = await this.service.updateUserAccess(id, body, userData);
+      const updatedAccess = await this.service.updateUserAccess(
+        id,
+        body,
+        userData
+      );
 
       res.status(200).json({
         success: true,
         data: updatedAccess,
-        message: "Acceso de usuario actualizado exitosamente"
+        message: "Acceso de usuario actualizado exitosamente",
       });
     } catch (error) {
       console.error("Error en controlador actualizando acceso:", error);
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -225,21 +237,25 @@ export class ModulePermissionController {
       const userData = {
         userId: user.sub,
         userName: user.name,
-        userEmail: user.email
+        userEmail: user.email,
       };
 
-      const result = await this.service.deactivateUserAccess(id, userData, reason);
+      const result = await this.service.deactivateUserAccess(
+        id,
+        userData,
+        reason
+      );
 
       res.status(200).json({
         success: true,
         data: result,
-        message: "Acceso de usuario desactivado exitosamente"
+        message: "Acceso de usuario desactivado exitosamente",
       });
     } catch (error) {
       console.error("Error en controlador desactivando acceso:", error);
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -260,21 +276,25 @@ export class ModulePermissionController {
       const userData = {
         userId: user.sub,
         userName: user.name,
-        userEmail: user.email
+        userEmail: user.email,
       };
 
-      const result = await this.service.reactivateUserAccess(id, userData, reason);
+      const result = await this.service.reactivateUserAccess(
+        id,
+        userData,
+        reason
+      );
 
       res.status(200).json({
         success: true,
         data: result,
-        message: "Acceso de usuario reactivado exitosamente"
+        message: "Acceso de usuario reactivado exitosamente",
       });
     } catch (error) {
       console.error("Error en controlador reactivando acceso:", error);
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -289,13 +309,16 @@ export class ModulePermissionController {
       const { user } = req;
 
       if (!departmentId || !fromUserId || !toUserId) {
-        return res.status(400).json({ message: "Departamento, usuario origen y usuario destino son requeridos" });
+        return res.status(400).json({
+          message:
+            "Departamento, usuario origen y usuario destino son requeridos",
+        });
       }
 
       const userData = {
         userId: user.sub,
         userName: user.name,
-        userEmail: user.email
+        userEmail: user.email,
       };
 
       const results = await this.service.transferDepartmentOwnership(
@@ -308,13 +331,13 @@ export class ModulePermissionController {
       res.status(200).json({
         success: true,
         data: results,
-        message: "Transferencia de ownership completada exitosamente"
+        message: "Transferencia de ownership completada exitosamente",
       });
     } catch (error) {
       console.error("Error en controlador transfiriendo ownership:", error);
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -329,27 +352,32 @@ export class ModulePermissionController {
       const { body, user } = req;
 
       if (!body.name || !body.defaultAccessLevel) {
-        return res.status(400).json({ message: "Nombre y nivel de acceso por defecto son requeridos" });
+        return res.status(400).json({
+          message: "Nombre y nivel de acceso por defecto son requeridos",
+        });
       }
 
       const userData = {
         userId: user.sub,
         userName: user.name,
-        userEmail: user.email
+        userEmail: user.email,
       };
 
-      const template = await this.service.createPermissionTemplate(body, userData);
+      const template = await this.service.createPermissionTemplate(
+        body,
+        userData
+      );
 
       res.status(201).json({
         success: true,
         data: template,
-        message: "Plantilla de permisos creada exitosamente"
+        message: "Plantilla de permisos creada exitosamente",
       });
     } catch (error) {
       console.error("Error en controlador creando plantilla:", error);
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -364,15 +392,15 @@ export class ModulePermissionController {
       const query = {};
       if (search) {
         query.$or = [
-          { name: { $regex: search, $options: 'i' } },
-          { description: { $regex: search, $options: 'i' } }
+          { name: { $regex: search, $options: "i" } },
+          { description: { $regex: search, $options: "i" } },
         ];
       }
 
       const options = {
         page: parseInt(page) || 1,
         limit: parseInt(limit) || 10,
-        sort: sort || '-createdAt'
+        sort: sort || "-createdAt",
       };
 
       const templates = await this.service.findTemplates(query, options);
@@ -380,13 +408,13 @@ export class ModulePermissionController {
       res.status(200).json({
         success: true,
         data: templates,
-        message: "Plantillas de permisos obtenidas exitosamente"
+        message: "Plantillas de permisos obtenidas exitosamente",
       });
     } catch (error) {
       console.error("Error en controlador buscando plantillas:", error);
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -401,21 +429,28 @@ export class ModulePermissionController {
 
       const options = {
         page: parseInt(page) || 1,
-        limit: parseInt(limit) || 10
+        limit: parseInt(limit) || 10,
       };
 
-      const templates = await this.service.getApplicableTemplates(roleId, departmentId, options);
+      const templates = await this.service.getApplicableTemplates(
+        roleId,
+        departmentId,
+        options
+      );
 
       res.status(200).json({
         success: true,
         data: templates,
-        message: "Plantillas aplicables obtenidas exitosamente"
+        message: "Plantillas aplicables obtenidas exitosamente",
       });
     } catch (error) {
-      console.error("Error en controlador obteniendo plantillas aplicables:", error);
+      console.error(
+        "Error en controlador obteniendo plantillas aplicables:",
+        error
+      );
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -430,17 +465,21 @@ export class ModulePermissionController {
       const { user } = req;
 
       if (!templateId || !userIds || !departmentId) {
-        return res.status(400).json({ message: "Template, usuarios y departamento son requeridos" });
+        return res.status(400).json({
+          message: "Template, usuarios y departamento son requeridos",
+        });
       }
 
       if (!Array.isArray(userIds) || userIds.length === 0) {
-        return res.status(400).json({ message: "Lista de usuarios debe ser un array no vacío" });
+        return res
+          .status(400)
+          .json({ message: "Lista de usuarios debe ser un array no vacío" });
       }
 
       const userData = {
         userId: user.sub,
         userName: user.name,
-        userEmail: user.email
+        userEmail: user.email,
       };
 
       const results = await this.service.applyTemplateToUsers(
@@ -453,13 +492,13 @@ export class ModulePermissionController {
       res.status(200).json({
         success: true,
         data: results,
-        message: "Plantilla aplicada a usuarios exitosamente"
+        message: "Plantilla aplicada a usuarios exitosamente",
       });
     } catch (error) {
       console.error("Error en controlador aplicando plantilla:", error);
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -480,21 +519,24 @@ export class ModulePermissionController {
 
       const options = {
         page: parseInt(page) || 1,
-        limit: parseInt(limit) || 20
+        limit: parseInt(limit) || 20,
       };
 
-      const history = await this.service.getPermissionHistory(accessId, options);
+      const history = await this.service.getPermissionHistory(
+        accessId,
+        options
+      );
 
       res.status(200).json({
         success: true,
         data: history,
-        message: "Historial de permisos obtenido exitosamente"
+        message: "Historial de permisos obtenido exitosamente",
       });
     } catch (error) {
       console.error("Error en controlador obteniendo historial:", error);
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -513,21 +555,27 @@ export class ModulePermissionController {
 
       const options = {
         page: parseInt(page) || 1,
-        limit: parseInt(limit) || 10
+        limit: parseInt(limit) || 10,
       };
 
-      const history = await this.service.getUserPermissionHistory(userId, options);
+      const history = await this.service.getUserPermissionHistory(
+        userId,
+        options
+      );
 
       res.status(200).json({
         success: true,
         data: history,
-        message: "Historial completo de permisos obtenido exitosamente"
+        message: "Historial completo de permisos obtenido exitosamente",
       });
     } catch (error) {
-      console.error("Error en controlador obteniendo historial de usuario:", error);
+      console.error(
+        "Error en controlador obteniendo historial de usuario:",
+        error
+      );
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -543,7 +591,9 @@ export class ModulePermissionController {
       const { systemAction, contractId } = req.query;
 
       if (!userId || !departmentId || !systemAction) {
-        return res.status(400).json({ message: "Usuario, departamento y acción del sistema son requeridos" });
+        return res.status(400).json({
+          message: "Usuario, departamento y acción del sistema son requeridos",
+        });
       }
 
       const result = await this.service.canPerformSystemAction(
@@ -556,13 +606,16 @@ export class ModulePermissionController {
       res.status(200).json({
         success: true,
         data: result,
-        message: "Verificación de acción del sistema completada"
+        message: "Verificación de acción del sistema completada",
       });
     } catch (error) {
-      console.error("Error en controlador verificando acción del sistema:", error);
+      console.error(
+        "Error en controlador verificando acción del sistema:",
+        error
+      );
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -575,13 +628,23 @@ export class ModulePermissionController {
       const { checks } = req.body;
 
       if (!Array.isArray(checks) || checks.length === 0) {
-        return res.status(400).json({ message: "Array de verificaciones es requerido" });
+        return res
+          .status(400)
+          .json({ message: "Array de verificaciones es requerido" });
       }
 
       // Validar estructura de cada verificación
       for (const check of checks) {
-        if (!check.userId || !check.departmentId || !check.category || !check.permission) {
-          return res.status(400).json({ message: "Cada verificación debe incluir userId, departmentId, category y permission" });
+        if (
+          !check.userId ||
+          !check.departmentId ||
+          !check.category ||
+          !check.permission
+        ) {
+          return res.status(400).json({
+            message:
+              "Cada verificación debe incluir userId, departmentId, category y permission",
+          });
         }
       }
 
@@ -590,13 +653,16 @@ export class ModulePermissionController {
       res.status(200).json({
         success: true,
         data: results,
-        message: "Verificación de permisos en lote completada"
+        message: "Verificación de permisos en lote completada",
       });
     } catch (error) {
-      console.error("Error en controlador verificando permisos en lote:", error);
+      console.error(
+        "Error en controlador verificando permisos en lote:",
+        error
+      );
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -615,13 +681,13 @@ export class ModulePermissionController {
       res.status(200).json({
         success: true,
         data: stats,
-        message: "Estadísticas de permisos obtenidas exitosamente"
+        message: "Estadísticas de permisos obtenidas exitosamente",
       });
     } catch (error) {
       console.error("Error en controlador obteniendo estadísticas:", error);
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -635,26 +701,31 @@ export class ModulePermissionController {
       const { page, limit } = req.query;
 
       if (!departmentId) {
-        return res.status(400).json({ message: "ID de departamento es requerido" });
+        return res
+          .status(400)
+          .json({ message: "ID de departamento es requerido" });
       }
 
       const options = {
         page: parseInt(page) || 1,
-        limit: parseInt(limit) || 10
+        limit: parseInt(limit) || 10,
       };
 
-      const report = await this.service.getDepartmentAccessReport(departmentId, options);
+      const report = await this.service.getDepartmentAccessReport(
+        departmentId,
+        options
+      );
 
       res.status(200).json({
         success: true,
         data: report,
-        message: "Reporte de accesos por departamento obtenido exitosamente"
+        message: "Reporte de accesos por departamento obtenido exitosamente",
       });
     } catch (error) {
       console.error("Error en controlador generando reporte:", error);
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -668,12 +739,14 @@ export class ModulePermissionController {
       const { accessLevel, page, limit } = req.query;
 
       if (!departmentId) {
-        return res.status(400).json({ message: "ID de departamento es requerido" });
+        return res
+          .status(400)
+          .json({ message: "ID de departamento es requerido" });
       }
 
       const options = {
         page: parseInt(page) || 1,
-        limit: parseInt(limit) || 10
+        limit: parseInt(limit) || 10,
       };
 
       const result = await this.service.findUsersWithDepartmentAccess(
@@ -685,13 +758,16 @@ export class ModulePermissionController {
       res.status(200).json({
         success: true,
         data: result,
-        message: "Usuarios con acceso al departamento obtenidos exitosamente"
+        message: "Usuarios con acceso al departamento obtenidos exitosamente",
       });
     } catch (error) {
-      console.error("Error en controlador buscando usuarios con acceso:", error);
+      console.error(
+        "Error en controlador buscando usuarios con acceso:",
+        error
+      );
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -703,21 +779,24 @@ export class ModulePermissionController {
    */
   getAccessLevels = async (req, res) => {
     try {
-      const accessLevels = Object.values(ACCESS_LEVELS).map(level => ({
+      const accessLevels = Object.values(ACCESS_LEVELS).map((level) => ({
         value: level,
-        label: this.getAccessLevelDisplayName(level)
+        label: this.getAccessLevelDisplayName(level),
       }));
 
       res.status(200).json({
         success: true,
         data: accessLevels,
-        message: "Niveles de acceso obtenidos exitosamente"
+        message: "Niveles de acceso obtenidos exitosamente",
       });
     } catch (error) {
-      console.error("Error en controlador obteniendo niveles de acceso:", error);
+      console.error(
+        "Error en controlador obteniendo niveles de acceso:",
+        error
+      );
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -727,21 +806,24 @@ export class ModulePermissionController {
    */
   getSystemActions = async (req, res) => {
     try {
-      const systemActions = Object.values(SYSTEM_ACTIONS).map(action => ({
+      const systemActions = Object.values(SYSTEM_ACTIONS).map((action) => ({
         value: action,
-        label: this.getSystemActionDisplayName(action)
+        label: this.getSystemActionDisplayName(action),
       }));
 
       res.status(200).json({
         success: true,
         data: systemActions,
-        message: "Acciones del sistema obtenidas exitosamente"
+        message: "Acciones del sistema obtenidas exitosamente",
       });
     } catch (error) {
-      console.error("Error en controlador obteniendo acciones del sistema:", error);
+      console.error(
+        "Error en controlador obteniendo acciones del sistema:",
+        error
+      );
       res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error interno del servidor"
+        message: error.message || "Error interno del servidor",
       });
     }
   };
@@ -753,10 +835,10 @@ export class ModulePermissionController {
    */
   getAccessLevelDisplayName(level) {
     const displayNames = {
-      'OWNER': 'Gestor Completo',
-      'CONTRIBUTOR': 'Colaborador',
-      'OBSERVER': 'Observador',
-      'REPOSITORY': 'Repositorio General'
+      OWNER: "Gestor Completo",
+      CONTRIBUTOR: "Colaborador",
+      OBSERVER: "Observador",
+      REPOSITORY: "Repositorio General",
     };
     return displayNames[level] || level;
   }
@@ -766,20 +848,20 @@ export class ModulePermissionController {
    */
   getSystemActionDisplayName(action) {
     const displayNames = {
-      'create_contract': 'Crear Contrato',
-      'view_contract': 'Ver Contrato',
-      'edit_contract': 'Editar Contrato',
-      'delete_contract': 'Eliminar Contrato',
-      'upload_document': 'Subir Documento',
-      'download_document': 'Descargar Documento',
-      'delete_document': 'Eliminar Documento',
-      'view_document': 'Ver Documento',
-      'add_observation': 'Agregar Observación',
-      'edit_observation': 'Editar Observación',
-      'delete_observation': 'Eliminar Observación',
-      'view_financial_data': 'Ver Datos Financieros',
-      'view_all_departments': 'Ver Todos los Departamentos',
-      'export_data': 'Exportar Datos'
+      create_contract: "Crear Contrato",
+      view_contract: "Ver Contrato",
+      edit_contract: "Editar Contrato",
+      delete_contract: "Eliminar Contrato",
+      upload_document: "Subir Documento",
+      download_document: "Descargar Documento",
+      delete_document: "Eliminar Documento",
+      view_document: "Ver Documento",
+      add_observation: "Agregar Observación",
+      edit_observation: "Editar Observación",
+      delete_observation: "Eliminar Observación",
+      view_financial_data: "Ver Datos Financieros",
+      view_all_departments: "Ver Todos los Departamentos",
+      export_data: "Exportar Datos",
     };
     return displayNames[action] || action;
   }

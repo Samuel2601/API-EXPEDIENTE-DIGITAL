@@ -4,7 +4,10 @@
 // =============================================================================
 
 import ModulePermissionRepository from "../repositories/module-permission.repository.js";
-import { ACCESS_LEVELS, SYSTEM_ACTIONS } from "../models/module-permission.scheme.js";
+import {
+  ACCESS_LEVELS,
+  SYSTEM_ACTIONS,
+} from "../models/module-permission.scheme.js";
 
 export class ModulePermissionService {
   constructor() {
@@ -22,20 +25,26 @@ export class ModulePermissionService {
       const existingAccess = await this.repository.findAll({
         user: data.user,
         department: data.department,
-        status: 'ACTIVE',
-        isActive: true
+        status: "ACTIVE",
+        isActive: true,
       });
 
       if (existingAccess.docs.length > 0) {
-        throw new Error('El usuario ya tiene acceso activo a este departamento');
+        throw new Error(
+          "El usuario ya tiene acceso activo a este departamento"
+        );
       }
 
       // Validar nivel de acceso
       if (!Object.values(ACCESS_LEVELS).includes(data.accessLevel)) {
-        throw new Error('Nivel de acceso no válido');
+        throw new Error("Nivel de acceso no válido");
       }
 
-      return await this.repository.createUserDepartmentAccess(data, userData, options);
+      return await this.repository.createUserDepartmentAccess(
+        data,
+        userData,
+        options
+      );
     } catch (error) {
       console.error("Error en servicio creando acceso:", error);
       throw error;
@@ -48,7 +57,7 @@ export class ModulePermissionService {
   async getUserAccesses(userId, options = {}) {
     try {
       if (!userId) {
-        throw new Error('ID de usuario es requerido');
+        throw new Error("ID de usuario es requerido");
       }
 
       return await this.repository.getUserAccesses(userId, options);
@@ -64,7 +73,7 @@ export class ModulePermissionService {
   async getUserDashboard(userId) {
     try {
       if (!userId) {
-        throw new Error('ID de usuario es requerido');
+        throw new Error("ID de usuario es requerido");
       }
 
       return await this.repository.getUserDashboard(userId);
@@ -77,10 +86,16 @@ export class ModulePermissionService {
   /**
    * Verificar permisos de usuario
    */
-  async checkUserPermission(userId, departmentId, category, permission, contractId = null) {
+  async checkUserPermission(
+    userId,
+    departmentId,
+    category,
+    permission,
+    contractId = null
+  ) {
     try {
       if (!userId || !departmentId || !category || !permission) {
-        throw new Error('Parámetros requeridos faltantes');
+        throw new Error("Parámetros requeridos faltantes");
       }
 
       return await this.repository.checkUserPermission(
@@ -103,7 +118,7 @@ export class ModulePermissionService {
     try {
       // Validar y procesar filtros
       const processedFilters = this.processSearchFilters(filters);
-      
+
       return await this.repository.searchAccesses(processedFilters, options);
     } catch (error) {
       console.error("Error en servicio buscando accesos:", error);
@@ -117,16 +132,21 @@ export class ModulePermissionService {
   async updateUserAccess(id, updateData, userData, options = {}) {
     try {
       if (!id) {
-        throw new Error('ID de acceso es requerido');
+        throw new Error("ID de acceso es requerido");
       }
 
       // Validar que el acceso exista y esté activo
       const existingAccess = await this.repository.findById(id);
       if (!existingAccess || !existingAccess.isActive) {
-        throw new Error('Acceso no encontrado o inactivo');
+        throw new Error("Acceso no encontrado o inactivo");
       }
 
-      return await this.repository.updateUserAccess(id, updateData, userData, options);
+      return await this.repository.updateUserAccess(
+        id,
+        updateData,
+        userData,
+        options
+      );
     } catch (error) {
       console.error("Error en servicio actualizando acceso:", error);
       throw error;
@@ -136,16 +156,16 @@ export class ModulePermissionService {
   /**
    * Desactivar acceso de usuario
    */
-  async deactivateUserAccess(id, userData, reason = '') {
+  async deactivateUserAccess(id, userData, reason = "") {
     try {
       if (!id) {
-        throw new Error('ID de acceso es requerido');
+        throw new Error("ID de acceso es requerido");
       }
 
       // Validar que el acceso exista y esté activo
       const existingAccess = await this.repository.findById(id);
       if (!existingAccess || !existingAccess.isActive) {
-        throw new Error('Acceso no encontrado o ya está inactivo');
+        throw new Error("Acceso no encontrado o ya está inactivo");
       }
 
       return await this.repository.deactivateUserAccess(id, userData, reason);
@@ -158,16 +178,16 @@ export class ModulePermissionService {
   /**
    * Reactivar acceso de usuario
    */
-  async reactivateUserAccess(id, userData, reason = '') {
+  async reactivateUserAccess(id, userData, reason = "") {
     try {
       if (!id) {
-        throw new Error('ID de acceso es requerido');
+        throw new Error("ID de acceso es requerido");
       }
 
       // Validar que el acceso exista y esté inactivo
       const existingAccess = await this.repository.findById(id);
       if (!existingAccess || existingAccess.isActive) {
-        throw new Error('Acceso no encontrado o ya está activo');
+        throw new Error("Acceso no encontrado o ya está activo");
       }
 
       return await this.repository.reactivateUserAccess(id, userData, reason);
@@ -180,10 +200,16 @@ export class ModulePermissionService {
   /**
    * Transferir ownership de departamento
    */
-  async transferDepartmentOwnership(departmentId, fromUserId, toUserId, userData, options = {}) {
+  async transferDepartmentOwnership(
+    departmentId,
+    fromUserId,
+    toUserId,
+    userData,
+    options = {}
+  ) {
     try {
       if (!departmentId || !fromUserId || !toUserId) {
-        throw new Error('Parámetros requeridos faltantes');
+        throw new Error("Parámetros requeridos faltantes");
       }
 
       // Encontrar el acceso actual del owner
@@ -191,20 +217,20 @@ export class ModulePermissionService {
         user: fromUserId,
         department: departmentId,
         accessLevel: ACCESS_LEVELS.OWNER,
-        status: 'ACTIVE',
-        isActive: true
+        status: "ACTIVE",
+        isActive: true,
       });
 
       if (currentOwnerAccess.docs.length === 0) {
-        throw new Error('Usuario actual no es owner del departamento');
+        throw new Error("Usuario actual no es owner del departamento");
       }
 
       // Verificar si el nuevo usuario ya tiene acceso
       const newUserAccess = await this.repository.findAll({
         user: toUserId,
         department: departmentId,
-        status: 'ACTIVE',
-        isActive: true
+        status: "ACTIVE",
+        isActive: true,
       });
 
       let transactionResults = [];
@@ -228,8 +254,8 @@ export class ModulePermissionService {
             assignment: {
               assignedBy: userData.userId,
               isPrimary: true,
-              assignmentReason: 'Transferencia de ownership'
-            }
+              assignmentReason: "Transferencia de ownership",
+            },
           },
           userData,
           options
@@ -263,7 +289,11 @@ export class ModulePermissionService {
       // Validar datos de la plantilla
       this.validateTemplateData(data);
 
-      return await this.repository.createPermissionTemplate(data, userData, options);
+      return await this.repository.createPermissionTemplate(
+        data,
+        userData,
+        options
+      );
     } catch (error) {
       console.error("Error en servicio creando plantilla:", error);
       throw error;
@@ -285,11 +315,22 @@ export class ModulePermissionService {
   /**
    * Obtener plantillas aplicables
    */
-  async getApplicableTemplates(roleId = null, departmentId = null, options = {}) {
+  async getApplicableTemplates(
+    roleId = null,
+    departmentId = null,
+    options = {}
+  ) {
     try {
-      return await this.repository.getApplicableTemplates(roleId, departmentId, options);
+      return await this.repository.getApplicableTemplates(
+        roleId,
+        departmentId,
+        options
+      );
     } catch (error) {
-      console.error("Error en servicio obteniendo plantillas aplicables:", error);
+      console.error(
+        "Error en servicio obteniendo plantillas aplicables:",
+        error
+      );
       throw error;
     }
   }
@@ -297,28 +338,40 @@ export class ModulePermissionService {
   /**
    * Aplicar plantilla a múltiples usuarios
    */
-  async applyTemplateToUsers(templateId, userIds, departmentId, userData, options = {}) {
+  async applyTemplateToUsers(
+    templateId,
+    userIds,
+    departmentId,
+    userData,
+    options = {}
+  ) {
     try {
-      if (!templateId || !userIds || !Array.isArray(userIds) || userIds.length === 0) {
-        throw new Error('Parámetros requeridos inválidos');
+      if (
+        !templateId ||
+        !userIds ||
+        !Array.isArray(userIds) ||
+        userIds.length === 0
+      ) {
+        throw new Error("Parámetros requeridos inválidos");
       }
 
       // Obtener la plantilla
-      const template = await this.repository.permissionTemplateModel.findById(templateId);
+      const template =
+        await this.repository.permissionTemplateModel.findById(templateId);
       if (!template || !template.isActive) {
-        throw new Error('Plantilla no encontrada o inactiva');
+        throw new Error("Plantilla no encontrada o inactiva");
       }
 
       const results = [];
-      
+
       for (const userId of userIds) {
         try {
           // Verificar si el usuario ya tiene acceso al departamento
           const existingAccess = await this.repository.findAll({
             user: userId,
             department: departmentId,
-            status: 'ACTIVE',
-            isActive: true
+            status: "ACTIVE",
+            isActive: true,
           });
 
           if (existingAccess.docs.length > 0) {
@@ -327,12 +380,12 @@ export class ModulePermissionService {
               existingAccess.docs[0]._id,
               {
                 accessLevel: template.defaultAccessLevel,
-                permissions: template.permissionTemplate
+                permissions: template.permissionTemplate,
               },
               userData,
               options
             );
-            results.push({ userId, status: 'updated', access: updatedAccess });
+            results.push({ userId, status: "updated", access: updatedAccess });
           } else {
             // Crear nuevo acceso
             const newAccess = await this.repository.createUserDepartmentAccess(
@@ -343,16 +396,16 @@ export class ModulePermissionService {
                 permissions: template.permissionTemplate,
                 assignment: {
                   assignedBy: userData.userId,
-                  assignmentReason: `Aplicada plantilla: ${template.name}`
-                }
+                  assignmentReason: `Aplicada plantilla: ${template.name}`,
+                },
               },
               userData,
               options
             );
-            results.push({ userId, status: 'created', access: newAccess });
+            results.push({ userId, status: "created", access: newAccess });
           }
         } catch (userError) {
-          results.push({ userId, status: 'error', error: userError.message });
+          results.push({ userId, status: "error", error: userError.message });
         }
       }
 
@@ -371,10 +424,13 @@ export class ModulePermissionService {
   async getPermissionHistory(userDepartmentAccessId, options = {}) {
     try {
       if (!userDepartmentAccessId) {
-        throw new Error('ID de acceso es requerido');
+        throw new Error("ID de acceso es requerido");
       }
 
-      return await this.repository.getPermissionHistory(userDepartmentAccessId, options);
+      return await this.repository.getPermissionHistory(
+        userDepartmentAccessId,
+        options
+      );
     } catch (error) {
       console.error("Error en servicio obteniendo historial:", error);
       throw error;
@@ -387,28 +443,34 @@ export class ModulePermissionService {
   async getUserPermissionHistory(userId, options = {}) {
     try {
       if (!userId) {
-        throw new Error('ID de usuario es requerido');
+        throw new Error("ID de usuario es requerido");
       }
 
       // Obtener todos los accesos del usuario
       const userAccesses = await this.repository.getUserAccesses(userId, {
-        includeInactive: true
+        includeInactive: true,
       });
 
       const historyResults = [];
-      
+
       for (const access of userAccesses.docs) {
-        const history = await this.repository.getPermissionHistory(access._id, options);
+        const history = await this.repository.getPermissionHistory(
+          access._id,
+          options
+        );
         historyResults.push({
           accessId: access._id,
           department: access.department,
-          history: history.docs
+          history: history.docs,
         });
       }
 
       return historyResults;
     } catch (error) {
-      console.error("Error en servicio obteniendo historial de usuario:", error);
+      console.error(
+        "Error en servicio obteniendo historial de usuario:",
+        error
+      );
       throw error;
     }
   }
@@ -418,14 +480,19 @@ export class ModulePermissionService {
   /**
    * Verificar si usuario puede realizar acción del sistema
    */
-  async canPerformSystemAction(userId, departmentId, systemAction, contractId = null) {
+  async canPerformSystemAction(
+    userId,
+    departmentId,
+    systemAction,
+    contractId = null
+  ) {
     try {
       if (!userId || !departmentId || !systemAction) {
-        throw new Error('Parámetros requeridos faltantes');
+        throw new Error("Parámetros requeridos faltantes");
       }
 
       if (!Object.values(SYSTEM_ACTIONS).includes(systemAction)) {
-        throw new Error('Acción del sistema no reconocida');
+        throw new Error("Acción del sistema no reconocida");
       }
 
       return await this.repository.canPerformSystemAction(
@@ -446,11 +513,11 @@ export class ModulePermissionService {
   async batchCheckPermissions(checks = []) {
     try {
       if (!Array.isArray(checks) || checks.length === 0) {
-        throw new Error('Array de verificaciones es requerido');
+        throw new Error("Array de verificaciones es requerido");
       }
 
       const results = [];
-      
+
       for (const check of checks) {
         try {
           const result = await this.checkUserPermission(
@@ -462,12 +529,12 @@ export class ModulePermissionService {
           );
           results.push({ ...check, result });
         } catch (error) {
-          results.push({ 
-            ...check, 
-            result: { 
-              allowed: false, 
-              reason: error.message 
-            } 
+          results.push({
+            ...check,
+            result: {
+              allowed: false,
+              reason: error.message,
+            },
           });
         }
       }
@@ -499,7 +566,7 @@ export class ModulePermissionService {
   async getDepartmentAccessReport(departmentId, options = {}) {
     try {
       if (!departmentId) {
-        throw new Error('ID de departamento es requerido');
+        throw new Error("ID de departamento es requerido");
       }
 
       const accesses = await this.repository.findUsersWithDepartmentAccess(
@@ -514,7 +581,7 @@ export class ModulePermissionService {
         totalUsers: accesses.totalDocs,
         accessLevels: {},
         activeUsers: 0,
-        inactiveUsers: 0
+        inactiveUsers: 0,
       };
 
       // Contar por nivel de acceso
@@ -525,7 +592,7 @@ export class ModulePermissionService {
         }
         report.accessLevels[level]++;
 
-        if (access.isActive && access.status === 'ACTIVE') {
+        if (access.isActive && access.status === "ACTIVE") {
           report.activeUsers++;
         } else {
           report.inactiveUsers++;
@@ -542,10 +609,14 @@ export class ModulePermissionService {
   /**
    * Obtener usuarios con acceso a departamento
    */
-  async findUsersWithDepartmentAccess(departmentId, accessLevel = null, options = {}) {
+  async findUsersWithDepartmentAccess(
+    departmentId,
+    accessLevel = null,
+    options = {}
+  ) {
     try {
       if (!departmentId) {
-        throw new Error('ID de departamento es requerido');
+        throw new Error("ID de departamento es requerido");
       }
 
       return await this.repository.findUsersWithDepartmentAccess(
@@ -568,22 +639,30 @@ export class ModulePermissionService {
     const processed = { ...filters };
 
     // Convertir strings a ObjectId cuando sea necesario
-    if (processed.user && typeof processed.user === 'string') {
+    if (processed.user && typeof processed.user === "string") {
       processed.user = processed.user;
     }
 
-    if (processed.department && typeof processed.department === 'string') {
+    if (processed.department && typeof processed.department === "string") {
       processed.department = processed.department;
     }
 
     // Validar status
-    if (processed.status && !['ACTIVE', 'SUSPENDED', 'EXPIRED', 'REVOKED', 'PENDING'].includes(processed.status)) {
-      throw new Error('Status no válido');
+    if (
+      processed.status &&
+      !["ACTIVE", "SUSPENDED", "EXPIRED", "REVOKED", "PENDING"].includes(
+        processed.status
+      )
+    ) {
+      throw new Error("Status no válido");
     }
 
     // Validar accessLevel
-    if (processed.accessLevel && !Object.values(ACCESS_LEVELS).includes(processed.accessLevel)) {
-      throw new Error('Nivel de acceso no válido');
+    if (
+      processed.accessLevel &&
+      !Object.values(ACCESS_LEVELS).includes(processed.accessLevel)
+    ) {
+      throw new Error("Nivel de acceso no válido");
     }
 
     return processed;
@@ -594,22 +673,32 @@ export class ModulePermissionService {
    */
   validateTemplateData(data) {
     if (!data.name || data.name.trim().length < 3) {
-      throw new Error('Nombre de plantilla debe tener al menos 3 caracteres');
+      throw new Error("Nombre de plantilla debe tener al menos 3 caracteres");
     }
 
-    if (!data.defaultAccessLevel || !Object.values(ACCESS_LEVELS).includes(data.defaultAccessLevel)) {
-      throw new Error('Nivel de acceso por defecto no válido');
+    if (
+      !data.defaultAccessLevel ||
+      !Object.values(ACCESS_LEVELS).includes(data.defaultAccessLevel)
+    ) {
+      throw new Error("Nivel de acceso por defecto no válido");
     }
 
     if (!data.permissionTemplate) {
-      throw new Error('Template de permisos es requerido');
+      throw new Error("Template de permisos es requerido");
     }
 
     // Validar estructura básica del template de permisos
-    const requiredSections = ['contracts', 'documents', 'interactions', 'special'];
+    const requiredSections = [
+      "contracts",
+      "documents",
+      "interactions",
+      "special",
+    ];
     for (const section of requiredSections) {
       if (!data.permissionTemplate[section]) {
-        throw new Error(`Sección ${section} es requerida en el template de permisos`);
+        throw new Error(
+          `Sección ${section} es requerida en el template de permisos`
+        );
       }
     }
   }
@@ -619,24 +708,29 @@ export class ModulePermissionService {
    */
   validateUserAccessData(data) {
     if (!data.user) {
-      throw new Error('Usuario es requerido');
+      throw new Error("Usuario es requerido");
     }
 
     if (!data.department) {
-      throw new Error('Departamento es requerido');
+      throw new Error("Departamento es requerido");
     }
 
-    if (!data.accessLevel || !Object.values(ACCESS_LEVELS).includes(data.accessLevel)) {
-      throw new Error('Nivel de acceso no válido');
+    if (
+      !data.accessLevel ||
+      !Object.values(ACCESS_LEVELS).includes(data.accessLevel)
+    ) {
+      throw new Error("Nivel de acceso no válido");
     }
 
     // Validar fechas de vigencia
     if (data.validity && data.validity.endDate) {
-      const startDate = data.validity.startDate ? new Date(data.validity.startDate) : new Date();
+      const startDate = data.validity.startDate
+        ? new Date(data.validity.startDate)
+        : new Date();
       const endDate = new Date(data.validity.endDate);
 
       if (endDate <= startDate) {
-        throw new Error('Fecha de fin debe ser posterior a fecha de inicio');
+        throw new Error("Fecha de fin debe ser posterior a fecha de inicio");
       }
     }
   }

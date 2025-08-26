@@ -4,12 +4,15 @@
 // =============================================================================
 
 import { BaseRepository } from "../../core/base/repositories/base.repository.js";
-import { 
-  UserDepartmentAccess, 
-  PermissionTemplate, 
-  PermissionHistory 
+import {
+  UserDepartmentAccess,
+  PermissionTemplate,
+  PermissionHistory,
 } from "../models/module-permission.scheme.js";
-import { ACCESS_LEVELS, SYSTEM_ACTIONS } from "../models/module-permission.scheme.js";
+import {
+  ACCESS_LEVELS,
+  SYSTEM_ACTIONS,
+} from "../models/module-permission.scheme.js";
 
 export class ModulePermissionRepository extends BaseRepository {
   constructor() {
@@ -50,20 +53,20 @@ export class ModulePermissionRepository extends BaseRepository {
   async getUserAccesses(userId, options = {}) {
     try {
       const query = { user: userId };
-      const { status = 'ACTIVE', includeInactive = false } = options;
-      
+      const { status = "ACTIVE", includeInactive = false } = options;
+
       if (status) {
         query.status = status;
       }
-      
+
       if (!includeInactive) {
         query.isActive = true;
       }
 
       return await this.findAll(query, {
         ...options,
-        populate: 'department',
-        sort: '-assignment.isPrimary -createdAt'
+        populate: "department",
+        sort: "-assignment.isPrimary -createdAt",
       });
     } catch (error) {
       console.error("Error obteniendo accesos de usuario:", error);
@@ -79,20 +82,28 @@ export class ModulePermissionRepository extends BaseRepository {
       return await UserDepartmentAccess.getUserDashboard(userId);
     } catch (error) {
       console.error("Error obteniendo dashboard de usuario:", error);
-      throw new Error(`Error obteniendo dashboard de usuario: ${error.message}`);
+      throw new Error(
+        `Error obteniendo dashboard de usuario: ${error.message}`
+      );
     }
   }
 
   /**
    * Verificar permisos de usuario para una acción específica
    */
-  async checkUserPermission(userId, departmentId, category, permission, contractId = null) {
+  async checkUserPermission(
+    userId,
+    departmentId,
+    category,
+    permission,
+    contractId = null
+  ) {
     try {
       return await UserDepartmentAccess.checkUserPermission(
-        userId, 
-        departmentId, 
-        category, 
-        permission, 
+        userId,
+        departmentId,
+        category,
+        permission,
         contractId
       );
     } catch (error) {
@@ -109,7 +120,7 @@ export class ModulePermissionRepository extends BaseRepository {
       user,
       department,
       accessLevel,
-      status = 'ACTIVE',
+      status = "ACTIVE",
       isActive = true,
       hasGlobalAccess,
       ...otherFilters
@@ -121,31 +132,31 @@ export class ModulePermissionRepository extends BaseRepository {
     if (department) query.department = department;
     if (accessLevel) query.accessLevel = accessLevel;
     if (hasGlobalAccess !== undefined) {
-      query['crossDepartmentAccess.hasGlobalAccess'] = hasGlobalAccess;
+      query["crossDepartmentAccess.hasGlobalAccess"] = hasGlobalAccess;
     }
 
     return await this.searchWithAggregation({
       filters: query,
       options: {
         ...options,
-        populate: 'user department',
+        populate: "user department",
         lookups: [
           {
-            from: 'users',
-            localField: 'user',
-            foreignField: '_id',
-            as: 'userInfo',
-            unwind: true
+            from: "users",
+            localField: "user",
+            foreignField: "_id",
+            as: "userInfo",
+            unwind: true,
           },
           {
-            from: 'departments',
-            localField: 'department',
-            foreignField: '_id',
-            as: 'departmentInfo',
-            unwind: true
-          }
-        ]
-      }
+            from: "departments",
+            localField: "department",
+            foreignField: "_id",
+            as: "departmentInfo",
+            unwind: true,
+          },
+        ],
+      },
     });
   }
 
@@ -156,11 +167,14 @@ export class ModulePermissionRepository extends BaseRepository {
     try {
       // Si se cambia el nivel de acceso, reconfigurar permisos
       if (updateData.accessLevel) {
-        updateData.permissions = this.getDefaultPermissionsByLevel(updateData.accessLevel);
-        
+        updateData.permissions = this.getDefaultPermissionsByLevel(
+          updateData.accessLevel
+        );
+
         // Actualizar acceso global si es REPOSITORY
         if (updateData.accessLevel === ACCESS_LEVELS.REPOSITORY) {
-          updateData.crossDepartmentAccess = updateData.crossDepartmentAccess || {};
+          updateData.crossDepartmentAccess =
+            updateData.crossDepartmentAccess || {};
           updateData.crossDepartmentAccess.hasGlobalAccess = true;
         }
       }
@@ -175,12 +189,14 @@ export class ModulePermissionRepository extends BaseRepository {
   /**
    * Desactivar acceso de usuario (soft delete mejorado)
    */
-  async deactivateUserAccess(id, userData, reason = '') {
+  async deactivateUserAccess(id, userData, reason = "") {
     try {
       const updateData = {
-        status: 'REVOKED',
+        status: "REVOKED",
         isActive: false,
-        observations: reason ? `Acceso revocado: ${reason}` : 'Acceso revocado sin especificar razón'
+        observations: reason
+          ? `Acceso revocado: ${reason}`
+          : "Acceso revocado sin especificar razón",
       };
 
       return await this.update(id, updateData, userData);
@@ -193,12 +209,14 @@ export class ModulePermissionRepository extends BaseRepository {
   /**
    * Reactivar acceso de usuario previamente desactivado
    */
-  async reactivateUserAccess(id, userData, reason = '') {
+  async reactivateUserAccess(id, userData, reason = "") {
     try {
       const updateData = {
-        status: 'ACTIVE',
+        status: "ACTIVE",
         isActive: true,
-        observations: reason ? `Acceso reactivado: ${reason}` : 'Acceso reactivado'
+        observations: reason
+          ? `Acceso reactivado: ${reason}`
+          : "Acceso reactivado",
       };
 
       return await this.update(id, updateData, userData);
@@ -217,7 +235,7 @@ export class ModulePermissionRepository extends BaseRepository {
     try {
       const template = new this.permissionTemplateModel({
         ...data,
-        createdBy: userData.userId
+        createdBy: userData.userId,
       });
 
       return await template.save(options);
@@ -235,8 +253,8 @@ export class ModulePermissionRepository extends BaseRepository {
       const {
         page = 1,
         limit = 10,
-        sort = '-createdAt',
-        populate = 'applicableRoles applicableDepartments',
+        sort = "-createdAt",
+        populate = "applicableRoles applicableDepartments",
         ...otherOptions
       } = options;
 
@@ -246,7 +264,7 @@ export class ModulePermissionRepository extends BaseRepository {
         sort,
         populate,
         lean: true,
-        ...otherOptions
+        ...otherOptions,
       });
     } catch (error) {
       console.error("Error buscando plantillas:", error);
@@ -257,7 +275,11 @@ export class ModulePermissionRepository extends BaseRepository {
   /**
    * Obtener plantillas aplicables para un rol/departamento
    */
-  async getApplicableTemplates(roleId = null, departmentId = null, options = {}) {
+  async getApplicableTemplates(
+    roleId = null,
+    departmentId = null,
+    options = {}
+  ) {
     try {
       const query = { isActive: true };
 
@@ -272,7 +294,9 @@ export class ModulePermissionRepository extends BaseRepository {
       return await this.findTemplates(query, options);
     } catch (error) {
       console.error("Error obteniendo plantillas aplicables:", error);
-      throw new Error(`Error obteniendo plantillas aplicables: ${error.message}`);
+      throw new Error(
+        `Error obteniendo plantillas aplicables: ${error.message}`
+      );
     }
   }
 
@@ -286,8 +310,8 @@ export class ModulePermissionRepository extends BaseRepository {
       const {
         page = 1,
         limit = 20,
-        sort = '-changeDate',
-        populate = 'changedBy',
+        sort = "-changeDate",
+        populate = "changedBy",
         ...otherOptions
       } = options;
 
@@ -299,7 +323,7 @@ export class ModulePermissionRepository extends BaseRepository {
         sort,
         populate,
         lean: true,
-        ...otherOptions
+        ...otherOptions,
       });
     } catch (error) {
       console.error("Error obteniendo historial:", error);
@@ -326,45 +350,160 @@ export class ModulePermissionRepository extends BaseRepository {
    * Obtener permisos por defecto según nivel de acceso
    */
   getDefaultPermissionsByLevel(accessLevel) {
-    switch(accessLevel) {
+    switch (accessLevel) {
       case ACCESS_LEVELS.OWNER:
         return {
-          contracts: { canCreate: true, canViewOwn: true, canViewDepartment: true, canViewAll: false, canEdit: true, canDelete: true },
-          documents: { canUpload: true, canDownload: true, canView: true, canDelete: true, canManageAll: true },
-          interactions: { canAddObservations: true, canEditOwnObservations: true, canDeleteOwnObservations: true, canViewAllObservations: true },
-          special: { canViewFinancialData: true, canExportData: true, canViewCrossDepartment: false, canManagePermissions: false }
+          contracts: {
+            canCreate: true,
+            canViewOwn: true,
+            canViewDepartment: true,
+            canViewAll: false,
+            canEdit: true,
+            canDelete: true,
+          },
+          documents: {
+            canUpload: true,
+            canDownload: true,
+            canView: true,
+            canDelete: true,
+            canManageAll: true,
+          },
+          interactions: {
+            canAddObservations: true,
+            canEditOwnObservations: true,
+            canDeleteOwnObservations: true,
+            canViewAllObservations: true,
+          },
+          special: {
+            canViewFinancialData: true,
+            canExportData: true,
+            canViewCrossDepartment: false,
+            canManagePermissions: false,
+          },
         };
 
       case ACCESS_LEVELS.REPOSITORY:
         return {
-          contracts: { canCreate: false, canViewOwn: true, canViewDepartment: true, canViewAll: true, canEdit: false, canDelete: false },
-          documents: { canUpload: false, canDownload: true, canView: true, canDelete: false, canManageAll: false },
-          interactions: { canAddObservations: true, canEditOwnObservations: true, canDeleteOwnObservations: false, canViewAllObservations: true },
-          special: { canViewFinancialData: true, canExportData: true, canViewCrossDepartment: true, canManagePermissions: false }
+          contracts: {
+            canCreate: false,
+            canViewOwn: true,
+            canViewDepartment: true,
+            canViewAll: true,
+            canEdit: false,
+            canDelete: false,
+          },
+          documents: {
+            canUpload: false,
+            canDownload: true,
+            canView: true,
+            canDelete: false,
+            canManageAll: false,
+          },
+          interactions: {
+            canAddObservations: true,
+            canEditOwnObservations: true,
+            canDeleteOwnObservations: false,
+            canViewAllObservations: true,
+          },
+          special: {
+            canViewFinancialData: true,
+            canExportData: true,
+            canViewCrossDepartment: true,
+            canManagePermissions: false,
+          },
         };
 
       case ACCESS_LEVELS.CONTRIBUTOR:
         return {
-          contracts: { canCreate: false, canViewOwn: true, canViewDepartment: true, canViewAll: false, canEdit: false, canDelete: false },
-          documents: { canUpload: true, canDownload: true, canView: true, canDelete: false, canManageAll: false },
-          interactions: { canAddObservations: true, canEditOwnObservations: true, canDeleteOwnObservations: false, canViewAllObservations: true },
-          special: { canViewFinancialData: false, canExportData: false, canViewCrossDepartment: false, canManagePermissions: false }
+          contracts: {
+            canCreate: false,
+            canViewOwn: true,
+            canViewDepartment: true,
+            canViewAll: false,
+            canEdit: false,
+            canDelete: false,
+          },
+          documents: {
+            canUpload: true,
+            canDownload: true,
+            canView: true,
+            canDelete: false,
+            canManageAll: false,
+          },
+          interactions: {
+            canAddObservations: true,
+            canEditOwnObservations: true,
+            canDeleteOwnObservations: false,
+            canViewAllObservations: true,
+          },
+          special: {
+            canViewFinancialData: false,
+            canExportData: false,
+            canViewCrossDepartment: false,
+            canManagePermissions: false,
+          },
         };
 
       case ACCESS_LEVELS.OBSERVER:
         return {
-          contracts: { canCreate: false, canViewOwn: true, canViewDepartment: true, canViewAll: false, canEdit: false, canDelete: false },
-          documents: { canUpload: false, canDownload: true, canView: true, canDelete: false, canManageAll: false },
-          interactions: { canAddObservations: true, canEditOwnObservations: true, canDeleteOwnObservations: false, canViewAllObservations: true },
-          special: { canViewFinancialData: false, canExportData: false, canViewCrossDepartment: false, canManagePermissions: false }
+          contracts: {
+            canCreate: false,
+            canViewOwn: true,
+            canViewDepartment: true,
+            canViewAll: false,
+            canEdit: false,
+            canDelete: false,
+          },
+          documents: {
+            canUpload: false,
+            canDownload: true,
+            canView: true,
+            canDelete: false,
+            canManageAll: false,
+          },
+          interactions: {
+            canAddObservations: true,
+            canEditOwnObservations: true,
+            canDeleteOwnObservations: false,
+            canViewAllObservations: true,
+          },
+          special: {
+            canViewFinancialData: false,
+            canExportData: false,
+            canViewCrossDepartment: false,
+            canManagePermissions: false,
+          },
         };
 
       default:
         return {
-          contracts: { canCreate: false, canViewOwn: true, canViewDepartment: true, canViewAll: false, canEdit: false, canDelete: false },
-          documents: { canUpload: false, canDownload: true, canView: true, canDelete: false, canManageAll: false },
-          interactions: { canAddObservations: false, canEditOwnObservations: false, canDeleteOwnObservations: false, canViewAllObservations: true },
-          special: { canViewFinancialData: false, canExportData: false, canViewCrossDepartment: false, canManagePermissions: false }
+          contracts: {
+            canCreate: false,
+            canViewOwn: true,
+            canViewDepartment: true,
+            canViewAll: false,
+            canEdit: false,
+            canDelete: false,
+          },
+          documents: {
+            canUpload: false,
+            canDownload: true,
+            canView: true,
+            canDelete: false,
+            canManageAll: false,
+          },
+          interactions: {
+            canAddObservations: false,
+            canEditOwnObservations: false,
+            canDeleteOwnObservations: false,
+            canViewAllObservations: true,
+          },
+          special: {
+            canViewFinancialData: false,
+            canExportData: false,
+            canViewCrossDepartment: false,
+            canManagePermissions: false,
+          },
         };
     }
   }
@@ -372,19 +511,24 @@ export class ModulePermissionRepository extends BaseRepository {
   /**
    * Verificar si un usuario puede realizar una acción del sistema
    */
-  async canPerformSystemAction(userId, departmentId, systemAction, contractId = null) {
+  async canPerformSystemAction(
+    userId,
+    departmentId,
+    systemAction,
+    contractId = null
+  ) {
     try {
       // Mapear acción del sistema a categoría y permiso específico
       const actionMapping = this.mapSystemActionToPermission(systemAction);
       if (!actionMapping) {
-        return { allowed: false, reason: 'Acción del sistema no reconocida' };
+        return { allowed: false, reason: "Acción del sistema no reconocida" };
       }
 
       return await this.checkUserPermission(
-        userId, 
-        departmentId, 
-        actionMapping.category, 
-        actionMapping.permission, 
+        userId,
+        departmentId,
+        actionMapping.category,
+        actionMapping.permission,
         contractId
       );
     } catch (error) {
@@ -398,20 +542,62 @@ export class ModulePermissionRepository extends BaseRepository {
    */
   mapSystemActionToPermission(systemAction) {
     const mapping = {
-      [SYSTEM_ACTIONS.CREATE_CONTRACT]: { category: 'contracts', permission: 'canCreate' },
-      [SYSTEM_ACTIONS.VIEW_CONTRACT]: { category: 'contracts', permission: 'canViewDepartment' },
-      [SYSTEM_ACTIONS.EDIT_CONTRACT]: { category: 'contracts', permission: 'canEdit' },
-      [SYSTEM_ACTIONS.DELETE_CONTRACT]: { category: 'contracts', permission: 'canDelete' },
-      [SYSTEM_ACTIONS.UPLOAD_DOCUMENT]: { category: 'documents', permission: 'canUpload' },
-      [SYSTEM_ACTIONS.DOWNLOAD_DOCUMENT]: { category: 'documents', permission: 'canDownload' },
-      [SYSTEM_ACTIONS.DELETE_DOCUMENT]: { category: 'documents', permission: 'canDelete' },
-      [SYSTEM_ACTIONS.VIEW_DOCUMENT]: { category: 'documents', permission: 'canView' },
-      [SYSTEM_ACTIONS.ADD_OBSERVATION]: { category: 'interactions', permission: 'canAddObservations' },
-      [SYSTEM_ACTIONS.EDIT_OBSERVATION]: { category: 'interactions', permission: 'canEditOwnObservations' },
-      [SYSTEM_ACTIONS.DELETE_OBSERVATION]: { category: 'interactions', permission: 'canDeleteOwnObservations' },
-      [SYSTEM_ACTIONS.VIEW_FINANCIAL_DATA]: { category: 'special', permission: 'canViewFinancialData' },
-      [SYSTEM_ACTIONS.VIEW_ALL_DEPARTMENTS]: { category: 'special', permission: 'canViewCrossDepartment' },
-      [SYSTEM_ACTIONS.EXPORT_DATA]: { category: 'special', permission: 'canExportData' }
+      [SYSTEM_ACTIONS.CREATE_CONTRACT]: {
+        category: "contracts",
+        permission: "canCreate",
+      },
+      [SYSTEM_ACTIONS.VIEW_CONTRACT]: {
+        category: "contracts",
+        permission: "canViewDepartment",
+      },
+      [SYSTEM_ACTIONS.EDIT_CONTRACT]: {
+        category: "contracts",
+        permission: "canEdit",
+      },
+      [SYSTEM_ACTIONS.DELETE_CONTRACT]: {
+        category: "contracts",
+        permission: "canDelete",
+      },
+      [SYSTEM_ACTIONS.UPLOAD_DOCUMENT]: {
+        category: "documents",
+        permission: "canUpload",
+      },
+      [SYSTEM_ACTIONS.DOWNLOAD_DOCUMENT]: {
+        category: "documents",
+        permission: "canDownload",
+      },
+      [SYSTEM_ACTIONS.DELETE_DOCUMENT]: {
+        category: "documents",
+        permission: "canDelete",
+      },
+      [SYSTEM_ACTIONS.VIEW_DOCUMENT]: {
+        category: "documents",
+        permission: "canView",
+      },
+      [SYSTEM_ACTIONS.ADD_OBSERVATION]: {
+        category: "interactions",
+        permission: "canAddObservations",
+      },
+      [SYSTEM_ACTIONS.EDIT_OBSERVATION]: {
+        category: "interactions",
+        permission: "canEditOwnObservations",
+      },
+      [SYSTEM_ACTIONS.DELETE_OBSERVATION]: {
+        category: "interactions",
+        permission: "canDeleteOwnObservations",
+      },
+      [SYSTEM_ACTIONS.VIEW_FINANCIAL_DATA]: {
+        category: "special",
+        permission: "canViewFinancialData",
+      },
+      [SYSTEM_ACTIONS.VIEW_ALL_DEPARTMENTS]: {
+        category: "special",
+        permission: "canViewCrossDepartment",
+      },
+      [SYSTEM_ACTIONS.EXPORT_DATA]: {
+        category: "special",
+        permission: "canExportData",
+      },
     };
 
     return mapping[systemAction];
@@ -422,8 +608,8 @@ export class ModulePermissionRepository extends BaseRepository {
    */
   async getPermissionStats(departmentId = null) {
     try {
-      const matchStage = { status: 'ACTIVE', isActive: true };
-      
+      const matchStage = { status: "ACTIVE", isActive: true };
+
       if (departmentId) {
         matchStage.department = departmentId;
       }
@@ -432,20 +618,20 @@ export class ModulePermissionRepository extends BaseRepository {
         { $match: matchStage },
         {
           $group: {
-            _id: '$accessLevel',
+            _id: "$accessLevel",
             count: { $sum: 1 },
-            users: { $addToSet: '$user' }
-          }
+            users: { $addToSet: "$user" },
+          },
         },
         {
           $project: {
-            accessLevel: '$_id',
+            accessLevel: "$_id",
             count: 1,
-            userCount: { $size: '$users' },
-            _id: 0
-          }
+            userCount: { $size: "$users" },
+            _id: 0,
+          },
         },
-        { $sort: { count: -1 } }
+        { $sort: { count: -1 } },
       ];
 
       return await this.model.aggregate(pipeline);
@@ -458,12 +644,16 @@ export class ModulePermissionRepository extends BaseRepository {
   /**
    * Buscar usuarios con acceso a un departamento específico
    */
-  async findUsersWithDepartmentAccess(departmentId, accessLevel = null, options = {}) {
+  async findUsersWithDepartmentAccess(
+    departmentId,
+    accessLevel = null,
+    options = {}
+  ) {
     try {
-      const query = { 
-        department: departmentId, 
-        status: 'ACTIVE', 
-        isActive: true 
+      const query = {
+        department: departmentId,
+        status: "ACTIVE",
+        isActive: true,
       };
 
       if (accessLevel) {
@@ -476,14 +666,14 @@ export class ModulePermissionRepository extends BaseRepository {
           ...options,
           lookups: [
             {
-              from: 'users',
-              localField: 'user',
-              foreignField: '_id',
-              as: 'userInfo',
-              unwind: true
-            }
-          ]
-        }
+              from: "users",
+              localField: "user",
+              foreignField: "_id",
+              as: "userInfo",
+              unwind: true,
+            },
+          ],
+        },
       });
     } catch (error) {
       console.error("Error buscando usuarios con acceso:", error);

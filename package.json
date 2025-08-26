@@ -1,5 +1,5 @@
 {
-  "name": "Zoosanitario-Api",
+  "name": "ExpedienteDigital",
   "version": "1.0.0",
   "description": "API para gestión de certificados zoosanitarios y proceso de faenamiento",
   "main": "app.js",

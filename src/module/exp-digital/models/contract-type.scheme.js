@@ -1,7 +1,10 @@
 // src/module/exp-digital/models/contract-type.scheme.js
 import mongoose from "mongoose";
 import mongoosePaginate from "mongoose-paginate-v2";
-import { setupBaseSchema, CommonValidators } from "../../core/base/models/base.scheme.js";
+import {
+  setupBaseSchema,
+  CommonValidators,
+} from "../../core/base/models/base.scheme.js";
 import { stripMetaFields } from "../../../../utils/meta-field.js";
 
 const { Schema } = mongoose;
@@ -15,34 +18,45 @@ export const ContractTypeJSON = {
     trim: true,
     maxlength: 10,
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         return /^[A-Z]{2,10}$/.test(v);
       },
-      message: 'El código debe contener solo letras mayúsculas (2-10 caracteres)'
+      message:
+        "El código debe contener solo letras mayúsculas (2-10 caracteres)",
     },
     meta: {
-      validation: { isString: true, required: true, notEmpty: true, isLength: { min: 2, max: 10 } },
+      validation: {
+        isString: true,
+        required: true,
+        notEmpty: true,
+        isLength: { min: 2, max: 10 },
+      },
       messages: {
         required: "El código del tipo de contratación es obligatorio",
         isString: "El código debe ser un texto válido",
         notEmpty: "El código no puede estar vacío",
-        isLength: "El código debe tener entre 2 y 10 caracteres"
+        isLength: "El código debe tener entre 2 y 10 caracteres",
       },
     },
   },
-  
+
   name: {
     type: String,
     required: true,
     trim: true,
     maxlength: 200,
     meta: {
-      validation: { isString: true, required: true, notEmpty: true, isLength: { min: 5, max: 200 } },
+      validation: {
+        isString: true,
+        required: true,
+        notEmpty: true,
+        isLength: { min: 5, max: 200 },
+      },
       messages: {
         required: "El nombre del tipo de contratación es obligatorio",
         isString: "El nombre debe ser un texto válido",
         notEmpty: "El nombre no puede estar vacío",
-        isLength: "El nombre debe tener entre 5 y 200 caracteres"
+        isLength: "El nombre debe tener entre 5 y 200 caracteres",
       },
     },
   },
@@ -51,7 +65,7 @@ export const ContractTypeJSON = {
     type: String,
     enum: {
       values: ["COMMON", "SPECIAL"],
-      message: "La categoría debe ser COMMON o SPECIAL"
+      message: "La categoría debe ser COMMON o SPECIAL",
     },
     required: true,
     uppercase: true,
@@ -59,7 +73,7 @@ export const ContractTypeJSON = {
       validation: { isIn: ["COMMON", "SPECIAL"], required: true },
       messages: {
         required: "La categoría es obligatoria",
-        isIn: "La categoría debe ser COMÚN o ESPECIAL según LOSNCP"
+        isIn: "La categoría debe ser COMÚN o ESPECIAL según LOSNCP",
       },
     },
   },
@@ -72,7 +86,7 @@ export const ContractTypeJSON = {
       validation: { isString: true, optional: true, isLength: { max: 1000 } },
       messages: {
         isString: "La descripción debe ser un texto válido",
-        isLength: "La descripción no puede exceder 1000 caracteres"
+        isLength: "La descripción no puede exceder 1000 caracteres",
       },
     },
   },
@@ -88,7 +102,7 @@ export const ContractTypeJSON = {
           validation: { isNumeric: true, min: 0, optional: true },
           messages: {
             isNumeric: "El monto mínimo debe ser numérico",
-            min: "El monto mínimo no puede ser negativo"
+            min: "El monto mínimo no puede ser negativo",
           },
         },
       },
@@ -99,10 +113,10 @@ export const ContractTypeJSON = {
           validation: { isNumeric: true, min: 0, optional: true },
           messages: {
             isNumeric: "El monto máximo debe ser numérico",
-            min: "El monto máximo no puede ser negativo"
+            min: "El monto máximo no puede ser negativo",
           },
         },
-      }
+      },
     },
     services: {
       min: {
@@ -113,7 +127,7 @@ export const ContractTypeJSON = {
           validation: { isNumeric: true, min: 0, optional: true },
           messages: {
             isNumeric: "El monto mínimo debe ser numérico",
-            min: "El monto mínimo no puede ser negativo"
+            min: "El monto mínimo no puede ser negativo",
           },
         },
       },
@@ -124,10 +138,10 @@ export const ContractTypeJSON = {
           validation: { isNumeric: true, min: 0, optional: true },
           messages: {
             isNumeric: "El monto máximo debe ser numérico",
-            min: "El monto máximo no puede ser negativo"
+            min: "El monto máximo no puede ser negativo",
           },
         },
-      }
+      },
     },
     works: {
       min: {
@@ -138,7 +152,7 @@ export const ContractTypeJSON = {
           validation: { isNumeric: true, min: 0, optional: true },
           messages: {
             isNumeric: "El monto mínimo debe ser numérico",
-            min: "El monto mínimo no puede ser negativo"
+            min: "El monto mínimo no puede ser negativo",
           },
         },
       },
@@ -149,47 +163,47 @@ export const ContractTypeJSON = {
           validation: { isNumeric: true, min: 0, optional: true },
           messages: {
             isNumeric: "El monto máximo debe ser numérico",
-            min: "El monto máximo no puede ser negativo"
+            min: "El monto máximo no puede ser negativo",
           },
         },
-      }
-    }
+      },
+    },
   },
 
   // Configuración de procedimiento
   procedureConfig: {
     requiresPublication: {
       type: Boolean,
-      default: true
+      default: true,
     },
     publicationDays: {
       type: Number,
       min: 0,
       max: 30,
-      default: 15
+      default: 15,
     },
     questionsDeadlineDays: {
       type: Number,
       min: 0,
       max: 15,
-      default: 5
+      default: 5,
     },
     evaluationDays: {
       type: Number,
       min: 1,
       max: 30,
-      default: 10
+      default: 10,
     },
     requiresInsurance: {
       type: Boolean,
-      default: true
+      default: true,
     },
     insurancePercentage: {
       type: Number,
       min: 0,
       max: 100,
-      default: 5
-    }
+      default: 5,
+    },
   },
 
   // Control de estado
@@ -200,7 +214,7 @@ export const ContractTypeJSON = {
     meta: {
       validation: { isBoolean: true, optional: true },
       messages: {
-        isBoolean: "El estado activo debe ser verdadero o falso"
+        isBoolean: "El estado activo debe ser verdadero o falso",
       },
     },
   },
@@ -210,14 +224,14 @@ export const ContractTypeJSON = {
     type: Number,
     min: 0,
     default: 0,
-    index: true
-  }
+    index: true,
+  },
 };
 
 // Crear el esquema con campos base
 const ContractTypeSchema = new Schema(stripMetaFields(ContractTypeJSON), {
   timestamps: true,
-  collection: "contracttypes"
+  collection: "contracttypes",
 });
 
 // Aplicar configuración base
@@ -234,73 +248,91 @@ setupBaseSchema(ContractTypeSchema, {
 // === MIDDLEWARES PERSONALIZADOS ===
 
 // Pre-save: validar montos
-ContractTypeSchema.pre('save', function(next) {
+ContractTypeSchema.pre("save", function (next) {
   // Validar que min <= max para cada tipo
-  const types = ['goods', 'services', 'works'];
-  
+  const types = ["goods", "services", "works"];
+
   for (const type of types) {
     const min = this.amountLimits[type]?.min || 0;
     const max = this.amountLimits[type]?.max;
-    
+
     if (max !== undefined && min > max) {
-      return next(new Error(`El monto mínimo no puede ser mayor al máximo para ${type}`));
+      return next(
+        new Error(`El monto mínimo no puede ser mayor al máximo para ${type}`)
+      );
     }
   }
-  
+
   next();
 });
 
 // === MÉTODOS DE INSTANCIA ===
 
-ContractTypeSchema.methods.toJSON = function() {
+ContractTypeSchema.methods.toJSON = function () {
   const obj = this.toObject();
   return stripMetaFields(obj);
 };
 
-ContractTypeSchema.methods.isApplicableForAmount = function(amount, contractObject = 'goods') {
+ContractTypeSchema.methods.isApplicableForAmount = function (
+  amount,
+  contractObject = "goods"
+) {
   const limits = this.amountLimits[contractObject];
   if (!limits) return false;
-  
+
   const min = limits.min || 0;
   const max = limits.max;
-  
+
   return amount >= min && (max === undefined || amount <= max);
 };
 
-ContractTypeSchema.methods.getRequiredInsuranceAmount = function(contractValue) {
+ContractTypeSchema.methods.getRequiredInsuranceAmount = function (
+  contractValue
+) {
   if (!this.procedureConfig.requiresInsurance) return 0;
   return (contractValue * this.procedureConfig.insurancePercentage) / 100;
 };
 
 // === MÉTODOS ESTÁTICOS ===
 
-ContractTypeSchema.statics.isProtected = function(method) {
-  const protectedMethods = ["get", "put", "delete", "createBatch", "updateBatch"];
+ContractTypeSchema.statics.isProtected = function (method) {
+  const protectedMethods = [
+    "get",
+    "put",
+    "delete",
+    "createBatch",
+    "updateBatch",
+  ];
   return protectedMethods.includes(method);
 };
 
-ContractTypeSchema.statics.findByCategory = function(category) {
+ContractTypeSchema.statics.findByCategory = function (category) {
   return this.findActive({ category: category.toUpperCase() });
 };
 
-ContractTypeSchema.statics.findForAmount = function(amount, contractObject = 'goods') {
-  return this.findActive().then(types => {
-    return types.filter(type => type.isApplicableForAmount(amount, contractObject));
+ContractTypeSchema.statics.findForAmount = function (
+  amount,
+  contractObject = "goods"
+) {
+  return this.findActive().then((types) => {
+    return types.filter((type) =>
+      type.isApplicableForAmount(amount, contractObject)
+    );
   });
 };
 
-ContractTypeSchema.statics.getActiveOrderedList = function() {
+ContractTypeSchema.statics.getActiveOrderedList = function () {
   return this.findActive({}, { sort: { displayOrder: 1, name: 1 } });
 };
 
 // === QUERY HELPERS ===
 
-ContractTypeSchema.query.byCategory = function(category) {
+ContractTypeSchema.query.byCategory = function (category) {
   return this.where({ category: category.toUpperCase() });
 };
 
-ContractTypeSchema.query.requiresPublication = function() {
-  return this.where({ 'procedureConfig.requiresPublication': true });
+ContractTypeSchema.query.requiresPublication = function () {
+  return this.where({ "procedureConfig.requiresPublication": true });
 };
 
 // === ÍNDICES ADICIONALES ===
@@ -311,10 +343,10 @@ ContractTypeSchema.index({ displayOrder: 1, name: 1 });
 ContractTypeSchema.index({ isActive: 1, createdAt: -1 });
 
 // Índice de texto para búsqueda
-ContractTypeSchema.index({ 
-  name: "text", 
-  description: "text", 
-  code: "text" 
+ContractTypeSchema.index({
+  name: "text",
+  description: "text",
+  code: "text",
 });
 
 // === HOOKS Y PLUGINS ===
@@ -325,9 +357,12 @@ ContractTypeSchema.plugin(mongoosePaginate);
 // === VALIDACIONES ADICIONALES ===
 
 // Validar códigos únicos (case-insensitive)
-ContractTypeSchema.index({ code: 1 }, { 
-  unique: true, 
-  collation: { locale: 'en', strength: 2 }
-});
+ContractTypeSchema.index(
+  { code: 1 },
+  {
+    unique: true,
+    collation: { locale: "en", strength: 2 },
+  }
+);
 
 export const ContractType = mongoose.model("ContractType", ContractTypeSchema);

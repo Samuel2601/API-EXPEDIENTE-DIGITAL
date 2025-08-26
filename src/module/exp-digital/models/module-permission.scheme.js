@@ -13,35 +13,35 @@ const { Schema } = mongoose;
 
 // ===== DEFINICIÓN DE NIVELES DE ACCESO =====
 export const ACCESS_LEVELS = {
-  OWNER: 'OWNER',               // Gestor completo del departamento
-  CONTRIBUTOR: 'CONTRIBUTOR',   // Colaborador con permisos limitados
-  OBSERVER: 'OBSERVER',         // Solo lectura y observaciones
-  REPOSITORY: 'REPOSITORY'      // Acceso total como repositorio (ej: Compras Públicas)
+  OWNER: "OWNER", // Gestor completo del departamento
+  CONTRIBUTOR: "CONTRIBUTOR", // Colaborador con permisos limitados
+  OBSERVER: "OBSERVER", // Solo lectura y observaciones
+  REPOSITORY: "REPOSITORY", // Acceso total como repositorio (ej: Compras Públicas)
 };
 
 // ===== DEFINICIÓN DE ACCIONES DEL SISTEMA =====
 export const SYSTEM_ACTIONS = {
   // Gestión de contratos
-  CREATE_CONTRACT: 'create_contract',
-  VIEW_CONTRACT: 'view_contract',
-  EDIT_CONTRACT: 'edit_contract',
-  DELETE_CONTRACT: 'delete_contract',
-  
+  CREATE_CONTRACT: "create_contract",
+  VIEW_CONTRACT: "view_contract",
+  EDIT_CONTRACT: "edit_contract",
+  DELETE_CONTRACT: "delete_contract",
+
   // Gestión documental
-  UPLOAD_DOCUMENT: 'upload_document',
-  DOWNLOAD_DOCUMENT: 'download_document',
-  DELETE_DOCUMENT: 'delete_document',
-  VIEW_DOCUMENT: 'view_document',
-  
+  UPLOAD_DOCUMENT: "upload_document",
+  DOWNLOAD_DOCUMENT: "download_document",
+  DELETE_DOCUMENT: "delete_document",
+  VIEW_DOCUMENT: "view_document",
+
   // Interacciones
-  ADD_OBSERVATION: 'add_observation',
-  EDIT_OBSERVATION: 'edit_observation',
-  DELETE_OBSERVATION: 'delete_observation',
-  
+  ADD_OBSERVATION: "add_observation",
+  EDIT_OBSERVATION: "edit_observation",
+  DELETE_OBSERVATION: "delete_observation",
+
   // Visualización de datos
-  VIEW_FINANCIAL_DATA: 'view_financial_data',
-  VIEW_ALL_DEPARTMENTS: 'view_all_departments',
-  EXPORT_DATA: 'export_data'
+  VIEW_FINANCIAL_DATA: "view_financial_data",
+  VIEW_ALL_DEPARTMENTS: "view_all_departments",
+  EXPORT_DATA: "export_data",
 };
 
 // ===== ESQUEMA DE ACCESO POR DEPARTAMENTO =====
@@ -56,7 +56,7 @@ export const UserDepartmentAccessJSON = {
       validation: { isMongoId: true, required: true },
       messages: {
         required: "El usuario es obligatorio",
-        isMongoId: "El ID del usuario no es válido"
+        isMongoId: "El ID del usuario no es válido",
       },
     },
   },
@@ -64,14 +64,14 @@ export const UserDepartmentAccessJSON = {
   // Departamento al que accede
   department: {
     type: Schema.Types.ObjectId,
-    ref: "Department", 
+    ref: "Department",
     required: true,
     index: true,
     meta: {
       validation: { isMongoId: true, required: true },
       messages: {
         required: "El departamento es obligatorio",
-        isMongoId: "El ID del departamento no es válido"
+        isMongoId: "El ID del departamento no es válido",
       },
     },
   },
@@ -81,7 +81,7 @@ export const UserDepartmentAccessJSON = {
     type: String,
     enum: {
       values: Object.values(ACCESS_LEVELS),
-      message: "Nivel de acceso no válido"
+      message: "Nivel de acceso no válido",
     },
     required: true,
     uppercase: true,
@@ -90,7 +90,7 @@ export const UserDepartmentAccessJSON = {
       validation: { isIn: Object.values(ACCESS_LEVELS), required: true },
       messages: {
         required: "El nivel de acceso es obligatorio",
-        isIn: "El nivel de acceso debe ser uno de los valores válidos (OWNER, CONTRIBUTOR, OBSERVER, REPOSITORY)"
+        isIn: "El nivel de acceso debe ser uno de los valores válidos (OWNER, CONTRIBUTOR, OBSERVER, REPOSITORY)",
       },
     },
   },
@@ -104,7 +104,7 @@ export const UserDepartmentAccessJSON = {
       canViewDepartment: { type: Boolean, default: true },
       canViewAll: { type: Boolean, default: false }, // Para REPOSITORY
       canEdit: { type: Boolean, default: false },
-      canDelete: { type: Boolean, default: false }
+      canDelete: { type: Boolean, default: false },
     },
 
     // === GESTIÓN DOCUMENTAL ===
@@ -113,7 +113,7 @@ export const UserDepartmentAccessJSON = {
       canDownload: { type: Boolean, default: true },
       canView: { type: Boolean, default: true },
       canDelete: { type: Boolean, default: false },
-      canManageAll: { type: Boolean, default: false } // Para OWNER
+      canManageAll: { type: Boolean, default: false }, // Para OWNER
     },
 
     // === INTERACCIONES ===
@@ -121,7 +121,7 @@ export const UserDepartmentAccessJSON = {
       canAddObservations: { type: Boolean, default: false },
       canEditOwnObservations: { type: Boolean, default: false },
       canDeleteOwnObservations: { type: Boolean, default: false },
-      canViewAllObservations: { type: Boolean, default: true }
+      canViewAllObservations: { type: Boolean, default: true },
     },
 
     // === ACCESOS ESPECIALES ===
@@ -129,29 +129,33 @@ export const UserDepartmentAccessJSON = {
       canViewFinancialData: { type: Boolean, default: false },
       canExportData: { type: Boolean, default: false },
       canViewCrossDepartment: { type: Boolean, default: false },
-      canManagePermissions: { type: Boolean, default: false } // Solo para administradores
-    }
+      canManagePermissions: { type: Boolean, default: false }, // Solo para administradores
+    },
   },
 
   // ===== RESTRICCIONES ESPECÍFICAS (OPCIONALES) =====
   restrictions: {
     // Tipos de contrato que puede gestionar (vacío = todos)
-    allowedContractTypes: [{
-      type: Schema.Types.ObjectId,
-      ref: "ContractType"
-    }],
+    allowedContractTypes: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "ContractType",
+      },
+    ],
 
     // Fases específicas donde puede trabajar (vacío = todas)
-    allowedPhases: [{
-      type: Schema.Types.ObjectId,
-      ref: "ContractPhase"
-    }],
+    allowedPhases: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "ContractPhase",
+      },
+    ],
 
     // Límite de monto para contratos (0 = sin límite)
     maxContractAmount: {
       type: Number,
       min: 0,
-      default: 0
+      default: 0,
     },
 
     // Restricciones temporales
@@ -160,52 +164,64 @@ export const UserDepartmentAccessJSON = {
       startTime: {
         type: String, // HH:MM
         validate: {
-          validator: function(v) {
+          validator: function (v) {
             return !v || /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(v);
           },
-          message: 'La hora debe tener formato HH:MM'
-        }
+          message: "La hora debe tener formato HH:MM",
+        },
       },
       endTime: {
         type: String, // HH:MM
         validate: {
-          validator: function(v) {
+          validator: function (v) {
             return !v || /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(v);
           },
-          message: 'La hora debe tener formato HH:MM'
-        }
+          message: "La hora debe tener formato HH:MM",
+        },
       },
-      allowedDays: [{
-        type: String,
-        enum: ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
-      }]
+      allowedDays: [
+        {
+          type: String,
+          enum: [
+            "MONDAY",
+            "TUESDAY",
+            "WEDNESDAY",
+            "THURSDAY",
+            "FRIDAY",
+            "SATURDAY",
+            "SUNDAY",
+          ],
+        },
+      ],
     },
 
     // Restricciones de IP (opcional)
     ipRestrictions: {
       enabled: { type: Boolean, default: false },
       allowedIPs: [String],
-      blockedIPs: [String]
-    }
+      blockedIPs: [String],
+    },
   },
 
   // ===== CONFIGURACIÓN DE ACCESO CRUZADO =====
   crossDepartmentAccess: {
     // Departamentos que puede visualizar (además del propio)
-    viewableDepartments: [{
-      department: {
-        type: Schema.Types.ObjectId,
-        ref: "Department"
+    viewableDepartments: [
+      {
+        department: {
+          type: Schema.Types.ObjectId,
+          ref: "Department",
+        },
+        accessLevel: {
+          type: String,
+          enum: ["READ_ONLY", "OBSERVE_COMMENT", "COLLABORATE"],
+          default: "READ_ONLY",
+        },
       },
-      accessLevel: {
-        type: String,
-        enum: ["READ_ONLY", "OBSERVE_COMMENT", "COLLABORATE"],
-        default: "READ_ONLY"
-      }
-    }],
+    ],
 
     // Si tiene acceso global (como repositorio)
-    hasGlobalAccess: { type: Boolean, default: false }
+    hasGlobalAccess: { type: Boolean, default: false },
   },
 
   // ===== INFORMACIÓN DE ASIGNACIÓN =====
@@ -218,15 +234,15 @@ export const UserDepartmentAccessJSON = {
         validation: { isMongoId: true, required: true },
         messages: {
           required: "El usuario que asigna es obligatorio",
-          isMongoId: "El ID del usuario asignador no es válido"
+          isMongoId: "El ID del usuario asignador no es válido",
         },
       },
     },
-    
+
     assignmentDate: {
       type: Date,
       default: Date.now,
-      required: true
+      required: true,
     },
 
     assignmentReason: {
@@ -237,7 +253,7 @@ export const UserDepartmentAccessJSON = {
         validation: { isString: true, optional: true, isLength: { max: 500 } },
         messages: {
           isString: "La razón debe ser un texto válido",
-          isLength: "La razón no puede exceder 500 caracteres"
+          isLength: "La razón no puede exceder 500 caracteres",
         },
       },
     },
@@ -245,15 +261,15 @@ export const UserDepartmentAccessJSON = {
     isPrimary: {
       type: Boolean,
       default: false,
-      index: true
+      index: true,
     }, // Marca si este es su departamento principal
 
     priority: {
       type: String,
       enum: ["LOW", "NORMAL", "HIGH"],
       default: "NORMAL",
-      uppercase: true
-    }
+      uppercase: true,
+    },
   },
 
   // ===== VIGENCIA DEL ACCESO =====
@@ -266,7 +282,7 @@ export const UserDepartmentAccessJSON = {
         validation: { isDate: true, required: true },
         messages: {
           required: "La fecha de inicio es obligatoria",
-          isDate: "La fecha de inicio debe ser válida"
+          isDate: "La fecha de inicio debe ser válida",
         },
       },
     },
@@ -276,17 +292,17 @@ export const UserDepartmentAccessJSON = {
       meta: {
         validation: { isDate: true, optional: true },
         messages: {
-          isDate: "La fecha de fin debe ser válida"
+          isDate: "La fecha de fin debe ser válida",
         },
       },
     },
 
     isTemporary: { type: Boolean, default: false },
-    
+
     autoExpire: {
       enabled: { type: Boolean, default: false },
-      days: { type: Number, min: 1, max: 365 } // Días después de los cuales expira
-    }
+      days: { type: Number, min: 1, max: 365 }, // Días después de los cuales expira
+    },
   },
 
   // ===== ESTADO DEL ACCESO =====
@@ -294,15 +310,18 @@ export const UserDepartmentAccessJSON = {
     type: String,
     enum: {
       values: ["ACTIVE", "SUSPENDED", "EXPIRED", "REVOKED", "PENDING"],
-      message: "Estado no válido"
+      message: "Estado no válido",
     },
     default: "ACTIVE",
     uppercase: true,
     index: true,
     meta: {
-      validation: { isIn: ["ACTIVE", "SUSPENDED", "EXPIRED", "REVOKED", "PENDING"], optional: true },
+      validation: {
+        isIn: ["ACTIVE", "SUSPENDED", "EXPIRED", "REVOKED", "PENDING"],
+        optional: true,
+      },
       messages: {
-        isIn: "El estado debe ser uno de los valores válidos"
+        isIn: "El estado debe ser uno de los valores válidos",
       },
     },
   },
@@ -316,7 +335,7 @@ export const UserDepartmentAccessJSON = {
       validation: { isString: true, optional: true, isLength: { max: 1000 } },
       messages: {
         isString: "Las observaciones deben ser un texto válido",
-        isLength: "Las observaciones no pueden exceder 1000 caracteres"
+        isLength: "Las observaciones no pueden exceder 1000 caracteres",
       },
     },
   },
@@ -324,15 +343,17 @@ export const UserDepartmentAccessJSON = {
   metadata: {
     lastAccess: Date,
     accessCount: { type: Number, default: 0 },
-    
+
     // Tags para categorización
-    tags: [{
-      type: String,
-      maxlength: 50
-    }],
+    tags: [
+      {
+        type: String,
+        maxlength: 50,
+      },
+    ],
 
     // Información adicional
-    notes: String
+    notes: String,
   },
 
   isActive: {
@@ -342,10 +363,10 @@ export const UserDepartmentAccessJSON = {
     meta: {
       validation: { isBoolean: true, optional: true },
       messages: {
-        isBoolean: "El estado activo debe ser verdadero o falso"
+        isBoolean: "El estado activo debe ser verdadero o falso",
       },
     },
-  }
+  },
 };
 
 // ===== ESQUEMA DE PLANTILLAS DE PERMISOS =====
@@ -357,12 +378,17 @@ export const PermissionTemplateJSON = {
     maxlength: 100,
     unique: true,
     meta: {
-      validation: { isString: true, required: true, notEmpty: true, isLength: { min: 3, max: 100 } },
+      validation: {
+        isString: true,
+        required: true,
+        notEmpty: true,
+        isLength: { min: 3, max: 100 },
+      },
       messages: {
         required: "El nombre de la plantilla es obligatorio",
         isString: "El nombre debe ser un texto válido",
         notEmpty: "El nombre no puede estar vacío",
-        isLength: "El nombre debe tener entre 3 y 100 caracteres"
+        isLength: "El nombre debe tener entre 3 y 100 caracteres",
       },
     },
   },
@@ -375,7 +401,7 @@ export const PermissionTemplateJSON = {
       validation: { isString: true, optional: true, isLength: { max: 500 } },
       messages: {
         isString: "La descripción debe ser un texto válido",
-        isLength: "La descripción no puede exceder 500 caracteres"
+        isLength: "La descripción no puede exceder 500 caracteres",
       },
     },
   },
@@ -385,7 +411,7 @@ export const PermissionTemplateJSON = {
     type: String,
     enum: Object.values(ACCESS_LEVELS),
     required: true,
-    uppercase: true
+    uppercase: true,
   },
 
   // Configuración de permisos de la plantilla
@@ -396,7 +422,7 @@ export const PermissionTemplateJSON = {
       canViewDepartment: { type: Boolean, default: true },
       canViewAll: { type: Boolean, default: false },
       canEdit: { type: Boolean, default: false },
-      canDelete: { type: Boolean, default: false }
+      canDelete: { type: Boolean, default: false },
     },
 
     documents: {
@@ -404,35 +430,39 @@ export const PermissionTemplateJSON = {
       canDownload: { type: Boolean, default: true },
       canView: { type: Boolean, default: true },
       canDelete: { type: Boolean, default: false },
-      canManageAll: { type: Boolean, default: false }
+      canManageAll: { type: Boolean, default: false },
     },
 
     interactions: {
       canAddObservations: { type: Boolean, default: false },
       canEditOwnObservations: { type: Boolean, default: false },
       canDeleteOwnObservations: { type: Boolean, default: false },
-      canViewAllObservations: { type: Boolean, default: true }
+      canViewAllObservations: { type: Boolean, default: true },
     },
 
     special: {
       canViewFinancialData: { type: Boolean, default: false },
       canExportData: { type: Boolean, default: false },
       canViewCrossDepartment: { type: Boolean, default: false },
-      canManagePermissions: { type: Boolean, default: false }
-    }
+      canManagePermissions: { type: Boolean, default: false },
+    },
   },
 
   // Roles que pueden usar esta plantilla
-  applicableRoles: [{
-    type: Schema.Types.ObjectId,
-    ref: "role"
-  }],
+  applicableRoles: [
+    {
+      type: Schema.Types.ObjectId,
+      ref: "role",
+    },
+  ],
 
   // Departamentos donde se puede aplicar
-  applicableDepartments: [{
-    type: Schema.Types.ObjectId,
-    ref: "Department"
-  }],
+  applicableDepartments: [
+    {
+      type: Schema.Types.ObjectId,
+      ref: "Department",
+    },
+  ],
 
   // Configuración de auto-aplicación
   autoAssignment: {
@@ -440,17 +470,17 @@ export const PermissionTemplateJSON = {
     trigger: {
       type: String,
       enum: ["ROLE_ASSIGNMENT", "DEPARTMENT_JOIN", "MANUAL"],
-      default: "MANUAL"
-    }
+      default: "MANUAL",
+    },
   },
 
   createdBy: {
     type: Schema.Types.ObjectId,
     ref: "user",
-    required: true
+    required: true,
   },
 
-  isActive: { type: Boolean, default: true, index: true }
+  isActive: { type: Boolean, default: true, index: true },
 };
 
 // ===== ESQUEMA DE HISTORIAL DE PERMISOS =====
@@ -459,31 +489,39 @@ export const PermissionHistoryJSON = {
     type: Schema.Types.ObjectId,
     ref: "UserDepartmentAccess",
     required: true,
-    index: true
+    index: true,
   },
 
   actionType: {
     type: String,
     enum: {
-      values: ["CREATED", "UPDATED", "ACTIVATED", "SUSPENDED", "REVOKED", "EXPIRED", "RESTORED"],
-      message: "Tipo de acción no válido"
+      values: [
+        "CREATED",
+        "UPDATED",
+        "ACTIVATED",
+        "SUSPENDED",
+        "REVOKED",
+        "EXPIRED",
+        "RESTORED",
+      ],
+      message: "Tipo de acción no válido",
     },
     required: true,
     uppercase: true,
-    index: true
+    index: true,
   },
 
   changedBy: {
     type: Schema.Types.ObjectId,
     ref: "user",
-    required: true
+    required: true,
   },
 
   changeDate: {
     type: Date,
     default: Date.now,
     required: true,
-    index: true
+    index: true,
   },
 
   previousValues: Schema.Types.Mixed,
@@ -492,14 +530,14 @@ export const PermissionHistoryJSON = {
   reason: {
     type: String,
     trim: true,
-    maxlength: 500
+    maxlength: 500,
   },
 
   auditInfo: {
     ipAddress: String,
     userAgent: String,
-    sessionId: String
-  }
+    sessionId: String,
+  },
 };
 
 // ===== EXTENSIÓN DEL ESQUEMA DE CONTRATO PARA CONCURRENCIA =====
@@ -508,54 +546,54 @@ export const ContractConcurrencyExtension = {
     currentlyEditing: {
       userId: {
         type: Schema.Types.ObjectId,
-        ref: "user"
+        ref: "user",
       },
       userName: {
         type: String,
         trim: true,
-        maxlength: 150
+        maxlength: 150,
       },
       userEmail: {
         type: String,
         trim: true,
-        lowercase: true
+        lowercase: true,
       },
       startTime: Date,
       sessionId: {
         type: String,
         trim: true,
-        maxlength: 100
+        maxlength: 100,
       },
       ipAddress: {
         type: String,
         trim: true,
-        maxlength: 45
-      }
+        maxlength: 45,
+      },
     },
     editLock: {
       type: Boolean,
       default: false,
-      index: true
+      index: true,
     },
     lockExpiration: {
       type: Date,
-      index: true
+      index: true,
     },
     version: {
       type: Number,
       default: 0,
-      min: 0
+      min: 0,
     },
     forceUnlocked: {
       type: Boolean,
-      default: false
+      default: false,
     },
     forceUnlockedBy: {
       type: Schema.Types.ObjectId,
-      ref: "user"
+      ref: "user",
     },
-    forceUnlockedAt: Date
-  }
+    forceUnlockedAt: Date,
+  },
 };
 
 // ===== EXTENSIÓN DEL ESQUEMA DE DEPARTAMENTO PARA POLÍTICAS =====
@@ -565,95 +603,118 @@ export const DepartmentContractPoliciesExtension = {
     concurrency: {
       allowMultipleEditors: {
         type: Boolean,
-        default: false
+        default: false,
       },
       maxConcurrentEdits: {
         type: Number,
         default: 1,
         min: 1,
-        max: 5
+        max: 5,
       },
       autoReleaseLockMinutes: {
         type: Number,
         default: 30,
         min: 5,
-        max: 240
+        max: 240,
       },
       lockExtensionAllowed: {
         type: Boolean,
-        default: true
+        default: true,
       },
       maxLockExtensions: {
         type: Number,
         default: 2,
         min: 0,
-        max: 5
-      }
+        max: 5,
+      },
     },
-    
+
     // Acciones permitidas
-    allowedActions: [{
-      type: String,
-      enum: ["UPLOAD_DOCUMENT", "MODIFY_DATA", "DELETE_DOCUMENT", "CHANGE_PHASE", "ADD_OBSERVATION", "APPROVE", "REJECT"]
-    }],
-    
+    allowedActions: [
+      {
+        type: String,
+        enum: [
+          "UPLOAD_DOCUMENT",
+          "MODIFY_DATA",
+          "DELETE_DOCUMENT",
+          "CHANGE_PHASE",
+          "ADD_OBSERVATION",
+          "APPROVE",
+          "REJECT",
+        ],
+      },
+    ],
+
     // Restricciones de edición
     editRestrictions: {
       requiresApprovalToEdit: {
         type: Boolean,
-        default: false
+        default: false,
       },
-      editablePhases: [{
-        type: Schema.Types.ObjectId,
-        ref: "ContractPhase"
-      }],
-      restrictedFields: [String], // Campos que no se pueden editar
-      
-      // Restricciones por rol
-      roleRestrictions: [{
-        role: {
-          type: String,
-          enum: ["OWNER", "CONTRIBUTOR", "OBSERVER", "REPOSITORY"]
+      editablePhases: [
+        {
+          type: Schema.Types.ObjectId,
+          ref: "ContractPhase",
         },
-        allowedActions: [String],
-        maxEditTime: Number // minutos
-      }]
+      ],
+      restrictedFields: [String], // Campos que no se pueden editar
+
+      // Restricciones por rol
+      roleRestrictions: [
+        {
+          role: {
+            type: String,
+            enum: ["OWNER", "CONTRIBUTOR", "OBSERVER", "REPOSITORY"],
+          },
+          allowedActions: [String],
+          maxEditTime: Number, // minutos
+        },
+      ],
     },
-    
+
     // Notificaciones
     notifications: {
       notifyOnLock: { type: Boolean, default: true },
       notifyOnUnlock: { type: Boolean, default: false },
       notifyOnForceUnlock: { type: Boolean, default: true },
       notifyDepartmentHead: { type: Boolean, default: false },
-      escalationMinutes: { type: Number, default: 60 }
+      escalationMinutes: { type: Number, default: 60 },
     },
-    
+
     // Auditoría
     auditLevel: {
       type: String,
       enum: ["BASIC", "DETAILED", "COMPREHENSIVE"],
-      default: "BASIC"
-    }
-  }
+      default: "BASIC",
+    },
+  },
 };
 
 // ===== CREACIÓN DE ESQUEMAS =====
 
-const UserDepartmentAccessSchema = new Schema(stripMetaFields(UserDepartmentAccessJSON), {
-  timestamps: true,
-  collection: "userdepartmentaccess"
-});
+const UserDepartmentAccessSchema = new Schema(
+  stripMetaFields(UserDepartmentAccessJSON),
+  {
+    timestamps: true,
+    collection: "userdepartmentaccess",
+  }
+);
 
-const PermissionTemplateSchema = new Schema(stripMetaFields(PermissionTemplateJSON), {
-  timestamps: true,
-  collection: "permissiontemplates"
-});
+const PermissionTemplateSchema = new Schema(
+  stripMetaFields(PermissionTemplateJSON),
+  {
+    timestamps: true,
+    collection: "permissiontemplates",
+  }
+);
 
-const PermissionHistorySchema = new Schema(stripMetaFields(PermissionHistoryJSON), {
-  timestamps: true,
-  collection: "permissionhistory"
-});
+const PermissionHistorySchema = new Schema(
+  stripMetaFields(PermissionHistoryJSON),
+  {
+    timestamps: true,
+    collection: "permissionhistory",
+  }
+);
 
 // ===== APLICAR CONFIGURACIÓN BASE =====
 
@@ -690,25 +751,30 @@ setupBaseSchema(PermissionHistorySchema, {
 // ===== MIDDLEWARES =====
 
 // Pre-save: Configurar permisos según nivel de acceso
-UserDepartmentAccessSchema.pre('save', function(next) {
+UserDepartmentAccessSchema.pre("save", function (next) {
   // Auto-configurar permisos según el nivel de acceso
-  if (this.isModified('accessLevel')) {
+  if (this.isModified("accessLevel")) {
     this.configurePermissionsByLevel();
   }
 
   // Validar que no haya duplicados activos
-  if (this.isNew || this.isModified('user') || this.isModified('department')) {
-    this.constructor.findOne({
-      user: this.user,
-      department: this.department,
-      status: 'ACTIVE',
-      _id: { $ne: this._id }
-    }).then(existing => {
-      if (existing) {
-        return next(new Error('El usuario ya tiene acceso activo a este departamento'));
-      }
-      next();
-    }).catch(next);
+  if (this.isNew || this.isModified("user") || this.isModified("department")) {
+    this.constructor
+      .findOne({
+        user: this.user,
+        department: this.department,
+        status: "ACTIVE",
+        _id: { $ne: this._id },
+      })
+      .then((existing) => {
+        if (existing) {
+          return next(
+            new Error("El usuario ya tiene acceso activo a este departamento")
+          );
+        }
+        next();
+      })
+      .catch(next);
   } else {
     next();
   }
@@ -716,56 +782,151 @@ UserDepartmentAccessSchema.pre('save', function(next) {
 
 // ===== MÉTODOS DE INSTANCIA =====
 
-UserDepartmentAccessSchema.methods.toJSON = function() {
+UserDepartmentAccessSchema.methods.toJSON = function () {
   const obj = this.toObject();
   return stripMetaFields(obj);
 };
 
 // Configurar permisos automáticamente según el nivel de acceso
-UserDepartmentAccessSchema.methods.configurePermissionsByLevel = function() {
-  switch(this.accessLevel) {
+UserDepartmentAccessSchema.methods.configurePermissionsByLevel = function () {
+  switch (this.accessLevel) {
     case ACCESS_LEVELS.OWNER:
       this.permissions = {
-        contracts: { canCreate: true, canViewOwn: true, canViewDepartment: true, canViewAll: false, canEdit: true, canDelete: true },
-        documents: { canUpload: true, canDownload: true, canView: true, canDelete: true, canManageAll: true },
-        interactions: { canAddObservations: true, canEditOwnObservations: true, canDeleteOwnObservations: true, canViewAllObservations: true },
-        special: { canViewFinancialData: true, canExportData: true, canViewCrossDepartment: false, canManagePermissions: false }
+        contracts: {
+          canCreate: true,
+          canViewOwn: true,
+          canViewDepartment: true,
+          canViewAll: false,
+          canEdit: true,
+          canDelete: true,
+        },
+        documents: {
+          canUpload: true,
+          canDownload: true,
+          canView: true,
+          canDelete: true,
+          canManageAll: true,
+        },
+        interactions: {
+          canAddObservations: true,
+          canEditOwnObservations: true,
+          canDeleteOwnObservations: true,
+          canViewAllObservations: true,
+        },
+        special: {
+          canViewFinancialData: true,
+          canExportData: true,
+          canViewCrossDepartment: false,
+          canManagePermissions: false,
+        },
       };
       break;
 
     case ACCESS_LEVELS.REPOSITORY:
       this.permissions = {
-        contracts: { canCreate: false, canViewOwn: true, canViewDepartment: true, canViewAll: true, canEdit: false, canDelete: false },
-        documents: { canUpload: false, canDownload: true, canView: true, canDelete: false, canManageAll: false },
-        interactions: { canAddObservations: true, canEditOwnObservations: true, canDeleteOwnObservations: false, canViewAllObservations: true },
-        special: { canViewFinancialData: true, canExportData: true, canViewCrossDepartment: true, canManagePermissions: false }
+        contracts: {
+          canCreate: false,
+          canViewOwn: true,
+          canViewDepartment: true,
+          canViewAll: true,
+          canEdit: false,
+          canDelete: false,
+        },
+        documents: {
+          canUpload: false,
+          canDownload: true,
+          canView: true,
+          canDelete: false,
+          canManageAll: false,
+        },
+        interactions: {
+          canAddObservations: true,
+          canEditOwnObservations: true,
+          canDeleteOwnObservations: false,
+          canViewAllObservations: true,
+        },
+        special: {
+          canViewFinancialData: true,
+          canExportData: true,
+          canViewCrossDepartment: true,
+          canManagePermissions: false,
+        },
       };
       this.crossDepartmentAccess.hasGlobalAccess = true;
       break;
 
     case ACCESS_LEVELS.CONTRIBUTOR:
       this.permissions = {
-        contracts: { canCreate: false, canViewOwn: true, canViewDepartment: true, canViewAll: false, canEdit: false, canDelete: false },
-        documents: { canUpload: true, canDownload: true, canView: true, canDelete: false, canManageAll: false },
-        interactions: { canAddObservations: true, canEditOwnObservations: true, canDeleteOwnObservations: false, canViewAllObservations: true },
-        special: { canViewFinancialData: false, canExportData: false, canViewCrossDepartment: false, canManagePermissions: false }
+        contracts: {
+          canCreate: false,
+          canViewOwn: true,
+          canViewDepartment: true,
+          canViewAll: false,
+          canEdit: false,
+          canDelete: false,
+        },
+        documents: {
+          canUpload: true,
+          canDownload: true,
+          canView: true,
+          canDelete: false,
+          canManageAll: false,
+        },
+        interactions: {
+          canAddObservations: true,
+          canEditOwnObservations: true,
+          canDeleteOwnObservations: false,
+          canViewAllObservations: true,
+        },
+        special: {
+          canViewFinancialData: false,
+          canExportData: false,
+          canViewCrossDepartment: false,
+          canManagePermissions: false,
+        },
       };
       break;
 
     case ACCESS_LEVELS.OBSERVER:
       this.permissions = {
-        contracts: { canCreate: false, canViewOwn: true, canViewDepartment: true, canViewAll: false, canEdit: false, canDelete: false },
-        documents: { canUpload: false, canDownload: true, canView: true, canDelete: false, canManageAll: false },
-        interactions: { canAddObservations: true, canEditOwnObservations: true, canDeleteOwnObservations: false, canViewAllObservations: true },
-        special: { canViewFinancialData: false, canExportData: false, canViewCrossDepartment: false, canManagePermissions: false }
+        contracts: {
+          canCreate: false,
+          canViewOwn: true,
+          canViewDepartment: true,
+          canViewAll: false,
+          canEdit: false,
+          canDelete: false,
+        },
+        documents: {
+          canUpload: false,
+          canDownload: true,
+          canView: true,
+          canDelete: false,
+          canManageAll: false,
+        },
+        interactions: {
+          canAddObservations: true,
+          canEditOwnObservations: true,
+          canDeleteOwnObservations: false,
+          canViewAllObservations: true,
+        },
+        special: {
+          canViewFinancialData: false,
+          canExportData: false,
+          canViewCrossDepartment: false,
+          canManagePermissions: false,
+        },
       };
       break;
   }
 };
 
 // Verificar si tiene un permiso específico
-UserDepartmentAccessSchema.methods.hasPermission = function(category, permission) {
-  if (!this.isActive || this.status !== 'ACTIVE' || this.isExpired()) {
+UserDepartmentAccessSchema.methods.hasPermission = function (
+  category,
+  permission
+) {
+  if (!this.isActive || this.status !== "ACTIVE" || this.isExpired()) {
     return false;
   }
 
@@ -773,86 +934,107 @@ UserDepartmentAccessSchema.methods.hasPermission = function(category, permission
 };
 
 // Verificar si el acceso ha expirado
-UserDepartmentAccessSchema.methods.isExpired = function() {
+UserDepartmentAccessSchema.methods.isExpired = function () {
   if (!this.validity.endDate) return false;
   return new Date() > this.validity.endDate;
 };
 
 // Verificar si puede acceder a un contrato específico
-UserDepartmentAccessSchema.methods.canAccessContract = function(contract) {
-  if (!this.isActive || this.status !== 'ACTIVE' || this.isExpired()) {
+UserDepartmentAccessSchema.methods.canAccessContract = function (contract) {
+  if (!this.isActive || this.status !== "ACTIVE" || this.isExpired()) {
     return false;
   }
 
   // Si es del mismo departamento
   if (contract.requestingDepartment.toString() === this.department.toString()) {
-    return this.hasPermission('contracts', 'canViewDepartment');
+    return this.hasPermission("contracts", "canViewDepartment");
   }
 
   // Si tiene acceso global (REPOSITORY)
-  if (this.crossDepartmentAccess.hasGlobalAccess && this.hasPermission('contracts', 'canViewAll')) {
+  if (
+    this.crossDepartmentAccess.hasGlobalAccess &&
+    this.hasPermission("contracts", "canViewAll")
+  ) {
     return true;
   }
 
   // Si tiene acceso específico a otros departamentos
-  const crossAccess = this.crossDepartmentAccess.viewableDepartments.find(vd => 
-    vd.department.toString() === contract.requestingDepartment.toString()
+  const crossAccess = this.crossDepartmentAccess.viewableDepartments.find(
+    (vd) =>
+      vd.department.toString() === contract.requestingDepartment.toString()
   );
-  
+
   return !!crossAccess;
 };
 
 // ===== MÉTODOS ESTÁTICOS =====
 
-UserDepartmentAccessSchema.statics.isProtected = function(method) {
-  const protectedMethods = ["get", "post", "put", "delete", "createBatch", "updateBatch"];
+UserDepartmentAccessSchema.statics.isProtected = function (method) {
+  const protectedMethods = [
+    "get",
+    "post",
+    "put",
+    "delete",
+    "createBatch",
+    "updateBatch",
+  ];
   return protectedMethods.includes(method);
 };
 
 // Obtener todos los accesos de un usuario
-UserDepartmentAccessSchema.statics.getUserAccesses = function(userId, status = 'ACTIVE') {
-  return this.find({ 
-    user: userId, 
+UserDepartmentAccessSchema.statics.getUserAccesses = function (
+  userId,
+  status = "ACTIVE"
+) {
+  return this.find({
+    user: userId,
     status: status,
-    isActive: true 
-  }).populate('department', 'code name shortName')
-    .sort({ 'assignment.isPrimary': -1, 'assignment.assignmentDate': -1 });
+    isActive: true,
+  })
+    .populate("department", "code name shortName")
+    .sort({ "assignment.isPrimary": -1, "assignment.assignmentDate": -1 });
 };
 
 // Verificar si un usuario puede realizar una acción específica
-UserDepartmentAccessSchema.statics.checkUserPermission = async function(userId, departmentId, category, permission, contractId = null) {
+UserDepartmentAccessSchema.statics.checkUserPermission = async function (
+  userId,
+  departmentId,
+  category,
+  permission,
+  contractId = null
+) {
   const access = await this.findOne({
     user: userId,
     department: departmentId,
-    status: 'ACTIVE',
-    isActive: true
+    status: "ACTIVE",
+    isActive: true,
   });
 
-  if (!access) return { allowed: false, reason: 'No access found' };
+  if (!access) return { allowed: false, reason: "No access found" };
 
   // Si se especifica un contrato, verificar acceso específico
   if (contractId) {
-    const Contract = mongoose.model('Contract');
+    const Contract = mongoose.model("Contract");
     const contract = await Contract.findById(contractId);
-    if (!contract) return { allowed: false, reason: 'Contract not found' };
-    
+    if (!contract) return { allowed: false, reason: "Contract not found" };
+
     if (!access.canAccessContract(contract)) {
-      return { allowed: false, reason: 'No access to this contract' };
+      return { allowed: false, reason: "No access to this contract" };
     }
   }
 
   const hasPermission = access.hasPermission(category, permission);
-  return { 
-    allowed: hasPermission, 
+  return {
+    allowed: hasPermission,
     accessLevel: access.accessLevel,
-    reason: hasPermission ? 'Permission granted' : 'Permission denied'
+    reason: hasPermission ? "Permission granted" : "Permission denied",
   };
 };
 
 // Obtener el dashboard de permisos de un usuario
-UserDepartmentAccessSchema.statics.getUserDashboard = async function(userId) {
+UserDepartmentAccessSchema.statics.getUserDashboard = async function (userId) {
   const accesses = await this.getUserAccesses(userId);
-  
+
   const dashboard = {
     primaryDepartment: null,
     departmentAccesses: [],
@@ -861,11 +1043,11 @@ UserDepartmentAccessSchema.statics.getUserDashboard = async function(userId) {
       totalDepartments: accesses.length,
       canCreateContracts: false,
       canViewAllDepartments: false,
-      isRepositoryUser: false
-    }
+      isRepositoryUser: false,
+    },
   };
 
-  accesses.forEach(access => {
+  accesses.forEach((access) => {
     if (access.assignment.isPrimary) {
       dashboard.primaryDepartment = access;
     }
@@ -874,14 +1056,14 @@ UserDepartmentAccessSchema.statics.getUserDashboard = async function(userId) {
       department: access.department,
       accessLevel: access.accessLevel,
       permissions: access.permissions,
-      crossDepartmentAccess: access.crossDepartmentAccess
+      crossDepartmentAccess: access.crossDepartmentAccess,
     });
 
     // Actualizar resumen
-    if (access.hasPermission('contracts', 'canCreate')) {
+    if (access.hasPermission("contracts", "canCreate")) {
       dashboard.summary.canCreateContracts = true;
     }
-    
+
     if (access.crossDepartmentAccess.hasGlobalAccess) {
       dashboard.summary.canViewAllDepartments = true;
       dashboard.globalAccess = true;
@@ -897,40 +1079,40 @@ UserDepartmentAccessSchema.statics.getUserDashboard = async function(userId) {
 
 // ===== VIRTUALES =====
 
-UserDepartmentAccessSchema.virtual('isExpiredVirtual').get(function() {
+UserDepartmentAccessSchema.virtual("isExpiredVirtual").get(function () {
   return this.isExpired();
 });
 
-UserDepartmentAccessSchema.virtual('accessLevelDisplay').get(function() {
+UserDepartmentAccessSchema.virtual("accessLevelDisplay").get(function () {
   const displayNames = {
-    'OWNER': 'Gestor Completo',
-    'CONTRIBUTOR': 'Colaborador',
-    'OBSERVER': 'Observador',
-    'REPOSITORY': 'Repositorio General'
+    OWNER: "Gestor Completo",
+    CONTRIBUTOR: "Colaborador",
+    OBSERVER: "Observador",
+    REPOSITORY: "Repositorio General",
   };
   return displayNames[this.accessLevel] || this.accessLevel;
 });
 
 // ===== QUERY HELPERS =====
 
-UserDepartmentAccessSchema.query.active = function() {
-  return this.where({ status: 'ACTIVE', isActive: true });
+UserDepartmentAccessSchema.query.active = function () {
+  return this.where({ status: "ACTIVE", isActive: true });
 };
 
-UserDepartmentAccessSchema.query.byUser = function(userId) {
+UserDepartmentAccessSchema.query.byUser = function (userId) {
   return this.where({ user: userId });
 };
 
-UserDepartmentAccessSchema.query.byDepartment = function(departmentId) {
+UserDepartmentAccessSchema.query.byDepartment = function (departmentId) {
   return this.where({ department: departmentId });
 };
 
-UserDepartmentAccessSchema.query.byAccessLevel = function(level) {
+UserDepartmentAccessSchema.query.byAccessLevel = function (level) {
   return this.where({ accessLevel: level.toUpperCase() });
 };
 
-UserDepartmentAccessSchema.query.withGlobalAccess = function() {
-  return this.where({ 'crossDepartmentAccess.hasGlobalAccess': true });
+UserDepartmentAccessSchema.query.withGlobalAccess = function () {
+  return this.where({ "crossDepartmentAccess.hasGlobalAccess": true });
 };
 
 // ===== ÍNDICES OPTIMIZADOS =====
@@ -942,18 +1124,20 @@ UserDepartmentAccessSchema.index({ user: 1, department: 1, status: 1 });
 
 // Índice único para evitar duplicados activos
 UserDepartmentAccessSchema.index(
-  { user: 1, department: 1, status: 1 }, 
-  { 
-    unique: true, 
-    partialFilterExpression: { status: 'ACTIVE' } 
+  { user: 1, department: 1, status: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: "ACTIVE" },
   }
 );
 
 // Índices para consultas específicas
 UserDepartmentAccessSchema.index({ accessLevel: 1, isActive: 1 });
-UserDepartmentAccessSchema.index({ 'assignment.isPrimary': 1, user: 1 });
-UserDepartmentAccessSchema.index({ 'crossDepartmentAccess.hasGlobalAccess': 1 });
-UserDepartmentAccessSchema.index({ 'validity.endDate': 1, status: 1 });
+UserDepartmentAccessSchema.index({ "assignment.isPrimary": 1, user: 1 });
+UserDepartmentAccessSchema.index({
+  "crossDepartmentAccess.hasGlobalAccess": 1,
+});
+UserDepartmentAccessSchema.index({ "validity.endDate": 1, status: 1 });
 
 // Índices para PermissionTemplate
 PermissionTemplateSchema.index({ name: 1 }, { unique: true });
@@ -974,6 +1158,15 @@ PermissionHistorySchema.plugin(mongoosePaginate);
 
 // ===== EXPORTACIÓN =====
 
-export const UserDepartmentAccess = mongoose.model("UserDepartmentAccess", UserDepartmentAccessSchema);
-export const PermissionTemplate = mongoose.model("PermissionTemplate", PermissionTemplateSchema);
-export const PermissionHistory = mongoose.model("PermissionHistory", PermissionHistorySchema);
+export const UserDepartmentAccess = mongoose.model(
+  "UserDepartmentAccess",
+  UserDepartmentAccessSchema
+);
+export const PermissionTemplate = mongoose.model(
+  "PermissionTemplate",
+  PermissionTemplateSchema
+);
+export const PermissionHistory = mongoose.model(
+  "PermissionHistory",
+  PermissionHistorySchema
+);

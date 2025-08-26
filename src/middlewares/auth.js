@@ -11,28 +11,29 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// ===== MIDDLEWARE DE VERIFICACIÓN DE MÓDULO =====
 
-
-  // ===== MIDDLEWARE DE VERIFICACIÓN DE MÓDULO =====
-
-  /**
-   * Middleware para verificar acceso al módulo
-   */
+/**
+ * Middleware para verificar acceso al módulo
+ */
 export const verifyModuleAccess = async (req, res, next) => {
-        const modulePermissionName = 'ModuleExpDigital';
-    const modulePermissionMethod = 'GET';
-    try {
-      // Primero autenticar al usuario
-      await auth(req, res, async () => {
-        // Luego verificar permisos del módulo
-        await permissUser(modulePermissionName, modulePermissionMethod)(req, res, next);
-      });
-    } catch (error) {
-      console.error("Error en verificación de módulo:", error);
-      return res.status(403).json({ message: "Acceso denegado al módulo" });
-    }
+  const modulePermissionName = "ModuleExpDigital";
+  const modulePermissionMethod = "GET";
+  try {
+    // Primero autenticar al usuario
+    await auth(req, res, async () => {
+      // Luego verificar permisos del módulo
+      await permissUser(modulePermissionName, modulePermissionMethod)(
+        req,
+        res,
+        next
+      );
+    });
+  } catch (error) {
+    console.error("Error en verificación de módulo:", error);
+    return res.status(403).json({ message: "Acceso denegado al módulo" });
+  }
 };
-  
 
 export const validationResultExpress = (req, res, next) => {
   const errors = validationResult(req);

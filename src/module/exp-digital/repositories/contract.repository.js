@@ -25,36 +25,48 @@ export class ContractRepository extends BaseRepository {
         foreignField: "_id",
         as: "contractTypeInfo",
         pipeline: [
-          { $project: { code: 1, name: 1, category: 1, isActive: 1 } }
-        ]
+          { $project: { code: 1, name: 1, category: 1, isActive: 1 } },
+        ],
       },
       requestingDepartment: {
-        from: "departments", 
+        from: "departments",
         localField: "requestingDepartment",
         foreignField: "_id",
         as: "departmentInfo",
         pipeline: [
-          { $project: { code: 1, name: 1, shortName: 1, responsible: 1, isActive: 1 } }
-        ]
+          {
+            $project: {
+              code: 1,
+              name: 1,
+              shortName: 1,
+              responsible: 1,
+              isActive: 1,
+            },
+          },
+        ],
       },
       currentPhase: {
         from: "contractphases",
-        localField: "currentPhase", 
+        localField: "currentPhase",
         foreignField: "_id",
         as: "currentPhaseInfo",
         pipeline: [
-          { $project: { code: 1, name: 1, shortName: 1, order: 1, category: 1 } }
-        ]
+          {
+            $project: { code: 1, name: 1, shortName: 1, order: 1, category: 1 },
+          },
+        ],
       },
       phases: {
         from: "contractphases",
         localField: "phases.phase",
-        foreignField: "_id", 
+        foreignField: "_id",
         as: "phasesInfo",
         pipeline: [
-          { $project: { code: 1, name: 1, shortName: 1, order: 1, category: 1 } }
-        ]
-      }
+          {
+            $project: { code: 1, name: 1, shortName: 1, order: 1, category: 1 },
+          },
+        ],
+      },
     };
   }
 
@@ -65,14 +77,17 @@ export class ContractRepository extends BaseRepository {
    */
   async findByContractNumber(contractNumber) {
     try {
-      const contract = await this.model.findOne({ 
-        contractNumber: contractNumber.toUpperCase(),
-        isActive: true
-      }).populate([
-        { path: 'contractType', select: 'code name category' },
-        { path: 'requestingDepartment', select: 'code name shortName' },
-        { path: 'currentPhase', select: 'code name order category' }
-      ]).lean();
+      const contract = await this.model
+        .findOne({
+          contractNumber: contractNumber.toUpperCase(),
+          isActive: true,
+        })
+        .populate([
+          { path: "contractType", select: "code name category" },
+          { path: "requestingDepartment", select: "code name shortName" },
+          { path: "currentPhase", select: "code name order category" },
+        ])
+        .lean();
 
       if (!contract) {
         throw new Error(`Contrato ${contractNumber} no encontrado`);
@@ -99,8 +114,8 @@ export class ContractRepository extends BaseRepository {
       lookups: [
         this.contractLookups.contractType,
         this.contractLookups.requestingDepartment,
-        this.contractLookups.currentPhase
-      ]
+        this.contractLookups.currentPhase,
+      ],
     });
   }
 
@@ -124,8 +139,8 @@ export class ContractRepository extends BaseRepository {
       lookups: [
         this.contractLookups.contractType,
         this.contractLookups.requestingDepartment,
-        this.contractLookups.currentPhase
-      ]
+        this.contractLookups.currentPhase,
+      ],
     });
   }
 
@@ -145,8 +160,8 @@ export class ContractRepository extends BaseRepository {
       lookups: [
         this.contractLookups.contractType,
         this.contractLookups.requestingDepartment,
-        this.contractLookups.currentPhase
-      ]
+        this.contractLookups.currentPhase,
+      ],
     });
   }
 
@@ -157,12 +172,12 @@ export class ContractRepository extends BaseRepository {
     const { page = 1, limit = 20 } = options;
 
     return await this.searchWithAggregation({
-      filters: { 'contractor.ruc': ruc },
+      filters: { "contractor.ruc": ruc },
       options: { page, limit, sort: { createdAt: -1 } },
       lookups: [
         this.contractLookups.contractType,
-        this.contractLookups.requestingDepartment
-      ]
+        this.contractLookups.requestingDepartment,
+      ],
     });
   }
 
@@ -182,8 +197,8 @@ export class ContractRepository extends BaseRepository {
       options: { page, limit, sort: { [`budget.${valueType}`]: -1 } },
       lookups: [
         this.contractLookups.contractType,
-        this.contractLookups.requestingDepartment
-      ]
+        this.contractLookups.requestingDepartment,
+      ],
     });
   }
 
@@ -195,18 +210,18 @@ export class ContractRepository extends BaseRepository {
     const today = new Date();
 
     const filters = {
-      'timeline.executionEndDate': { $lt: today },
-      generalStatus: { $nin: ['FINISHED', 'LIQUIDATED', 'CANCELLED'] }
+      "timeline.executionEndDate": { $lt: today },
+      generalStatus: { $nin: ["FINISHED", "LIQUIDATED", "CANCELLED"] },
     };
 
     return await this.searchWithAggregation({
       filters,
-      options: { page, limit, sort: { 'timeline.executionEndDate': 1 } },
+      options: { page, limit, sort: { "timeline.executionEndDate": 1 } },
       lookups: [
         this.contractLookups.contractType,
         this.contractLookups.requestingDepartment,
-        this.contractLookups.currentPhase
-      ]
+        this.contractLookups.currentPhase,
+      ],
     });
   }
 
@@ -220,21 +235,21 @@ export class ContractRepository extends BaseRepository {
     futureDate.setDate(today.getDate() + days);
 
     const filters = {
-      'timeline.executionEndDate': { 
-        $gte: today, 
-        $lte: futureDate 
+      "timeline.executionEndDate": {
+        $gte: today,
+        $lte: futureDate,
       },
-      generalStatus: { $nin: ['FINISHED', 'LIQUIDATED', 'CANCELLED'] }
+      generalStatus: { $nin: ["FINISHED", "LIQUIDATED", "CANCELLED"] },
     };
 
     return await this.searchWithAggregation({
       filters,
-      options: { page, limit, sort: { 'timeline.executionEndDate': 1 } },
+      options: { page, limit, sort: { "timeline.executionEndDate": 1 } },
       lookups: [
         this.contractLookups.contractType,
         this.contractLookups.requestingDepartment,
-        this.contractLookups.currentPhase
-      ]
+        this.contractLookups.currentPhase,
+      ],
     });
   }
 
@@ -259,25 +274,25 @@ export class ContractRepository extends BaseRepository {
         phase,
         textSearch,
         tags,
-        priority
+        priority,
       } = searchParams;
 
       const {
         page = 1,
         limit = 20,
         sort = { createdAt: -1 },
-        includeInactive = false
+        includeInactive = false,
       } = options;
 
       // Construir filtros
       const filters = {};
-      
+
       if (!includeInactive) {
         filters.isActive = true;
       }
 
       if (contractNumber) {
-        filters.contractNumber = { $regex: contractNumber, $options: 'i' };
+        filters.contractNumber = { $regex: contractNumber, $options: "i" };
       }
 
       if (contractType) {
@@ -289,23 +304,26 @@ export class ContractRepository extends BaseRepository {
       }
 
       if (status && Array.isArray(status)) {
-        filters.generalStatus = { $in: status.map(s => s.toUpperCase()) };
+        filters.generalStatus = { $in: status.map((s) => s.toUpperCase()) };
       } else if (status) {
         filters.generalStatus = status.toUpperCase();
       }
 
       if (contractorRuc) {
-        filters['contractor.ruc'] = contractorRuc;
+        filters["contractor.ruc"] = contractorRuc;
       }
 
       if (contractorName) {
-        filters['contractor.businessName'] = { $regex: contractorName, $options: 'i' };
+        filters["contractor.businessName"] = {
+          $regex: contractorName,
+          $options: "i",
+        };
       }
 
       if (minValue || maxValue) {
-        filters['budget.estimatedValue'] = {};
-        if (minValue) filters['budget.estimatedValue'].$gte = minValue;
-        if (maxValue) filters['budget.estimatedValue'].$lte = maxValue;
+        filters["budget.estimatedValue"] = {};
+        if (minValue) filters["budget.estimatedValue"].$gte = minValue;
+        if (maxValue) filters["budget.estimatedValue"].$lte = maxValue;
       }
 
       if (dateFrom || dateTo) {
@@ -319,11 +337,11 @@ export class ContractRepository extends BaseRepository {
       }
 
       if (tags && Array.isArray(tags) && tags.length > 0) {
-        filters['metadata.tags'] = { $in: tags };
+        filters["metadata.tags"] = { $in: tags };
       }
 
       if (priority) {
-        filters['metadata.priority'] = priority.toUpperCase();
+        filters["metadata.priority"] = priority.toUpperCase();
       }
 
       // Configurar pipeline personalizado para búsqueda de texto
@@ -332,14 +350,19 @@ export class ContractRepository extends BaseRepository {
         customPipeline.push({
           $match: {
             $or: [
-              { contractNumber: { $regex: textSearch, $options: 'i' } },
-              { contractualObject: { $regex: textSearch, $options: 'i' } },
-              { detailedDescription: { $regex: textSearch, $options: 'i' } },
-              { 'contractor.businessName': { $regex: textSearch, $options: 'i' } },
-              { 'contractor.tradeName': { $regex: textSearch, $options: 'i' } },
-              { observations: { $regex: textSearch, $options: 'i' } }
-            ]
-          }
+              { contractNumber: { $regex: textSearch, $options: "i" } },
+              { contractualObject: { $regex: textSearch, $options: "i" } },
+              { detailedDescription: { $regex: textSearch, $options: "i" } },
+              {
+                "contractor.businessName": {
+                  $regex: textSearch,
+                  $options: "i",
+                },
+              },
+              { "contractor.tradeName": { $regex: textSearch, $options: "i" } },
+              { observations: { $regex: textSearch, $options: "i" } },
+            ],
+          },
         });
       }
 
@@ -349,11 +372,10 @@ export class ContractRepository extends BaseRepository {
         lookups: [
           this.contractLookups.contractType,
           this.contractLookups.requestingDepartment,
-          this.contractLookups.currentPhase
+          this.contractLookups.currentPhase,
         ],
-        customPipeline
+        customPipeline,
       });
-
     } catch (error) {
       throw new Error(`Error en búsqueda avanzada: ${error.message}`);
     }
@@ -372,14 +394,14 @@ export class ContractRepository extends BaseRepository {
           $group: {
             _id: null,
             totalContracts: { $sum: 1 },
-            totalEstimatedValue: { $sum: '$budget.estimatedValue' },
-            totalAwardedValue: { $sum: '$budget.awardedValue' },
-            totalPaidValue: { $sum: '$budget.paidValue' },
-            avgEstimatedValue: { $avg: '$budget.estimatedValue' },
+            totalEstimatedValue: { $sum: "$budget.estimatedValue" },
+            totalAwardedValue: { $sum: "$budget.awardedValue" },
+            totalPaidValue: { $sum: "$budget.paidValue" },
+            avgEstimatedValue: { $avg: "$budget.estimatedValue" },
             statusBreakdown: {
-              $push: '$generalStatus'
-            }
-          }
+              $push: "$generalStatus",
+            },
+          },
         },
         {
           $project: {
@@ -389,17 +411,16 @@ export class ContractRepository extends BaseRepository {
             totalAwardedValue: 1,
             totalPaidValue: 1,
             avgEstimatedValue: 1,
-            pendingPayment: { 
-              $subtract: ['$totalAwardedValue', '$totalPaidValue'] 
+            pendingPayment: {
+              $subtract: ["$totalAwardedValue", "$totalPaidValue"],
             },
-            statusBreakdown: 1
-          }
-        }
+            statusBreakdown: 1,
+          },
+        },
       ];
 
       const result = await this.model.aggregate(pipeline);
       return result[0] || {};
-
     } catch (error) {
       throw new Error(`Error obteniendo estadísticas: ${error.message}`);
     }
@@ -414,33 +435,34 @@ export class ContractRepository extends BaseRepository {
         { $match: { isActive: true } },
         {
           $lookup: {
-            from: 'departments',
-            localField: 'requestingDepartment',
-            foreignField: '_id',
-            as: 'department'
-          }
+            from: "departments",
+            localField: "requestingDepartment",
+            foreignField: "_id",
+            as: "department",
+          },
         },
-        { $unwind: '$department' },
+        { $unwind: "$department" },
         {
           $group: {
-            _id: '$requestingDepartment',
-            departmentName: { $first: '$department.name' },
-            departmentCode: { $first: '$department.code' },
+            _id: "$requestingDepartment",
+            departmentName: { $first: "$department.name" },
+            departmentCode: { $first: "$department.code" },
             contractCount: { $sum: 1 },
-            totalValue: { $sum: '$budget.estimatedValue' },
-            avgValue: { $avg: '$budget.estimatedValue' },
+            totalValue: { $sum: "$budget.estimatedValue" },
+            avgValue: { $avg: "$budget.estimatedValue" },
             statusBreakdown: {
-              $push: '$generalStatus'
-            }
-          }
+              $push: "$generalStatus",
+            },
+          },
         },
-        { $sort: { contractCount: -1 } }
+        { $sort: { contractCount: -1 } },
       ];
 
       return await this.model.aggregate(pipeline);
-
     } catch (error) {
-      throw new Error(`Error en estadísticas por departamento: ${error.message}`);
+      throw new Error(
+        `Error en estadísticas por departamento: ${error.message}`
+      );
     }
   }
 
@@ -453,31 +475,30 @@ export class ContractRepository extends BaseRepository {
         { $match: { isActive: true } },
         {
           $lookup: {
-            from: 'contracttypes',
-            localField: 'contractType',
-            foreignField: '_id',
-            as: 'contractType'
-          }
+            from: "contracttypes",
+            localField: "contractType",
+            foreignField: "_id",
+            as: "contractType",
+          },
         },
-        { $unwind: '$contractType' },
+        { $unwind: "$contractType" },
         {
           $group: {
-            _id: '$contractType._id',
-            typeName: { $first: '$contractType.name' },
-            typeCode: { $first: '$contractType.code' },
-            category: { $first: '$contractType.category' },
+            _id: "$contractType._id",
+            typeName: { $first: "$contractType.name" },
+            typeCode: { $first: "$contractType.code" },
+            category: { $first: "$contractType.category" },
             contractCount: { $sum: 1 },
-            totalValue: { $sum: '$budget.estimatedValue' },
-            avgValue: { $avg: '$budget.estimatedValue' },
-            minValue: { $min: '$budget.estimatedValue' },
-            maxValue: { $max: '$budget.estimatedValue' }
-          }
+            totalValue: { $sum: "$budget.estimatedValue" },
+            avgValue: { $avg: "$budget.estimatedValue" },
+            minValue: { $min: "$budget.estimatedValue" },
+            maxValue: { $max: "$budget.estimatedValue" },
+          },
         },
-        { $sort: { contractCount: -1 } }
+        { $sort: { contractCount: -1 } },
       ];
 
       return await this.model.aggregate(pipeline);
-
     } catch (error) {
       throw new Error(`Error en estadísticas por tipo: ${error.message}`);
     }
@@ -494,29 +515,28 @@ export class ContractRepository extends BaseRepository {
             isActive: true,
             createdAt: {
               $gte: new Date(`${year}-01-01`),
-              $lte: new Date(`${year}-12-31`)
-            }
-          }
+              $lte: new Date(`${year}-12-31`),
+            },
+          },
         },
         {
           $group: {
             _id: {
-              year: { $year: '$createdAt' },
-              month: { $month: '$createdAt' }
+              year: { $year: "$createdAt" },
+              month: { $month: "$createdAt" },
             },
             contractCount: { $sum: 1 },
-            totalValue: { $sum: '$budget.estimatedValue' },
-            avgValue: { $avg: '$budget.estimatedValue' },
+            totalValue: { $sum: "$budget.estimatedValue" },
+            avgValue: { $avg: "$budget.estimatedValue" },
             statusBreakdown: {
-              $push: '$generalStatus'
-            }
-          }
+              $push: "$generalStatus",
+            },
+          },
         },
-        { $sort: { '_id.month': 1 } }
+        { $sort: { "_id.month": 1 } },
       ];
 
       return await this.model.aggregate(pipeline);
-
     } catch (error) {
       throw new Error(`Error en estadísticas temporales: ${error.message}`);
     }
@@ -527,10 +547,18 @@ export class ContractRepository extends BaseRepository {
   /**
    * Actualizar fase actual del contrato
    */
-  async updateCurrentPhase(contractId, newPhaseId, userData, observations = '') {
+  async updateCurrentPhase(
+    contractId,
+    newPhaseId,
+    userData,
+    observations = ""
+  ) {
     try {
-      if (!Types.ObjectId.isValid(contractId) || !Types.ObjectId.isValid(newPhaseId)) {
-        throw new Error('IDs no válidos');
+      if (
+        !Types.ObjectId.isValid(contractId) ||
+        !Types.ObjectId.isValid(newPhaseId)
+      ) {
+        throw new Error("IDs no válidos");
       }
 
       const contract = await this.findById(contractId);
@@ -541,13 +569,13 @@ export class ContractRepository extends BaseRepository {
         contractId,
         {
           currentPhase: newPhaseId,
-          'phases.$[elem].status': 'IN_PROGRESS',
-          'phases.$[elem].startDate': new Date(),
-          'phases.$[elem].observations': observations
+          "phases.$[elem].status": "IN_PROGRESS",
+          "phases.$[elem].startDate": new Date(),
+          "phases.$[elem].observations": observations,
         },
         userData,
         {
-          arrayFilters: [{ 'elem.phase': newPhaseId }]
+          arrayFilters: [{ "elem.phase": newPhaseId }],
         }
       );
 
@@ -557,18 +585,17 @@ export class ContractRepository extends BaseRepository {
           { _id: contractId },
           {
             $set: {
-              'phases.$[elem].status': 'COMPLETED',
-              'phases.$[elem].completionDate': new Date()
-            }
+              "phases.$[elem].status": "COMPLETED",
+              "phases.$[elem].completionDate": new Date(),
+            },
           },
           {
-            arrayFilters: [{ 'elem.phase': oldPhaseId }]
+            arrayFilters: [{ "elem.phase": oldPhaseId }],
           }
         );
       }
 
       return updatedContract;
-
     } catch (error) {
       throw new Error(`Error actualizando fase: ${error.message}`);
     }
@@ -577,32 +604,31 @@ export class ContractRepository extends BaseRepository {
   /**
    * Completar fase actual
    */
-  async completeCurrentPhase(contractId, userData, observations = '') {
+  async completeCurrentPhase(contractId, userData, observations = "") {
     try {
       const contract = await this.findById(contractId);
       if (!contract.currentPhase) {
-        throw new Error('No hay fase actual para completar');
+        throw new Error("No hay fase actual para completar");
       }
 
       const updatedContract = await this.model.findOneAndUpdate(
         {
           _id: contractId,
-          'phases.phase': contract.currentPhase
+          "phases.phase": contract.currentPhase,
         },
         {
           $set: {
-            'phases.$.status': 'COMPLETED',
-            'phases.$.completionDate': new Date(),
-            'phases.$.observations': observations,
+            "phases.$.status": "COMPLETED",
+            "phases.$.completionDate": new Date(),
+            "phases.$.observations": observations,
             updatedBy: userData.userId,
-            updatedAt: new Date()
-          }
+            updatedAt: new Date(),
+          },
         },
         { new: true }
       );
 
       return updatedContract;
-
     } catch (error) {
       throw new Error(`Error completando fase: ${error.message}`);
     }
@@ -615,9 +641,9 @@ export class ContractRepository extends BaseRepository {
    */
   async isContractNumberAvailable(contractNumber, excludeId = null) {
     try {
-      const query = { 
+      const query = {
         contractNumber: contractNumber.toUpperCase(),
-        isActive: true
+        isActive: true,
       };
 
       if (excludeId) {
@@ -626,7 +652,6 @@ export class ContractRepository extends BaseRepository {
 
       const existingContract = await this.model.findOne(query);
       return !existingContract;
-
     } catch (error) {
       throw new Error(`Error verificando número de contrato: ${error.message}`);
     }
@@ -635,15 +660,18 @@ export class ContractRepository extends BaseRepository {
   /**
    * Generar siguiente número de contrato
    */
-  async generateNextContractNumber(departmentCode, year = new Date().getFullYear()) {
+  async generateNextContractNumber(
+    departmentCode,
+    year = new Date().getFullYear()
+  ) {
     try {
       const prefix = `${departmentCode}-${year}`;
-      const regex = new RegExp(`^${prefix}-(\\d+)$`, 'i');
+      const regex = new RegExp(`^${prefix}-(\\d+)$`, "i");
 
       const lastContract = await this.model
         .findOne({
           contractNumber: { $regex: regex },
-          isActive: true
+          isActive: true,
         })
         .sort({ contractNumber: -1 })
         .lean();
@@ -656,9 +684,8 @@ export class ContractRepository extends BaseRepository {
         }
       }
 
-      const paddedNumber = nextNumber.toString().padStart(4, '0');
+      const paddedNumber = nextNumber.toString().padStart(4, "0");
       return `${prefix}-${paddedNumber}`;
-
     } catch (error) {
       throw new Error(`Error generando número de contrato: ${error.message}`);
     }
@@ -672,7 +699,7 @@ export class ContractRepository extends BaseRepository {
       const matchStage = { isActive: true };
 
       // Filtrar por usuario/departamento si no es admin
-      if (userId && userRole !== 'ADMIN') {
+      if (userId && userRole !== "ADMIN") {
         // Aquí puedes agregar lógica para filtrar por departamento del usuario
         // matchStage.requestingDepartment = userDepartment;
       }
@@ -685,67 +712,68 @@ export class ContractRepository extends BaseRepository {
             byStatus: [
               {
                 $group: {
-                  _id: '$generalStatus',
+                  _id: "$generalStatus",
                   count: { $sum: 1 },
-                  totalValue: { $sum: '$budget.estimatedValue' }
-                }
-              }
+                  totalValue: { $sum: "$budget.estimatedValue" },
+                },
+              },
             ],
-            
+
             // Contratos recientes
             recent: [
               { $sort: { createdAt: -1 } },
               { $limit: 5 },
               {
                 $lookup: {
-                  from: 'departments',
-                  localField: 'requestingDepartment',
-                  foreignField: '_id',
-                  as: 'department'
-                }
+                  from: "departments",
+                  localField: "requestingDepartment",
+                  foreignField: "_id",
+                  as: "department",
+                },
               },
-              { $unwind: '$department' },
+              { $unwind: "$department" },
               {
                 $project: {
                   contractNumber: 1,
                   contractualObject: 1,
-                  'budget.estimatedValue': 1,
+                  "budget.estimatedValue": 1,
                   generalStatus: 1,
-                  'department.name': 1,
-                  createdAt: 1
-                }
-              }
+                  "department.name": 1,
+                  createdAt: 1,
+                },
+              },
             ],
-            
+
             // Contratos vencidos
             overdue: [
               {
                 $match: {
-                  'timeline.executionEndDate': { $lt: new Date() },
-                  generalStatus: { $nin: ['FINISHED', 'LIQUIDATED', 'CANCELLED'] }
-                }
+                  "timeline.executionEndDate": { $lt: new Date() },
+                  generalStatus: {
+                    $nin: ["FINISHED", "LIQUIDATED", "CANCELLED"],
+                  },
+                },
               },
-              { $count: 'count' }
+              { $count: "count" },
             ],
-            
+
             // Total de contratos y valores
             totals: [
               {
                 $group: {
                   _id: null,
                   totalContracts: { $sum: 1 },
-                  totalEstimatedValue: { $sum: '$budget.estimatedValue' },
-                  totalAwardedValue: { $sum: '$budget.awardedValue' }
-                }
-              }
-            ]
-          }
-        }
+                  totalEstimatedValue: { $sum: "$budget.estimatedValue" },
+                  totalAwardedValue: { $sum: "$budget.awardedValue" },
+                },
+              },
+            ],
+          },
+        },
       ];
 
       const result = await this.model.aggregate(pipeline);
       return result[0];
-
     } catch (error) {
       throw new Error(`Error obteniendo dashboard: ${error.message}`);
     }
