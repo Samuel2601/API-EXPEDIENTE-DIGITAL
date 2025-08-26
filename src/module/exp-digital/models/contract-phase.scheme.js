@@ -1,7 +1,8 @@
 // src/module/exp-digital/models/contract-phase.scheme.js
 import mongoose from "mongoose";
 import mongoosePaginate from "mongoose-paginate-v2";
-import { setupBaseSchema, CommonValidators, stripMetaFields } from "../../../core/base/models/base.scheme.js";
+import { setupBaseSchema, CommonValidators } from "../../core/base/models/base.scheme.js";
+import { stripMetaFields } from "../../../../utils/meta-field.js";
 
 const { Schema } = mongoose;
 
