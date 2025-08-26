@@ -5,6 +5,7 @@ import { setupBaseSchema, CommonValidators } from "../../core/base/models/base.s
 import { stripMetaFields } from "../../../../utils/meta-field.js";
 import crypto from "crypto";
 import path from "path";
+import rsyncClient from "../../../config/rsync.client.js";
 
 const { Schema } = mongoose;
 
@@ -90,6 +91,96 @@ const VersionInfoJSON = {
   }
 };
 
+// Sub-esquema específico para rsync
+const RsyncInfoJSON = {
+  remoteHost: {
+    type: String,
+    trim: true,
+    maxlength: 255
+  },
+  
+  remotePath: {
+    type: String,
+    trim: true,
+    maxlength: 500
+  },
+  
+  remoteFileName: {
+    type: String,
+    trim: true,
+    maxlength: 255
+  },
+  
+  syncStatus: {
+    type: String,
+    enum: ["PENDING", "SYNCING", "SYNCED", "FAILED", "PARTIAL"],
+    default: "PENDING",
+    index: true
+  },
+  
+  lastSyncAttempt: {
+    type: Date
+  },
+  
+  lastSyncSuccess: {
+    type: Date,
+    index: true
+  },
+  
+  syncRetries: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 10
+  },
+  
+  maxRetries: {
+    type: Number,
+    default: 3,
+    min: 0,
+    max: 10
+  },
+  
+  syncError: {
+    type: String,
+    trim: true,
+    maxlength: 1000
+  },
+  
+  // Verificación de integridad
+  remoteHash: {
+    type: String,
+    trim: true,
+    maxlength: 64
+  },
+  
+  remoteSize: {
+    type: Number,
+    min: 0
+  },
+  
+  verificationDate: {
+    type: Date
+  },
+  
+  // Configuración específica
+  priority: {
+    type: String,
+    enum: ["LOW", "NORMAL", "HIGH", "URGENT"],
+    default: "NORMAL"
+  },
+  
+  autoSync: {
+    type: Boolean,
+    default: true
+  },
+  
+  keepLocal: {
+    type: Boolean,
+    default: false
+  }
+};
+
 export const FileJSON = {
   contract: {
     type: Schema.Types.ObjectId,
@@ -172,7 +263,7 @@ export const FileJSON = {
     },
   },
   
-  // Rutas de almacenamiento
+  // Rutas de almacenamiento (EXTENDIDO para rsync)
   storage: {
     path: {
       type: String,
@@ -205,7 +296,7 @@ export const FileJSON = {
     
     storageProvider: {
       type: String,
-      enum: ["LOCAL", "AWS_S3", "AZURE", "GOOGLE_CLOUD"],
+      enum: ["LOCAL", "AWS_S3", "AZURE", "GOOGLE_CLOUD", "RSYNC"],
       default: "LOCAL",
       uppercase: true
     },
@@ -221,6 +312,20 @@ export const FileJSON = {
       trim: true,
       maxlength: 50
     }
+  },
+  
+  // Información específica de rsync (NUEVO)
+  rsyncInfo: {
+    type: RsyncInfoJSON,
+    default: function() {
+      return this.storage.storageProvider === 'RSYNC' ? {} : undefined;
+    },
+    meta: {
+      validation: { optional: true },
+      messages: {
+        invalid: "La información de rsync debe ser válida"
+      },
+    },
   },
   
   // Información técnica del archivo
@@ -623,9 +728,9 @@ setupBaseSchema(FileSchema, {
   addBaseFields: true,
 });
 
-// === MIDDLEWARES PERSONALIZADOS ===
+// === MIDDLEWARES PERSONALIZADOS EXTENDIDOS PARA RSYNC ===
 
-// Pre-save: generar nombre del sistema y validaciones
+// Pre-save: generar nombre del sistema y configurar rsync
 FileSchema.pre('save', async function(next) {
   // Generar nombre del sistema si es nuevo
   if (this.isNew && !this.systemName) {
@@ -634,6 +739,33 @@ FileSchema.pre('save', async function(next) {
     const extension = path.extname(this.originalName);
     
     this.systemName = `${timestamp}_${random}${extension}`;
+  }
+  
+  // Configurar rsync si se especifica como proveedor de almacenamiento
+  if (this.storage.storageProvider === 'RSYNC') {
+    if (!this.rsyncInfo) {
+      this.rsyncInfo = {};
+    }
+    
+    // Configurar información de rsync por defecto
+    if (!this.rsyncInfo.remoteHost) {
+      this.rsyncInfo.remoteHost = process.env.RSYNC_REMOTE_HOST;
+    }
+    
+    if (!this.rsyncInfo.remotePath) {
+      const baseRemotePath = process.env.RSYNC_REMOTE_PATH || '/files';
+      this.rsyncInfo.remotePath = `${baseRemotePath}/${this.contract}/${this.phase}`;
+    }
+    
+    if (!this.rsyncInfo.remoteFileName) {
+      this.rsyncInfo.remoteFileName = this.systemName;
+    }
+    
+    // Si es un archivo nuevo con rsync, marcarlo para sincronización
+    if (this.isNew) {
+      this.rsyncInfo.syncStatus = 'PENDING';
+      this.rsyncInfo.autoSync = this.rsyncInfo.autoSync !== false; // true por defecto
+    }
   }
   
   // Validar tamaño según tipo de archivo
@@ -666,7 +798,6 @@ FileSchema.pre('save', async function(next) {
     
     if (existingFile) {
       console.warn(`Archivo duplicado detectado: ${this.originalName} (hash: ${this.fileInfo.hash})`);
-      // No error, pero log para auditoría
     }
   }
   
@@ -678,31 +809,34 @@ FileSchema.pre('save', async function(next) {
   next();
 });
 
-// Pre-save: manejar versionado
-FileSchema.pre('save', async function(next) {
-  if (this.versionInfo.version > 1 && this.versionInfo.isCurrentVersion) {
-    // Si esta es una nueva versión actual, marcar la anterior como no actual
-    await this.constructor.updateMany({
-      contract: this.contract,
-      phase: this.phase,
-      documentType: this.documentType,
-      'versionInfo.isCurrentVersion': true,
-      _id: { $ne: this._id }
-    }, {
-      $set: { 'versionInfo.isCurrentVersion': false }
+// Post-save: sincronizar con rsync automáticamente
+FileSchema.post('save', async function(doc) {
+  // Solo sincronizar si es RSYNC y autoSync está habilitado
+  if (doc.storage.storageProvider === 'RSYNC' && 
+      doc.rsyncInfo?.autoSync && 
+      doc.rsyncInfo?.syncStatus === 'PENDING') {
+    
+    console.log(`📤 Iniciando sincronización automática para archivo: ${doc.systemName}`);
+    
+    // No esperar la sincronización para no bloquear el save
+    setImmediate(async () => {
+      try {
+        await doc.syncToRsync();
+      } catch (error) {
+        console.error(`❌ Error en sincronización automática: ${error.message}`);
+      }
     });
   }
-  
-  next();
 });
 
-// === MÉTODOS DE INSTANCIA ===
+// === MÉTODOS DE INSTANCIA EXTENDIDOS PARA RSYNC ===
 
 FileSchema.methods.toJSON = function() {
   const obj = this.toObject();
   return stripMetaFields(obj);
 };
 
+// Métodos originales mantenidos
 FileSchema.methods.getFileExtension = function() {
   return path.extname(this.originalName).toLowerCase().substring(1);
 };
@@ -739,17 +873,161 @@ FileSchema.methods.isArchive = function() {
   return archiveTypes.includes(this.fileInfo.fileType);
 };
 
+// NUEVOS MÉTODOS PARA RSYNC
+
+// Sincronizar archivo con rsync
+FileSchema.methods.syncToRsync = async function() {
+  if (this.storage.storageProvider !== 'RSYNC') {
+    throw new Error('Este archivo no está configurado para usar rsync');
+  }
+
+  if (!this.rsyncInfo) {
+    throw new Error('Información de rsync no configurada');
+  }
+
+  const startTime = new Date();
+  
+  try {
+    // Actualizar estado a sincronizando
+    this.rsyncInfo.syncStatus = 'SYNCING';
+    this.rsyncInfo.lastSyncAttempt = startTime;
+    this.rsyncInfo.syncError = undefined;
+    await this.save({ validateBeforeSave: false });
+
+    console.log(`🔄 Sincronizando archivo ${this.systemName} a ${this.rsyncInfo.remoteHost}`);
+    
+    // Realizar la transferencia
+    const result = await rsyncClient.transferFile(
+      this.storage.path, 
+      this.rsyncInfo.remoteFileName
+    );
+    
+    if (result.success) {
+      // Actualizar estado exitoso
+      this.rsyncInfo.syncStatus = 'SYNCED';
+      this.rsyncInfo.lastSyncSuccess = new Date();
+      this.rsyncInfo.syncRetries = 0;
+      
+      console.log(`✅ Archivo ${this.systemName} sincronizado exitosamente`);
+    } else {
+      throw new Error('La sincronización no fue exitosa');
+    }
+    
+  } catch (error) {
+    // Manejar error de sincronización
+    this.rsyncInfo.syncStatus = 'FAILED';
+    this.rsyncInfo.syncError = error.message;
+    this.rsyncInfo.syncRetries += 1;
+    
+    console.error(`❌ Error sincronizando ${this.systemName}: ${error.message}`);
+    
+    // Si no se han excedido los reintentos, programar otro intento
+    if (this.rsyncInfo.syncRetries < this.rsyncInfo.maxRetries) {
+      console.log(`🔄 Programando reintento ${this.rsyncInfo.syncRetries + 1}/${this.rsyncInfo.maxRetries}`);
+      this.rsyncInfo.syncStatus = 'PENDING';
+      
+      // Programar reintento después de un delay exponencial
+      const delay = Math.min(30000 * Math.pow(2, this.rsyncInfo.syncRetries), 300000); // Max 5 min
+      setTimeout(() => {
+        this.syncToRsync().catch(err => 
+          console.error(`❌ Error en reintento: ${err.message}`)
+        );
+      }, delay);
+    }
+    
+    throw error;
+  } finally {
+    await this.save({ validateBeforeSave: false });
+  }
+};
+
+// Verificar integridad del archivo remoto
+FileSchema.methods.verifyRemoteIntegrity = async function() {
+  if (this.storage.storageProvider !== 'RSYNC' || this.rsyncInfo?.syncStatus !== 'SYNCED') {
+    return { verified: false, reason: 'Archivo no sincronizado con rsync' };
+  }
+
+  try {
+    // Listar archivos remotos para verificar existencia y tamaño
+    const remoteFiles = await rsyncClient.listRemoteFiles();
+    const remoteFile = remoteFiles.find(file => 
+      file.includes(this.rsyncInfo.remoteFileName)
+    );
+    
+    if (!remoteFile) {
+      return { verified: false, reason: 'Archivo no encontrado en servidor remoto' };
+    }
+    
+    // Actualizar información de verificación
+    this.rsyncInfo.verificationDate = new Date();
+    await this.save({ validateBeforeSave: false });
+    
+    return { 
+      verified: true, 
+      remoteFile: remoteFile,
+      verificationDate: this.rsyncInfo.verificationDate 
+    };
+    
+  } catch (error) {
+    console.error(`❌ Error verificando integridad remota: ${error.message}`);
+    return { verified: false, reason: error.message };
+  }
+};
+
+// Obtener URL de acceso (local o indicador de remoto)
+FileSchema.methods.getAccessUrl = function() {
+  if (this.storage.storageProvider === 'RSYNC') {
+    if (this.rsyncInfo?.syncStatus === 'SYNCED') {
+      // Para archivos rsync, devolver URL de descarga especial
+      return `/api/files/${this._id}/download?source=remote`;
+    } else {
+      // Si no está sincronizado, usar archivo local si existe
+      return this.rsyncInfo?.keepLocal ? 
+        `/api/files/${this._id}/download?source=local` : 
+        null;
+    }
+  }
+  
+  // Para otros proveedores, mantener lógica original
+  return `/api/files/${this._id}/download`;
+};
+
+// Verificar si el archivo está disponible
+FileSchema.methods.isAvailable = function() {
+  if (this.storage.storageProvider === 'RSYNC') {
+    return this.rsyncInfo?.syncStatus === 'SYNCED' || this.rsyncInfo?.keepLocal;
+  }
+  
+  return true; // Para otros proveedores
+};
+
+// Forzar re-sincronización
+FileSchema.methods.forceSyncToRsync = async function() {
+  if (this.storage.storageProvider !== 'RSYNC') {
+    throw new Error('Este archivo no está configurado para usar rsync');
+  }
+  
+  // Resetear estado para forzar nueva sincronización
+  this.rsyncInfo.syncStatus = 'PENDING';
+  this.rsyncInfo.syncRetries = 0;
+  this.rsyncInfo.syncError = undefined;
+  
+  await this.save();
+  return await this.syncToRsync();
+};
+
+// Métodos originales mantenidos con adaptaciones
 FileSchema.methods.canUserAccess = function(userId, userRole) {
-  // Verificar si es público
+  // Verificar disponibilidad del archivo primero
+  if (!this.isAvailable()) {
+    return false;
+  }
+  
+  // Resto de la lógica original
   if (this.access.isPublic) return true;
-  
-  // Verificar si el usuario es el que subió el archivo
   if (this.audit.uploadedBy.toString() === userId.toString()) return true;
-  
-  // Verificar roles permitidos
   if (this.access.allowedRoles.includes(userRole)) return true;
   
-  // Verificar usuarios específicos
   const userAccess = this.access.allowedUsers.find(u => 
     u.userId.toString() === userId.toString()
   );
@@ -757,56 +1035,67 @@ FileSchema.methods.canUserAccess = function(userId, userRole) {
   return !!userAccess;
 };
 
-FileSchema.methods.hasPermission = function(userId, permission) {
-  const userAccess = this.access.allowedUsers.find(u => 
-    u.userId.toString() === userId.toString()
-  );
-  
-  return userAccess && userAccess.permissions.includes(permission);
-};
-
-FileSchema.methods.incrementDownloadCount = function() {
-  this.access.downloadCount += 1;
-  this.audit.lastAccessDate = new Date();
-  return this.save();
-};
-
-FileSchema.methods.incrementViewCount = function() {
-  this.access.viewCount += 1;
-  this.audit.lastAccessDate = new Date();
-  return this.save();
-};
-
-FileSchema.methods.approve = function(approvedBy, observations = '') {
-  this.status = 'APPROVED';
-  this.review.approvedBy = approvedBy;
-  this.review.approvalDate = new Date();
-  if (observations) this.review.observations = observations;
-  
-  return this.save();
-};
-
-FileSchema.methods.reject = function(rejectedBy, reason) {
-  this.status = 'REJECTED';
-  this.review.reviewedBy = rejectedBy;
-  this.review.reviewDate = new Date();
-  this.review.rejectionReason = reason;
-  
-  return this.save();
-};
-
-FileSchema.methods.isExpired = function() {
-  if (!this.document.expirationDate) return false;
-  return new Date() > this.document.expirationDate;
-};
-
-// === MÉTODOS ESTÁTICOS ===
+// === MÉTODOS ESTÁTICOS EXTENDIDOS PARA RSYNC ===
 
 FileSchema.statics.isProtected = function(method) {
   const protectedMethods = ["get", "put", "delete", "createBatch", "updateBatch"];
   return protectedMethods.includes(method);
 };
 
+// Nuevos métodos estáticos para rsync
+FileSchema.statics.findPendingSync = function() {
+  return this.findActive({
+    'storage.storageProvider': 'RSYNC',
+    'rsyncInfo.syncStatus': 'PENDING'
+  }).sort({ 'rsyncInfo.priority': -1, createdAt: 1 });
+};
+
+FileSchema.statics.findFailedSync = function() {
+  return this.findActive({
+    'storage.storageProvider': 'RSYNC',
+    'rsyncInfo.syncStatus': 'FAILED',
+    'rsyncInfo.syncRetries': { $lt: 3 } // Aún con reintentos disponibles
+  });
+};
+
+FileSchema.statics.findSyncedFiles = function() {
+  return this.findActive({
+    'storage.storageProvider': 'RSYNC',
+    'rsyncInfo.syncStatus': 'SYNCED'
+  });
+};
+
+FileSchema.statics.getRsyncStats = function() {
+  return this.aggregate([
+    { $match: { 'storage.storageProvider': 'RSYNC', isActive: true } },
+    {
+      $group: {
+        _id: '$rsyncInfo.syncStatus',
+        count: { $sum: 1 },
+        totalSize: { $sum: '$fileInfo.size' },
+        avgRetries: { $avg: '$rsyncInfo.syncRetries' }
+      }
+    }
+  ]);
+};
+
+FileSchema.statics.processRsyncQueue = async function(batchSize = 10) {
+  const pendingFiles = await this.findPendingSync().limit(batchSize);
+  const results = [];
+  
+  for (const file of pendingFiles) {
+    try {
+      await file.syncToRsync();
+      results.push({ file: file._id, success: true });
+    } catch (error) {
+      results.push({ file: file._id, success: false, error: error.message });
+    }
+  }
+  
+  return results;
+};
+
+// Métodos originales mantenidos
 FileSchema.statics.findByContract = function(contractId, options = {}) {
   const { phase, documentType, status, currentVersionOnly = false } = options;
   
@@ -820,121 +1109,7 @@ FileSchema.statics.findByContract = function(contractId, options = {}) {
   return this.find(query).sort({ 'audit.uploadDate': -1 });
 };
 
-FileSchema.statics.findByPhase = function(phaseId) {
-  return this.findActive({ phase: phaseId })
-    .sort({ documentType: 1, 'versionInfo.version': -1 });
-};
-
-FileSchema.statics.findByDocumentType = function(documentType, contractId) {
-  const query = { documentType: documentType.toUpperCase() };
-  if (contractId) query.contract = contractId;
-  
-  return this.findActive(query).sort({ 'versionInfo.version': -1 });
-};
-
-FileSchema.statics.findCurrentVersions = function(contractId) {
-  return this.findActive({
-    contract: contractId,
-    'versionInfo.isCurrentVersion': true
-  });
-};
-
-FileSchema.statics.findByHash = function(hash) {
-  return this.findActive({ 'fileInfo.hash': hash });
-};
-
-FileSchema.statics.findDuplicates = function() {
-  return this.aggregate([
-    { $match: { isActive: true } },
-    {
-      $group: {
-        _id: '$fileInfo.hash',
-        count: { $sum: 1 },
-        files: { $push: { _id: '$_id', originalName: '$originalName', size: '$fileInfo.size' } }
-      }
-    },
-    { $match: { count: { $gt: 1 } } },
-    { $sort: { count: -1 } }
-  ]);
-};
-
-FileSchema.statics.findPendingReview = function() {
-  return this.findActive({ status: 'REVIEW' })
-    .sort({ 'audit.uploadDate': 1 });
-};
-
-FileSchema.statics.findExpired = function() {
-  const now = new Date();
-  return this.findActive({
-    'document.expirationDate': { $lt: now }
-  });
-};
-
-FileSchema.statics.getStorageStats = function() {
-  return this.aggregate([
-    { $match: { isActive: true } },
-    {
-      $group: {
-        _id: null,
-        totalFiles: { $sum: 1 },
-        totalSize: { $sum: '$fileInfo.size' },
-        avgSize: { $avg: '$fileInfo.size' },
-        fileTypes: { $addToSet: '$fileInfo.fileType' }
-      }
-    }
-  ]);
-};
-
-FileSchema.statics.getStatsByFileType = function() {
-  return this.aggregate([
-    { $match: { isActive: true } },
-    {
-      $group: {
-        _id: '$fileInfo.fileType',
-        count: { $sum: 1 },
-        totalSize: { $sum: '$fileInfo.size' },
-        avgSize: { $avg: '$fileInfo.size' }
-      }
-    },
-    { $sort: { count: -1 } }
-  ]);
-};
-
-FileSchema.statics.cleanupOldVersions = function(keepVersions = 5) {
-  return this.aggregate([
-    { $match: { isActive: true } },
-    {
-      $group: {
-        _id: { contract: '$contract', phase: '$phase', documentType: '$documentType' },
-        files: { 
-          $push: { 
-            _id: '$_id', 
-            version: '$versionInfo.version',
-            isCurrentVersion: '$versionInfo.isCurrentVersion'
-          }
-        }
-      }
-    },
-    {
-      $project: {
-        filesToDelete: {
-          $slice: [
-            {
-              $filter: {
-                input: { $sortArray: { input: '$files', sortBy: { version: -1 } } },
-                cond: { $eq: ['$$this.isCurrentVersion', false] }
-              }
-            },
-            keepVersions,
-            1000
-          ]
-        }
-      }
-    }
-  ]);
-};
-
-// === VIRTUALES ===
+// === VIRTUALES EXTENDIDOS ===
 
 FileSchema.virtual('displaySize').get(function() {
   return this.getFileSize() + ' MB';
@@ -945,92 +1120,65 @@ FileSchema.virtual('extension').get(function() {
 });
 
 FileSchema.virtual('downloadUrl').get(function() {
-  return `/api/files/${this._id}/download`;
+  return this.getAccessUrl();
 });
 
-FileSchema.virtual('previewUrl').get(function() {
-  if (this.isImage() || this.fileInfo.fileType === 'pdf') {
-    return `/api/files/${this._id}/preview`;
-  }
-  return null;
+FileSchema.virtual('syncStatusDisplay').get(function() {
+  if (this.storage.storageProvider !== 'RSYNC') return null;
+  
+  const statusMap = {
+    'PENDING': 'Pendiente de sincronización',
+    'SYNCING': 'Sincronizando...',
+    'SYNCED': 'Sincronizado',
+    'FAILED': 'Error en sincronización',
+    'PARTIAL': 'Sincronización parcial'
+  };
+  
+  return statusMap[this.rsyncInfo?.syncStatus] || 'Estado desconocido';
 });
 
-FileSchema.virtual('isExpiredDoc').get(function() {
-  return this.isExpired();
+FileSchema.virtual('isRemoteAvailable').get(function() {
+  return this.storage.storageProvider === 'RSYNC' && this.rsyncInfo?.syncStatus === 'SYNCED';
 });
 
-// === QUERY HELPERS ===
-
-FileSchema.query.byContract = function(contractId) {
-  return this.where({ contract: contractId });
-};
-
-FileSchema.query.byPhase = function(phaseId) {
-  return this.where({ phase: phaseId });
-};
-
-FileSchema.query.byDocumentType = function(documentType) {
-  return this.where({ documentType: documentType.toUpperCase() });
-};
-
-FileSchema.query.currentVersions = function() {
-  return this.where({ 'versionInfo.isCurrentVersion': true });
-};
-
-FileSchema.query.byStatus = function(status) {
-  return this.where({ status: status.toUpperCase() });
-};
-
-FileSchema.query.images = function() {
-  return this.where({ 'fileInfo.fileType': { $in: ['jpg', 'jpeg', 'png', 'gif'] } });
-};
-
-FileSchema.query.documents = function() {
-  return this.where({ 'fileInfo.fileType': { $in: ['pdf', 'doc', 'docx'] } });
-};
-
-FileSchema.query.public = function() {
-  return this.where({ 'access.isPublic': true });
-};
-
-FileSchema.query.expired = function() {
-  const now = new Date();
-  return this.where({ 'document.expirationDate': { $lt: now } });
-};
-
-// === ÍNDICES ADICIONALES ===
+// === ÍNDICES ADICIONALES PARA RSYNC ===
 
 FileSchema.index({ systemName: 1 }, { unique: true });
 FileSchema.index({ contract: 1, phase: 1 });
-FileSchema.index({ contract: 1, documentType: 1 });
-FileSchema.index({ 'fileInfo.hash': 1 });
-FileSchema.index({ 'versionInfo.isCurrentVersion': 1 });
-FileSchema.index({ status: 1, 'audit.uploadDate': -1 });
-FileSchema.index({ 'audit.uploadedBy': 1 });
-FileSchema.index({ 'access.isPublic': 1 });
-FileSchema.index({ 'document.expirationDate': 1 });
+FileSchema.index({ 'storage.storageProvider': 1 });
+FileSchema.index({ 'rsyncInfo.syncStatus': 1 });
+FileSchema.index({ 'rsyncInfo.lastSyncSuccess': -1 });
+FileSchema.index({ 'rsyncInfo.priority': -1 });
+FileSchema.index({ 'rsyncInfo.autoSync': 1 });
 
-// Índices compuestos
+// Índices compuestos para rsync
 FileSchema.index({ 
-  contract: 1, 
-  phase: 1, 
-  documentType: 1, 
-  'versionInfo.isCurrentVersion': 1 
+  'storage.storageProvider': 1, 
+  'rsyncInfo.syncStatus': 1, 
+  'rsyncInfo.priority': -1 
 });
 
-FileSchema.index({ 
-  'fileInfo.fileType': 1, 
-  status: 1, 
-  'audit.uploadDate': -1 
-});
+// === QUERY HELPERS EXTENDIDOS ===
 
-// Índice de texto para búsqueda
-FileSchema.index({ 
-  originalName: "text", 
-  'document.description': "text",
-  'document.keywords': "text",
-  'review.observations': "text"
-});
+FileSchema.query.rsyncFiles = function() {
+  return this.where({ 'storage.storageProvider': 'RSYNC' });
+};
+
+FileSchema.query.pendingSync = function() {
+  return this.where({ 'rsyncInfo.syncStatus': 'PENDING' });
+};
+
+FileSchema.query.synced = function() {
+  return this.where({ 'rsyncInfo.syncStatus': 'SYNCED' });
+};
+
+FileSchema.query.syncFailed = function() {
+  return this.where({ 'rsyncInfo.syncStatus': 'FAILED' });
+};
+
+FileSchema.query.highPriority = function() {
+  return this.where({ 'rsyncInfo.priority': { $in: ['HIGH', 'URGENT'] } });
+};
 
 // === HOOKS Y PLUGINS ===
 

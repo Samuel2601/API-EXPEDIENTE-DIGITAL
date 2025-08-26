@@ -244,20 +244,20 @@ export const DepartmentJSON = {
 
   // Configuración presupuestaria
   budgetConfig: {
-    hasOwnBudget: {
+    hasOwnBudget: { //Tiene su propio presupuesto
       type: Boolean,
       default: false
     },
-    budgetCode: {
+    budgetCode: { //Código del presupuesto
       type: String,
       trim: true,
       maxlength: 30
     },
-    canApproveContracts: {
+    canApproveContracts: { //Puede aprobar contratos
       type: Boolean,
       default: false
     },
-    maxApprovalAmount: {
+    maxApprovalAmount: { //Importe máximo de aprobación
       type: Number,
       min: 0,
       default: 0
