@@ -1,5 +1,5 @@
 // =============================================================================
-// src/module/exp-digital/repositories/contract.repository.js
+// src/module/exp-digital/repositories/contract.repository.js - MEJORADO
 // Repositorio especializado para gestión de contratos de contratación pública
 // =============================================================================
 
@@ -17,7 +17,6 @@ export class ContractRepository extends BaseRepository {
    * Configurar lookups específicos para contratos
    */
   setupContractLookups() {
-    // Lookups específicos para contratos
     this.contractLookups = {
       contractType: {
         from: "contracttypes",
@@ -70,7 +69,192 @@ export class ContractRepository extends BaseRepository {
     };
   }
 
-  // ===== MÉTODOS DE BÚSQUEDA ESPECÍFICOS =====
+  // ===== MÉTODOS USANDO QUERY HELPERS DEL ESQUEMA =====
+
+  /**
+   * Buscar contratos por estado - USA QUERY HELPER
+   * ✅ MEJORA: Utiliza el query helper del esquema
+   */
+  async findByStatus(status, options = {}) {
+    try {
+      const { page = 1, limit = 10, includePopulation = true } = options;
+
+      // ✅ Usar query helper del esquema
+      let query = this.model.find().byStatus(status);
+
+      if (includePopulation) {
+        query = query.populate([
+          { path: "contractType", select: "code name category" },
+          { path: "requestingDepartment", select: "code name shortName" },
+          { path: "currentPhase", select: "code name shortName order" },
+        ]);
+      }
+
+      return await this.paginate(query, { page, limit });
+    } catch (error) {
+      throw new Error(`Error buscando contratos por estado: ${error.message}`);
+    }
+  }
+
+  /**
+   * Buscar contratos por departamento - USA QUERY HELPER
+   */
+  async findByDepartment(departmentId, options = {}) {
+    try {
+      const { page = 1, limit = 10, status } = options;
+
+      // ✅ Usar query helper del esquema
+      let query = this.model.find().byDepartment(departmentId);
+
+      if (status) {
+        query = query.byStatus(status); // Combinar query helpers
+      }
+
+      query = query
+        .populate([
+          { path: "contractType", select: "code name category" },
+          { path: "currentPhase", select: "code name shortName order" },
+        ])
+        .sort({ createdAt: -1 });
+
+      return await this.paginate(query, { page, limit });
+    } catch (error) {
+      throw new Error(
+        `Error buscando contratos por departamento: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Buscar contratos por tipo - USA QUERY HELPER
+   */
+  async findByContractType(contractTypeId, options = {}) {
+    try {
+      const { page = 1, limit = 10, status } = options;
+
+      // ✅ Usar query helper del esquema
+      let query = this.model.find().byContractType(contractTypeId);
+
+      if (status) {
+        query = query.byStatus(status);
+      }
+
+      query = query
+        .populate([
+          { path: "requestingDepartment", select: "code name shortName" },
+          { path: "currentPhase", select: "code name shortName order" },
+        ])
+        .sort({ createdAt: -1 });
+
+      return await this.paginate(query, { page, limit });
+    } catch (error) {
+      throw new Error(`Error buscando contratos por tipo: ${error.message}`);
+    }
+  }
+
+  /**
+   * Buscar contratos vencidos - USA QUERY HELPER
+   */
+  async findOverdue(options = {}) {
+    try {
+      const { page = 1, limit = 10 } = options;
+
+      // ✅ Usar query helper del esquema
+      const query = this.model
+        .find()
+        .overdue()
+        .populate([
+          { path: "contractType", select: "code name category" },
+          { path: "requestingDepartment", select: "code name shortName" },
+        ])
+        .sort({ "timeline.executionEndDate": 1 });
+
+      return await this.paginate(query, { page, limit });
+    } catch (error) {
+      throw new Error(`Error buscando contratos vencidos: ${error.message}`);
+    }
+  }
+
+  /**
+   * Buscar contratos en progreso - USA QUERY HELPER
+   */
+  async findInProgress(options = {}) {
+    try {
+      const { page = 1, limit = 10 } = options;
+
+      // ✅ Usar query helper del esquema
+      const query = this.model
+        .find()
+        .inProgress()
+        .populate([
+          { path: "contractType", select: "code name category" },
+          { path: "requestingDepartment", select: "code name shortName" },
+          { path: "currentPhase", select: "code name shortName order" },
+        ])
+        .sort({ createdAt: -1 });
+
+      return await this.paginate(query, { page, limit });
+    } catch (error) {
+      throw new Error(`Error buscando contratos en progreso: ${error.message}`);
+    }
+  }
+
+  // ===== MÉTODOS USANDO MÉTODOS ESTÁTICOS DEL ESQUEMA =====
+
+  /**
+   * Buscar contratos por rango de valor - USA MÉTODO ESTÁTICO
+   * ✅ MEJORA: Utiliza el método estático del esquema
+   */
+  async findByValueRange(minValue, maxValue, options = {}) {
+    try {
+      const { page = 1, limit = 10 } = options;
+
+      // ✅ Usar método estático del esquema
+      const query = this.model
+        .findByValueRange(minValue, maxValue)
+        .populate([
+          { path: "contractType", select: "code name category" },
+          { path: "requestingDepartment", select: "code name shortName" },
+        ])
+        .sort({ "budget.estimatedValue": -1 });
+
+      return await this.paginate(query, { page, limit });
+    } catch (error) {
+      throw new Error(
+        `Error buscando contratos por rango de valor: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Obtener estadísticas por departamento - USA MÉTODO ESTÁTICO
+   * ✅ MEJORA: Utiliza el método estático del esquema
+   */
+  async getStatsByDepartment(options = {}) {
+    try {
+      const { populateDepartmentInfo = true } = options;
+
+      // ✅ Usar método estático del esquema
+      let stats = await this.model.getStatsByDepartment();
+
+      if (populateDepartmentInfo && stats.length > 0) {
+        // Poblar información de departamentos
+        await this.model.populate(stats, {
+          path: "_id",
+          select: "code name shortName",
+          model: "Department",
+        });
+      }
+
+      return stats;
+    } catch (error) {
+      throw new Error(
+        `Error obteniendo estadísticas por departamento: ${error.message}`
+      );
+    }
+  }
+
+  // ===== MÉTODOS ESPECÍFICOS DEL REPOSITORIO =====
 
   /**
    * Buscar contrato por número
@@ -84,631 +268,224 @@ export class ContractRepository extends BaseRepository {
         })
         .populate([
           { path: "contractType", select: "code name category" },
-          { path: "requestingDepartment", select: "code name shortName" },
-          { path: "currentPhase", select: "code name order category" },
-        ])
-        .lean();
-
-      if (!contract) {
-        throw new Error(`Contrato ${contractNumber} no encontrado`);
-      }
+          {
+            path: "requestingDepartment",
+            select: "code name shortName responsible",
+          },
+          { path: "currentPhase", select: "code name shortName order" },
+          { path: "phases.phase", select: "code name shortName order" },
+        ]);
 
       return contract;
     } catch (error) {
-      throw new Error(`Error buscando contrato: ${error.message}`);
+      throw new Error(`Error buscando contrato por número: ${error.message}`);
     }
   }
 
   /**
-   * Buscar contratos por tipo de contratación
+   * Buscar contrato por código SERCOP
    */
-  async findByContractType(contractTypeId, options = {}) {
-    const { page = 1, limit = 20, status } = options;
+  async findBySercopCode(sercopCode) {
+    try {
+      const contract = await this.model
+        .findOne({
+          sercopCode: sercopCode.toUpperCase(),
+          isActive: true,
+        })
+        .populate([
+          { path: "contractType", select: "code name category" },
+          { path: "requestingDepartment", select: "code name shortName" },
+        ]);
 
-    const baseQuery = { contractType: contractTypeId };
-    if (status) baseQuery.generalStatus = status.toUpperCase();
-
-    return await this.searchWithAggregation({
-      filters: baseQuery,
-      options: { page, limit, sort: { createdAt: -1 } },
-      lookups: [
-        this.contractLookups.contractType,
-        this.contractLookups.requestingDepartment,
-        this.contractLookups.currentPhase,
-      ],
-    });
-  }
-
-  /**
-   * Buscar contratos por departamento solicitante
-   */
-  async findByDepartment(departmentId, options = {}) {
-    const { page = 1, limit = 20, dateFrom, dateTo, status } = options;
-
-    const baseQuery = { requestingDepartment: departmentId };
-    if (status) baseQuery.generalStatus = status.toUpperCase();
-    if (dateFrom || dateTo) {
-      baseQuery.createdAt = {};
-      if (dateFrom) baseQuery.createdAt.$gte = new Date(dateFrom);
-      if (dateTo) baseQuery.createdAt.$lte = new Date(dateTo);
+      return contract;
+    } catch (error) {
+      throw new Error(
+        `Error buscando contrato por código SERCOP: ${error.message}`
+      );
     }
+  }
 
-    return await this.searchWithAggregation({
-      filters: baseQuery,
-      options: { page, limit, sort: { createdAt: -1 } },
-      lookups: [
-        this.contractLookups.contractType,
-        this.contractLookups.requestingDepartment,
-        this.contractLookups.currentPhase,
-      ],
-    });
+  // ===== MÉTODOS DE GESTIÓN DE FASES =====
+
+  /**
+   * Avanzar a la siguiente fase
+   * ✅ MEJORA: Utiliza métodos del esquema para validaciones
+   */
+  async advanceToNextPhase(contractId, userData, options = {}) {
+    try {
+      const contract = await this.findById(contractId);
+      if (!contract) {
+        throw new Error("Contrato no encontrado");
+      }
+
+      // ✅ Usar método del esquema para validar
+      if (!contract.canAdvanceToNextPhase()) {
+        throw new Error("El contrato no puede avanzar a la siguiente fase");
+      }
+
+      // ✅ Usar método del esquema para obtener siguiente fase
+      const nextPhase = contract.getNextPhase();
+      if (!nextPhase) {
+        throw new Error("No hay una fase siguiente disponible");
+      }
+
+      // Actualizar fase actual
+      const updateData = {
+        currentPhase: nextPhase.phase,
+        "phases.$.status": "IN_PROGRESS",
+      };
+
+      const updatedContract = await this.update(
+        contractId,
+        updateData,
+        userData,
+        options
+      );
+
+      return {
+        contract: updatedContract,
+        previousPhase: contract.getCurrentPhaseInfo(),
+        currentPhase: nextPhase,
+      };
+    } catch (error) {
+      throw new Error(`Error avanzando fase: ${error.message}`);
+    }
   }
 
   /**
-   * Buscar contratos por estado general
+   * Obtener información detallada de progreso
+   * ✅ MEJORA: Utiliza métodos del esquema
    */
-  async findByStatus(status, options = {}) {
-    const { page = 1, limit = 20, contractType, department } = options;
+  async getProgressInfo(contractId) {
+    try {
+      const contract = await this.findById(contractId);
+      if (!contract) {
+        throw new Error("Contrato no encontrado");
+      }
 
-    const baseQuery = { generalStatus: status.toUpperCase() };
-    if (contractType) baseQuery.contractType = contractType;
-    if (department) baseQuery.requestingDepartment = department;
-
-    return await this.searchWithAggregation({
-      filters: baseQuery,
-      options: { page, limit, sort: { createdAt: -1 } },
-      lookups: [
-        this.contractLookups.contractType,
-        this.contractLookups.requestingDepartment,
-        this.contractLookups.currentPhase,
-      ],
-    });
+      return {
+        contractId: contract._id,
+        contractNumber: contract.contractNumber,
+        // ✅ Usar métodos del esquema
+        progress: contract.calculateProgress(),
+        daysRemaining: contract.getDaysRemaining(),
+        isOverdue: contract.isOverdue(),
+        budgetUtilization: contract.getBudgetUtilization(),
+        currentPhase: contract.getCurrentPhaseInfo(),
+        nextPhase: contract.getNextPhase(),
+        canAdvanceToNext: contract.canAdvanceToNextPhase(),
+      };
+    } catch (error) {
+      throw new Error(
+        `Error obteniendo información de progreso: ${error.message}`
+      );
+    }
   }
 
-  /**
-   * Buscar contratos por RUC del contratista
-   */
-  async findByContractorRuc(ruc, options = {}) {
-    const { page = 1, limit = 20 } = options;
-
-    return await this.searchWithAggregation({
-      filters: { "contractor.ruc": ruc },
-      options: { page, limit, sort: { createdAt: -1 } },
-      lookups: [
-        this.contractLookups.contractType,
-        this.contractLookups.requestingDepartment,
-      ],
-    });
-  }
+  // ===== MÉTODOS DE BÚSQUEDA AVANZADA =====
 
   /**
-   * Buscar contratos por rango de montos
+   * Búsqueda avanzada de contratos
    */
-  async findByValueRange(minValue, maxValue, options = {}) {
-    const { page = 1, limit = 20, valueType = "estimatedValue" } = options;
-
-    const filters = {};
-    filters[`budget.${valueType}`] = {};
-    if (minValue !== undefined) filters[`budget.${valueType}`].$gte = minValue;
-    if (maxValue !== undefined) filters[`budget.${valueType}`].$lte = maxValue;
-
-    return await this.searchWithAggregation({
-      filters,
-      options: { page, limit, sort: { [`budget.${valueType}`]: -1 } },
-      lookups: [
-        this.contractLookups.contractType,
-        this.contractLookups.requestingDepartment,
-      ],
-    });
-  }
-
-  /**
-   * Buscar contratos vencidos
-   */
-  async findOverdueContracts(options = {}) {
-    const { page = 1, limit = 20 } = options;
-    const today = new Date();
-
-    const filters = {
-      "timeline.executionEndDate": { $lt: today },
-      generalStatus: { $nin: ["FINISHED", "LIQUIDATED", "CANCELLED"] },
-    };
-
-    return await this.searchWithAggregation({
-      filters,
-      options: { page, limit, sort: { "timeline.executionEndDate": 1 } },
-      lookups: [
-        this.contractLookups.contractType,
-        this.contractLookups.requestingDepartment,
-        this.contractLookups.currentPhase,
-      ],
-    });
-  }
-
-  /**
-   * Buscar contratos próximos a vencer
-   */
-  async findContractsNearExpiration(days = 30, options = {}) {
-    const { page = 1, limit = 20 } = options;
-    const today = new Date();
-    const futureDate = new Date();
-    futureDate.setDate(today.getDate() + days);
-
-    const filters = {
-      "timeline.executionEndDate": {
-        $gte: today,
-        $lte: futureDate,
-      },
-      generalStatus: { $nin: ["FINISHED", "LIQUIDATED", "CANCELLED"] },
-    };
-
-    return await this.searchWithAggregation({
-      filters,
-      options: { page, limit, sort: { "timeline.executionEndDate": 1 } },
-      lookups: [
-        this.contractLookups.contractType,
-        this.contractLookups.requestingDepartment,
-        this.contractLookups.currentPhase,
-      ],
-    });
-  }
-
-  // ===== BÚSQUEDAS AVANZADAS =====
-
-  /**
-   * Búsqueda avanzada de contratos con múltiples filtros
-   */
-  async advancedSearch(searchParams, options = {}) {
+  async findAdvanced(criteria, options = {}) {
     try {
       const {
-        contractNumber,
-        contractType,
-        department,
+        page = 1,
+        limit = 10,
+        sort = { createdAt: -1 },
+        populate = true,
+      } = options;
+
+      const {
         status,
-        contractorRuc,
-        contractorName,
+        department,
+        contractType,
         minValue,
         maxValue,
         dateFrom,
         dateTo,
-        phase,
-        textSearch,
+        searchText,
+        isOverdue,
         tags,
-        priority,
-      } = searchParams;
+      } = criteria;
 
-      const {
-        page = 1,
-        limit = 20,
-        sort = { createdAt: -1 },
-        includeInactive = false,
-      } = options;
+      // Construir query base
+      let query = this.model.find();
 
-      // Construir filtros
-      const filters = {};
+      // Aplicar filtros usando query helpers cuando sea apropiado
+      if (status) query = query.byStatus(status);
+      if (department) query = query.byDepartment(department);
+      if (contractType) query = query.byContractType(contractType);
+      if (isOverdue) query = query.overdue();
 
-      if (!includeInactive) {
-        filters.isActive = true;
-      }
-
-      if (contractNumber) {
-        filters.contractNumber = { $regex: contractNumber, $options: "i" };
-      }
-
-      if (contractType) {
-        filters.contractType = new Types.ObjectId(contractType);
-      }
-
-      if (department) {
-        filters.requestingDepartment = new Types.ObjectId(department);
-      }
-
-      if (status && Array.isArray(status)) {
-        filters.generalStatus = { $in: status.map((s) => s.toUpperCase()) };
-      } else if (status) {
-        filters.generalStatus = status.toUpperCase();
-      }
-
-      if (contractorRuc) {
-        filters["contractor.ruc"] = contractorRuc;
-      }
-
-      if (contractorName) {
-        filters["contractor.businessName"] = {
-          $regex: contractorName,
-          $options: "i",
-        };
-      }
-
+      // Filtros adicionales
       if (minValue || maxValue) {
-        filters["budget.estimatedValue"] = {};
-        if (minValue) filters["budget.estimatedValue"].$gte = minValue;
-        if (maxValue) filters["budget.estimatedValue"].$lte = maxValue;
+        const valueQuery = {};
+        if (minValue) valueQuery.$gte = minValue;
+        if (maxValue) valueQuery.$lte = maxValue;
+        query = query.where({ "budget.estimatedValue": valueQuery });
       }
 
       if (dateFrom || dateTo) {
-        filters.createdAt = {};
-        if (dateFrom) filters.createdAt.$gte = new Date(dateFrom);
-        if (dateTo) filters.createdAt.$lte = new Date(dateTo);
+        const dateQuery = {};
+        if (dateFrom) dateQuery.$gte = new Date(dateFrom);
+        if (dateTo) dateQuery.$lte = new Date(dateTo);
+        query = query.where({ createdAt: dateQuery });
       }
 
-      if (phase) {
-        filters.currentPhase = new Types.ObjectId(phase);
-      }
-
-      if (tags && Array.isArray(tags) && tags.length > 0) {
-        filters["metadata.tags"] = { $in: tags };
-      }
-
-      if (priority) {
-        filters["metadata.priority"] = priority.toUpperCase();
-      }
-
-      // Configurar pipeline personalizado para búsqueda de texto
-      const customPipeline = [];
-      if (textSearch) {
-        customPipeline.push({
-          $match: {
-            $or: [
-              { contractNumber: { $regex: textSearch, $options: "i" } },
-              { contractualObject: { $regex: textSearch, $options: "i" } },
-              { detailedDescription: { $regex: textSearch, $options: "i" } },
-              {
-                "contractor.businessName": {
-                  $regex: textSearch,
-                  $options: "i",
-                },
-              },
-              { "contractor.tradeName": { $regex: textSearch, $options: "i" } },
-              { observations: { $regex: textSearch, $options: "i" } },
-            ],
-          },
+      if (searchText) {
+        query = query.where({
+          $text: { $search: searchText },
         });
       }
 
-      return await this.searchWithAggregation({
-        filters,
-        options: { page, limit, sort },
-        lookups: [
-          this.contractLookups.contractType,
-          this.contractLookups.requestingDepartment,
-          this.contractLookups.currentPhase,
-        ],
-        customPipeline,
-      });
+      if (tags && tags.length > 0) {
+        query = query.where({ "metadata.tags": { $in: tags } });
+      }
+
+      // Población condicional
+      if (populate) {
+        query = query.populate([
+          { path: "contractType", select: "code name category" },
+          { path: "requestingDepartment", select: "code name shortName" },
+          { path: "currentPhase", select: "code name shortName order" },
+        ]);
+      }
+
+      // Aplicar ordenamiento
+      query = query.sort(sort);
+
+      return await this.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error en búsqueda avanzada: ${error.message}`);
     }
   }
 
-  // ===== ESTADÍSTICAS Y REPORTES =====
+  // ===== MÉTODOS DE REPORTES Y ESTADÍSTICAS =====
 
   /**
-   * Obtener estadísticas generales de contratos
+   * Obtener dashboard mejorado usando métodos del esquema
    */
-  async getGeneralStats() {
+  async getDashboard(filters = {}, userId = null, userRole = null) {
     try {
-      const pipeline = [
-        { $match: { isActive: true } },
-        {
-          $group: {
-            _id: null,
-            totalContracts: { $sum: 1 },
-            totalEstimatedValue: { $sum: "$budget.estimatedValue" },
-            totalAwardedValue: { $sum: "$budget.awardedValue" },
-            totalPaidValue: { $sum: "$budget.paidValue" },
-            avgEstimatedValue: { $avg: "$budget.estimatedValue" },
-            statusBreakdown: {
-              $push: "$generalStatus",
-            },
-          },
-        },
-        {
-          $project: {
-            _id: 0,
-            totalContracts: 1,
-            totalEstimatedValue: 1,
-            totalAwardedValue: 1,
-            totalPaidValue: 1,
-            avgEstimatedValue: 1,
-            pendingPayment: {
-              $subtract: ["$totalAwardedValue", "$totalPaidValue"],
-            },
-            statusBreakdown: 1,
-          },
-        },
-      ];
+      const { department, dateFrom, dateTo } = filters;
 
-      const result = await this.model.aggregate(pipeline);
-      return result[0] || {};
-    } catch (error) {
-      throw new Error(`Error obteniendo estadísticas: ${error.message}`);
-    }
-  }
+      let matchStage = { isActive: true };
 
-  /**
-   * Estadísticas por departamento
-   */
-  async getStatsByDepartment() {
-    try {
-      const pipeline = [
-        { $match: { isActive: true } },
-        {
-          $lookup: {
-            from: "departments",
-            localField: "requestingDepartment",
-            foreignField: "_id",
-            as: "department",
-          },
-        },
-        { $unwind: "$department" },
-        {
-          $group: {
-            _id: "$requestingDepartment",
-            departmentName: { $first: "$department.name" },
-            departmentCode: { $first: "$department.code" },
-            contractCount: { $sum: 1 },
-            totalValue: { $sum: "$budget.estimatedValue" },
-            avgValue: { $avg: "$budget.estimatedValue" },
-            statusBreakdown: {
-              $push: "$generalStatus",
-            },
-          },
-        },
-        { $sort: { contractCount: -1 } },
-      ];
-
-      return await this.model.aggregate(pipeline);
-    } catch (error) {
-      throw new Error(
-        `Error en estadísticas por departamento: ${error.message}`
-      );
-    }
-  }
-
-  /**
-   * Estadísticas por tipo de contratación
-   */
-  async getStatsByContractType() {
-    try {
-      const pipeline = [
-        { $match: { isActive: true } },
-        {
-          $lookup: {
-            from: "contracttypes",
-            localField: "contractType",
-            foreignField: "_id",
-            as: "contractType",
-          },
-        },
-        { $unwind: "$contractType" },
-        {
-          $group: {
-            _id: "$contractType._id",
-            typeName: { $first: "$contractType.name" },
-            typeCode: { $first: "$contractType.code" },
-            category: { $first: "$contractType.category" },
-            contractCount: { $sum: 1 },
-            totalValue: { $sum: "$budget.estimatedValue" },
-            avgValue: { $avg: "$budget.estimatedValue" },
-            minValue: { $min: "$budget.estimatedValue" },
-            maxValue: { $max: "$budget.estimatedValue" },
-          },
-        },
-        { $sort: { contractCount: -1 } },
-      ];
-
-      return await this.model.aggregate(pipeline);
-    } catch (error) {
-      throw new Error(`Error en estadísticas por tipo: ${error.message}`);
-    }
-  }
-
-  /**
-   * Estadísticas temporales (por mes/año)
-   */
-  async getTemporalStats(year = new Date().getFullYear()) {
-    try {
-      const pipeline = [
-        {
-          $match: {
-            isActive: true,
-            createdAt: {
-              $gte: new Date(`${year}-01-01`),
-              $lte: new Date(`${year}-12-31`),
-            },
-          },
-        },
-        {
-          $group: {
-            _id: {
-              year: { $year: "$createdAt" },
-              month: { $month: "$createdAt" },
-            },
-            contractCount: { $sum: 1 },
-            totalValue: { $sum: "$budget.estimatedValue" },
-            avgValue: { $avg: "$budget.estimatedValue" },
-            statusBreakdown: {
-              $push: "$generalStatus",
-            },
-          },
-        },
-        { $sort: { "_id.month": 1 } },
-      ];
-
-      return await this.model.aggregate(pipeline);
-    } catch (error) {
-      throw new Error(`Error en estadísticas temporales: ${error.message}`);
-    }
-  }
-
-  // ===== MANEJO DE FASES =====
-
-  /**
-   * Actualizar fase actual del contrato
-   */
-  async updateCurrentPhase(
-    contractId,
-    newPhaseId,
-    userData,
-    observations = ""
-  ) {
-    try {
-      if (
-        !Types.ObjectId.isValid(contractId) ||
-        !Types.ObjectId.isValid(newPhaseId)
-      ) {
-        throw new Error("IDs no válidos");
-      }
-
-      const contract = await this.findById(contractId);
-      const oldPhaseId = contract.currentPhase;
-
-      // Actualizar la fase actual
-      const updatedContract = await this.update(
-        contractId,
-        {
-          currentPhase: newPhaseId,
-          "phases.$[elem].status": "IN_PROGRESS",
-          "phases.$[elem].startDate": new Date(),
-          "phases.$[elem].observations": observations,
-        },
-        userData,
-        {
-          arrayFilters: [{ "elem.phase": newPhaseId }],
-        }
-      );
-
-      // Marcar fase anterior como completada si existe
-      if (oldPhaseId) {
-        await this.model.updateOne(
-          { _id: contractId },
-          {
-            $set: {
-              "phases.$[elem].status": "COMPLETED",
-              "phases.$[elem].completionDate": new Date(),
-            },
-          },
-          {
-            arrayFilters: [{ "elem.phase": oldPhaseId }],
-          }
-        );
-      }
-
-      return updatedContract;
-    } catch (error) {
-      throw new Error(`Error actualizando fase: ${error.message}`);
-    }
-  }
-
-  /**
-   * Completar fase actual
-   */
-  async completeCurrentPhase(contractId, userData, observations = "") {
-    try {
-      const contract = await this.findById(contractId);
-      if (!contract.currentPhase) {
-        throw new Error("No hay fase actual para completar");
-      }
-
-      const updatedContract = await this.model.findOneAndUpdate(
-        {
-          _id: contractId,
-          "phases.phase": contract.currentPhase,
-        },
-        {
-          $set: {
-            "phases.$.status": "COMPLETED",
-            "phases.$.completionDate": new Date(),
-            "phases.$.observations": observations,
-            updatedBy: userData.userId,
-            updatedAt: new Date(),
-          },
-        },
-        { new: true }
-      );
-
-      return updatedContract;
-    } catch (error) {
-      throw new Error(`Error completando fase: ${error.message}`);
-    }
-  }
-
-  // ===== MÉTODOS DE UTILIDAD =====
-
-  /**
-   * Verificar disponibilidad de número de contrato
-   */
-  async isContractNumberAvailable(contractNumber, excludeId = null) {
-    try {
-      const query = {
-        contractNumber: contractNumber.toUpperCase(),
-        isActive: true,
-      };
-
-      if (excludeId) {
-        query._id = { $ne: excludeId };
-      }
-
-      const existingContract = await this.model.findOne(query);
-      return !existingContract;
-    } catch (error) {
-      throw new Error(`Error verificando número de contrato: ${error.message}`);
-    }
-  }
-
-  /**
-   * Generar siguiente número de contrato
-   */
-  async generateNextContractNumber(
-    departmentCode,
-    year = new Date().getFullYear()
-  ) {
-    try {
-      const prefix = `${departmentCode}-${year}`;
-      const regex = new RegExp(`^${prefix}-(\\d+)$`, "i");
-
-      const lastContract = await this.model
-        .findOne({
-          contractNumber: { $regex: regex },
-          isActive: true,
-        })
-        .sort({ contractNumber: -1 })
-        .lean();
-
-      let nextNumber = 1;
-      if (lastContract) {
-        const match = lastContract.contractNumber.match(regex);
-        if (match && match[1]) {
-          nextNumber = parseInt(match[1]) + 1;
-        }
-      }
-
-      const paddedNumber = nextNumber.toString().padStart(4, "0");
-      return `${prefix}-${paddedNumber}`;
-    } catch (error) {
-      throw new Error(`Error generando número de contrato: ${error.message}`);
-    }
-  }
-
-  /**
-   * Obtener dashboard de contratos
-   */
-  async getDashboard(userId = null, userRole = null) {
-    try {
-      const matchStage = { isActive: true };
-
-      // Filtrar por usuario/departamento si no es admin
-      if (userId && userRole !== "ADMIN") {
-        // Aquí puedes agregar lógica para filtrar por departamento del usuario
-        // matchStage.requestingDepartment = userDepartment;
+      // Filtros opcionales
+      if (department)
+        matchStage.requestingDepartment = new Types.ObjectId(department);
+      if (dateFrom || dateTo) {
+        matchStage.createdAt = {};
+        if (dateFrom) matchStage.createdAt.$gte = new Date(dateFrom);
+        if (dateTo) matchStage.createdAt.$lte = new Date(dateTo);
       }
 
       const pipeline = [
         { $match: matchStage },
         {
           $facet: {
-            // Estadísticas por estado
+            // Usar métodos estáticos para estadísticas
             byStatus: [
               {
                 $group: {
@@ -719,7 +496,7 @@ export class ContractRepository extends BaseRepository {
               },
             ],
 
-            // Contratos recientes
+            // Contratos recientes con información de progreso
             recent: [
               { $sort: { createdAt: -1 } },
               { $limit: 5 },
@@ -740,11 +517,13 @@ export class ContractRepository extends BaseRepository {
                   generalStatus: 1,
                   "department.name": 1,
                   createdAt: 1,
+                  "timeline.executionEndDate": 1,
+                  phases: 1,
                 },
               },
             ],
 
-            // Contratos vencidos
+            // Contratos vencidos (usar lógica similar al query helper)
             overdue: [
               {
                 $match: {
@@ -757,7 +536,7 @@ export class ContractRepository extends BaseRepository {
               { $count: "count" },
             ],
 
-            // Total de contratos y valores
+            // Totales
             totals: [
               {
                 $group: {
@@ -773,9 +552,65 @@ export class ContractRepository extends BaseRepository {
       ];
 
       const result = await this.model.aggregate(pipeline);
-      return result[0];
+      const dashboard = result[0];
+
+      // Enriquecer con estadísticas por departamento si es necesario
+      if (!department) {
+        dashboard.byDepartment = await this.getStatsByDepartment();
+      }
+
+      return dashboard;
     } catch (error) {
       throw new Error(`Error obteniendo dashboard: ${error.message}`);
+    }
+  }
+
+  // ===== VALIDACIONES ESPECÍFICAS =====
+
+  /**
+   * Validar datos antes de crear contrato
+   */
+  async validateBeforeCreate(data) {
+    const errors = [];
+
+    // Validar unicidad de número de contrato
+    if (data.contractNumber) {
+      const existing = await this.model.findOne({
+        contractNumber: data.contractNumber.toUpperCase(),
+        isActive: true,
+      });
+      if (existing) {
+        errors.push("El número de contrato ya existe");
+      }
+    }
+
+    // Validar unicidad de código SERCOP
+    if (data.sercopCode) {
+      const existing = await this.model.findOne({
+        sercopCode: data.sercopCode.toUpperCase(),
+        isActive: true,
+      });
+      if (existing) {
+        errors.push("El código SERCOP ya existe");
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new Error(`Validación fallida: ${errors.join(", ")}`);
+    }
+
+    return true;
+  }
+
+  /**
+   * Crear contrato con validaciones
+   */
+  async create(data, userData, options = {}) {
+    try {
+      await this.validateBeforeCreate(data);
+      return await super.create(data, userData, options);
+    } catch (error) {
+      throw new Error(`Error creando contrato: ${error.message}`);
     }
   }
 }

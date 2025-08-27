@@ -1,4 +1,8 @@
-// src/module/exp-digital/models/department.scheme.js
+// =============================================================================
+// src/module/exp-digital/models/department.scheme.js - OPTIMIZADO
+// Esquema optimizado para evitar duplicaciones con el repositorio
+// =============================================================================
+
 import mongoose from "mongoose";
 import mongoosePaginate from "mongoose-paginate-v2";
 import {
@@ -63,13 +67,21 @@ export const DepartmentJSON = {
 
   shortName: {
     type: String,
+    required: true,
     trim: true,
     maxlength: 50,
     meta: {
-      validation: { isString: true, optional: true, isLength: { max: 50 } },
+      validation: {
+        isString: true,
+        required: true,
+        notEmpty: true,
+        isLength: { min: 2, max: 50 },
+      },
       messages: {
+        required: "El nombre corto es obligatorio",
         isString: "El nombre corto debe ser un texto válido",
-        isLength: "El nombre corto no puede exceder 50 caracteres",
+        notEmpty: "El nombre corto no puede estar vacío",
+        isLength: "El nombre corto debe tener entre 2 y 50 caracteres",
       },
     },
   },
@@ -77,12 +89,16 @@ export const DepartmentJSON = {
   description: {
     type: String,
     trim: true,
-    maxlength: 2000,
+    maxlength: 500,
     meta: {
-      validation: { isString: true, optional: true, isLength: { max: 2000 } },
+      validation: {
+        isString: true,
+        optional: true,
+        isLength: { max: 500 },
+      },
       messages: {
-        isString: "La descripción debe ser un texto válida",
-        isLength: "La descripción no puede exceder 2000 caracteres",
+        isString: "La descripción debe ser un texto válido",
+        isLength: "La descripción no puede exceder 500 caracteres",
       },
     },
   },
@@ -91,55 +107,37 @@ export const DepartmentJSON = {
   responsible: {
     name: {
       type: String,
+      required: true,
       trim: true,
       maxlength: 150,
       meta: {
-        validation: { isString: true, optional: true, isLength: { max: 150 } },
+        validation: {
+          isString: true,
+          required: true,
+          notEmpty: true,
+          isLength: { min: 3, max: 150 },
+        },
         messages: {
-          isString: "El nombre del responsable debe ser un texto válido",
-          isLength: "El nombre del responsable no puede exceder 150 caracteres",
+          required: "El nombre del responsable es obligatorio",
+          isString: "El nombre debe ser un texto válido",
+          notEmpty: "El nombre no puede estar vacío",
+          isLength: "El nombre debe tener entre 3 y 150 caracteres",
         },
       },
     },
     position: {
       type: String,
       trim: true,
-      maxlength: 150,
+      maxlength: 100,
       meta: {
-        validation: { isString: true, optional: true, isLength: { max: 150 } },
+        validation: {
+          isString: true,
+          optional: true,
+          isLength: { max: 100 },
+        },
         messages: {
           isString: "El cargo debe ser un texto válido",
-          isLength: "El cargo no puede exceder 150 caracteres",
-        },
-      },
-    },
-    email: {
-      type: String,
-      trim: true,
-      lowercase: true,
-      maxlength: 100,
-      validate: CommonValidators.email,
-      meta: {
-        validation: { isEmail: true, optional: true },
-        messages: {
-          isEmail: "El email del responsable no es válido",
-        },
-      },
-    },
-    phone: {
-      type: String,
-      trim: true,
-      maxlength: 20,
-      validate: {
-        validator: function (v) {
-          return !v || /^[\d\-\+\(\)\s]{7,20}$/.test(v);
-        },
-        message: "El teléfono debe tener un formato válido",
-      },
-      meta: {
-        validation: { optional: true },
-        messages: {
-          invalid: "El teléfono debe tener un formato válido",
+          isLength: "El cargo no puede exceder 100 caracteres",
         },
       },
     },
@@ -148,7 +146,11 @@ export const DepartmentJSON = {
       trim: true,
       maxlength: 10,
       meta: {
-        validation: { isString: true, optional: true, isLength: { max: 10 } },
+        validation: {
+          isString: true,
+          optional: true,
+          isLength: { max: 10 },
+        },
         messages: {
           isString: "La extensión debe ser un texto válido",
           isLength: "La extensión no puede exceder 10 caracteres",
@@ -157,27 +159,16 @@ export const DepartmentJSON = {
     },
   },
 
-  // Información de contacto del departamento
+  // Información de contacto
   contact: {
-    address: {
-      type: String,
-      trim: true,
-      maxlength: 300,
-      meta: {
-        validation: { isString: true, optional: true, isLength: { max: 300 } },
-        messages: {
-          isString: "La dirección debe ser un texto válido",
-          isLength: "La dirección no puede exceder 300 caracteres",
-        },
-      },
-    },
     phone: {
       type: String,
       trim: true,
       maxlength: 20,
       validate: {
         validator: function (v) {
-          return !v || /^[\d\-\+\(\)\s]{7,20}$/.test(v);
+          if (!v) return true; // Campo opcional
+          return /^[\d\s\-\+\(\)]{7,20}$/.test(v);
         },
         message: "El teléfono debe tener un formato válido",
       },
@@ -242,235 +233,108 @@ export const DepartmentJSON = {
   // Nivel jerárquico (0 = raíz, 1 = primer nivel, etc.)
   level: {
     type: Number,
-    min: 0,
-    max: 10,
     default: 0,
-    index: true,
+    min: 0,
+    max: 20,
     meta: {
-      validation: { isNumeric: true, min: 0, max: 10 },
+      validation: {
+        isInt: true,
+        min: 0,
+        max: 20,
+      },
       messages: {
-        isNumeric: "El nivel debe ser numérico",
-        min: "El nivel mínimo es 0",
-        max: "El nivel máximo es 10",
+        isInt: "El nivel debe ser un número entero",
+        min: "El nivel no puede ser menor a 0",
+        max: "El nivel no puede ser mayor a 20",
+      },
+    },
+  },
+
+  // Orden de visualización
+  displayOrder: {
+    type: Number,
+    default: 0,
+    min: 0,
+    meta: {
+      validation: {
+        isInt: true,
+        min: 0,
+      },
+      messages: {
+        isInt: "El orden debe ser un número entero",
+        min: "El orden no puede ser menor a 0",
       },
     },
   },
 
   // Configuración presupuestaria
   budgetConfig: {
-    hasOwnBudget: {
-      //Tiene su propio presupuesto
-      type: Boolean,
-      default: false,
-    },
-    budgetCode: {
-      //Código del presupuesto
-      type: String,
-      trim: true,
-      maxlength: 30,
+    maxApprovalAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+      meta: {
+        validation: {
+          isNumeric: true,
+          min: 0,
+        },
+        messages: {
+          isNumeric: "El monto máximo de aprobación debe ser un número",
+          min: "El monto no puede ser negativo",
+        },
+      },
     },
     canApproveContracts: {
-      //Puede aprobar contratos
       type: Boolean,
       default: false,
+      meta: {
+        validation: { isBoolean: true },
+        messages: {
+          isBoolean: "El campo debe ser verdadero o falso",
+        },
+      },
     },
-    maxApprovalAmount: {
-      //Importe máximo de aprobación
-      type: Number,
-      min: 0,
-      default: 0,
-    },
-  },
-
-  // Control de estado
-  isActive: {
-    type: Boolean,
-    default: true,
-    index: true,
-    meta: {
-      validation: { isBoolean: true, optional: true },
-      messages: {
-        isBoolean: "El estado activo debe ser verdadero o falso",
+    requiresApproval: {
+      type: Boolean,
+      default: true,
+      meta: {
+        validation: { isBoolean: true },
+        messages: {
+          isBoolean: "El campo debe ser verdadero o falso",
+        },
       },
     },
   },
 
-  // Orden para mostrar en listas
-  displayOrder: {
-    type: Number,
-    min: 0,
-    default: 0,
-    index: true,
-  },
-
-  // Tags/etiquetas para categorización
+  // Tags para categorización
   tags: {
     type: [String],
     default: [],
     validate: {
-      validator: function (v) {
-        return v.length <= 20;
+      validator: function (arr) {
+        return arr.length <= 10; // Máximo 10 tags
       },
-      message: "No se pueden tener más de 20 tags",
+      message: "No se pueden tener más de 10 tags",
+    },
+    meta: {
+      validation: {
+        isArray: true,
+        optional: true,
+      },
+      messages: {
+        isArray: "Los tags deben ser un arreglo",
+      },
     },
   },
 };
 
-// Crear el esquema con campos base
-const DepartmentSchema = new Schema(stripMetaFields(DepartmentJSON), {
-  timestamps: true,
-  collection: "departments",
-});
+// === CONFIGURACIÓN DEL ESQUEMA ===
 
-// Aplicar configuración base
-setupBaseSchema(DepartmentSchema, {
-  addTimestamps: true,
-  addIndexes: true,
-  addVirtuals: true,
-  addMethods: true,
-  addStatics: true,
-  addHelpers: true,
-  addBaseFields: true,
-});
-
-// === MIDDLEWARES PERSONALIZADOS ===
-
-// Pre-save: calcular nivel automáticamente
-DepartmentSchema.pre("save", async function (next) {
-  if (this.isModified("parentDepartment")) {
-    if (this.parentDepartment) {
-      try {
-        const parent = await this.constructor.findById(this.parentDepartment);
-        if (parent) {
-          this.level = parent.level + 1;
-
-          // Prevenir referencias circulares
-          if (
-            parent.parentDepartment &&
-            parent.parentDepartment.toString() === this._id.toString()
-          ) {
-            return next(new Error("No se puede crear una referencia circular"));
-          }
-        }
-      } catch (error) {
-        return next(error);
-      }
-    } else {
-      this.level = 0;
-    }
-  }
-
-  next();
-});
-
-// === MÉTODOS DE INSTANCIA ===
-
-DepartmentSchema.methods.toJSON = function () {
-  const obj = this.toObject();
-  return stripMetaFields(obj);
-};
-
-DepartmentSchema.methods.getFullHierarchy = async function () {
-  const hierarchy = [this];
-  let current = this;
-
-  while (current.parentDepartment) {
-    current = await this.constructor.findById(current.parentDepartment);
-    if (current) {
-      hierarchy.unshift(current);
-    } else {
-      break;
-    }
-  }
-
-  return hierarchy;
-};
-
-DepartmentSchema.methods.getChildren = function () {
-  return this.constructor.findActive({ parentDepartment: this._id });
-};
-
-DepartmentSchema.methods.getAllDescendants = async function () {
-  const descendants = [];
-  const directChildren = await this.getChildren();
-
-  for (const child of directChildren) {
-    descendants.push(child);
-    const childDescendants = await child.getAllDescendants();
-    descendants.push(...childDescendants);
-  }
-
-  return descendants;
-};
-
-DepartmentSchema.methods.canApprove = function (amount) {
-  return (
-    this.budgetConfig.canApproveContracts &&
-    amount <= this.budgetConfig.maxApprovalAmount
-  );
-};
-
-// === MÉTODOS ESTÁTICOS ===
-
-DepartmentSchema.statics.isProtected = function (method) {
-  const protectedMethods = [
-    "get",
-    "put",
-    "delete",
-    "createBatch",
-    "updateBatch",
-  ];
-  return protectedMethods.includes(method);
-};
-
-DepartmentSchema.statics.findRootDepartments = function () {
-  return this.findActive({
-    $or: [{ parentDepartment: null }, { parentDepartment: { $exists: false } }],
-  }).sort({ displayOrder: 1, name: 1 });
-};
-
-DepartmentSchema.statics.findByLevel = function (level) {
-  return this.findActive({ level }).sort({ displayOrder: 1, name: 1 });
-};
-
-DepartmentSchema.statics.getHierarchyTree = async function () {
-  const allDepartments = await this.findActive().populate("parentDepartment");
-  const tree = [];
-  const departmentMap = new Map();
-
-  // Crear mapa de departamentos
-  allDepartments.forEach((dept) => {
-    departmentMap.set(dept._id.toString(), {
-      ...dept.toObject(),
-      children: [],
-    });
-  });
-
-  // Construir árbol
-  allDepartments.forEach((dept) => {
-    if (dept.parentDepartment) {
-      const parent = departmentMap.get(dept.parentDepartment._id.toString());
-      if (parent) {
-        parent.children.push(departmentMap.get(dept._id.toString()));
-      }
-    } else {
-      tree.push(departmentMap.get(dept._id.toString()));
-    }
-  });
-
-  return tree;
-};
-
-DepartmentSchema.statics.findWithApprovalCapability = function (minAmount = 0) {
-  return this.findActive({
-    "budgetConfig.canApproveContracts": true,
-    "budgetConfig.maxApprovalAmount": { $gte: minAmount },
-  }).sort({ "budgetConfig.maxApprovalAmount": -1 });
-};
+const DepartmentSchema = setupBaseSchema(DepartmentJSON);
 
 // === VIRTUALES ===
 
-DepartmentSchema.virtual("fullName").get(function () {
+DepartmentSchema.virtual("displayName").get(function () {
   return this.shortName ? `${this.name} (${this.shortName})` : this.name;
 });
 
@@ -483,6 +347,7 @@ DepartmentSchema.virtual("contactInfo").get(function () {
 });
 
 // === QUERY HELPERS ===
+// ✅ MANTENIDOS: Para que el repositorio pueda usarlos
 
 DepartmentSchema.query.byParent = function (parentId) {
   return this.where({ parentDepartment: parentId });
@@ -496,7 +361,101 @@ DepartmentSchema.query.byLevel = function (level) {
   return this.where({ level });
 };
 
-// === ÍNDICES ADICIONALES ===
+DepartmentSchema.query.byTags = function (tags) {
+  return this.where({ tags: { $in: tags } });
+};
+
+DepartmentSchema.query.active = function () {
+  return this.where({ isActive: true });
+};
+
+// === MÉTODOS DE INSTANCIA ===
+// ✅ SOLO MÉTODOS SIMPLES QUE NO REQUIEREN AGREGACIÓN
+
+DepartmentSchema.methods.toJSON = function () {
+  const obj = this.toObject();
+  return stripMetaFields(obj);
+};
+
+// ✅ MÉTODO SIMPLE: Verificar capacidad de aprobación
+DepartmentSchema.methods.canApprove = function (amount) {
+  return (
+    this.budgetConfig.canApproveContracts &&
+    this.budgetConfig.maxApprovalAmount >= amount
+  );
+};
+
+// ✅ MÉTODO SIMPLE: Verificar si es departamento raíz
+DepartmentSchema.methods.isRoot = function () {
+  return !this.parentDepartment || this.level === 0;
+};
+
+// ✅ MÉTODO SIMPLE: Obtener información básica del responsable
+DepartmentSchema.methods.getResponsibleInfo = function () {
+  if (!this.responsible.name) return null;
+
+  const info = [this.responsible.name];
+  if (this.responsible.position) info.push(this.responsible.position);
+  if (this.responsible.extension)
+    info.push(`Ext: ${this.responsible.extension}`);
+
+  return info.join(" - ");
+};
+
+// ❌ ELIMINADOS: Métodos complejos que requieren agregación
+// - getFullHierarchy() -> Mover al repositorio
+// - getAllDescendants() -> Mover al repositorio
+// - getChildren() -> Usar query helper byParent en el repositorio
+
+// === MIDDLEWARES MEJORADOS ===
+
+// Pre-save: Validaciones básicas y normalización
+DepartmentSchema.pre("save", function (next) {
+  // Normalizar código a mayúsculas
+  if (this.code) {
+    this.code = this.code.toUpperCase().trim();
+  }
+
+  // Normalizar tags
+  if (this.tags && this.tags.length > 0) {
+    this.tags = this.tags
+      .map((tag) => tag.trim().toLowerCase())
+      .filter((tag) => tag);
+  }
+
+  next();
+});
+
+// ❌ ELIMINADO: Pre-save para calcular nivel
+// La lógica compleja de validación de jerarquía se maneja en el repositorio
+
+// Pre-remove: Validar que no tenga hijos activos
+DepartmentSchema.pre(
+  "deleteOne",
+  { document: true, query: false },
+  async function (next) {
+    try {
+      const childrenCount = await this.constructor.countDocuments({
+        parentDepartment: this._id,
+        isActive: true,
+      });
+
+      if (childrenCount > 0) {
+        return next(
+          new Error(
+            "No se puede eliminar un departamento que tiene departamentos hijos activos"
+          )
+        );
+      }
+
+      next();
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// === ÍNDICES OPTIMIZADOS ===
 
 DepartmentSchema.index({ code: 1 }, { unique: true });
 DepartmentSchema.index({ parentDepartment: 1, isActive: 1 });
@@ -513,16 +472,29 @@ DepartmentSchema.index({
   "responsible.name": "text",
 });
 
-// Índice compuesto para jerarquía
+// Índice compuesto para jerarquía y ordenamiento
 DepartmentSchema.index({
   parentDepartment: 1,
   level: 1,
   displayOrder: 1,
 });
 
-// === HOOKS Y PLUGINS ===
+// Índice para consultas de capacidad de aprobación
+DepartmentSchema.index({
+  "budgetConfig.canApproveContracts": 1,
+  "budgetConfig.maxApprovalAmount": 1,
+  isActive: 1,
+});
+
+// === CONFIGURACIÓN FINAL ===
+
+// Incluir virtuals en JSON y Object
+DepartmentSchema.set("toJSON", { virtuals: true });
+DepartmentSchema.set("toObject", { virtuals: true });
 
 // Plugin de paginación
 DepartmentSchema.plugin(mongoosePaginate);
+
+// === EXPORTACIÓN ===
 
 export const Department = mongoose.model("Department", DepartmentSchema);

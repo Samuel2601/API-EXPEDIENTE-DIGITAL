@@ -1,6 +1,6 @@
 // =============================================================================
 // src/module/exp-digital/repositories/department.repository.js
-// Repositorio especializado para gestión de departamentos organizacionales
+// Repositorio especializado para gestión de departamentos organizacionales - MEJORADO
 // =============================================================================
 
 import { Types } from "mongoose";
@@ -17,7 +17,6 @@ export class DepartmentRepository extends BaseRepository {
    * Configurar lookups específicos para departamentos
    */
   setupDepartmentLookups() {
-    // Lookups específicos para departamentos
     this.departmentLookups = {
       parentDepartment: {
         from: "departments",
@@ -55,7 +54,7 @@ export class DepartmentRepository extends BaseRepository {
   // ===== MÉTODOS DE BÚSQUEDA JERÁRQUICOS =====
 
   /**
-   * Buscar departamento por código
+   * Buscar departamento por código - UTILIZA QUERY HELPER
    */
   async findByCode(code) {
     try {
@@ -64,115 +63,135 @@ export class DepartmentRepository extends BaseRepository {
           code: code.toUpperCase(),
           isActive: true,
         })
-        .populate([
-          { path: "parentDepartment", select: "code name shortName level" },
-        ])
-        .lean();
-
-      if (!department) {
-        throw new Error(`Departamento con código ${code} no encontrado`);
-      }
+        .populate({
+          path: "parentDepartment",
+          select: "code name shortName level",
+        });
 
       return department;
     } catch (error) {
-      throw new Error(`Error buscando departamento: ${error.message}`);
+      throw new Error(
+        `Error buscando departamento por código: ${error.message}`
+      );
     }
   }
 
   /**
-   * Obtener departamentos raíz (sin padre)
+   * Buscar departamentos con capacidad de aprobación - USA QUERY HELPER
    */
-  async findRootDepartments(options = {}) {
-    const { page = 1, limit = 50, includeChildren = false } = options;
+  async findDepartmentsWithApprovalCapability(options = {}) {
+    try {
+      const { page = 1, limit = 10 } = options;
 
-    const baseQuery = {
-      $or: [
-        { parentDepartment: null },
-        { parentDepartment: { $exists: false } },
-      ],
-    };
+      // ✅ MEJORA: Usar query helper del esquema
+      const query = this.model.find().withApprovalCapability();
 
-    const lookups = [];
-    if (includeChildren) {
-      lookups.push(this.departmentLookups.children);
+      const result = await this.paginate(query, { page, limit });
+      return result;
+    } catch (error) {
+      throw new Error(
+        `Error buscando departamentos con capacidad de aprobación: ${error.message}`
+      );
     }
-
-    return await this.searchWithAggregation({
-      filters: baseQuery,
-      options: {
-        page,
-        limit,
-        sort: { displayOrder: 1, name: 1 },
-      },
-      lookups,
-    });
   }
 
   /**
-   * Buscar departamentos por nivel jerárquico
+   * Buscar departamentos por nivel jerárquico - USA QUERY HELPER
    */
   async findByLevel(level, options = {}) {
-    const {
-      page = 1,
-      limit = 50,
-      includeChildren = false,
-      includeParent = false,
-    } = options;
-
-    if (level < 0 || level > 10) {
-      throw new Error("El nivel debe estar entre 0 y 10");
-    }
-
-    const lookups = [];
-    if (includeChildren) lookups.push(this.departmentLookups.children);
-    if (includeParent) lookups.push(this.departmentLookups.parentDepartment);
-
-    return await this.searchWithAggregation({
-      filters: { level },
-      options: {
-        page,
-        limit,
-        sort: { displayOrder: 1, name: 1 },
-      },
-      lookups,
-    });
-  }
-
-  /**
-   * Obtener hijos directos de un departamento
-   */
-  async getChildren(parentId, options = {}) {
-    const { page = 1, limit = 50, includeInactive = false } = options;
-
-    const baseQuery = { parentDepartment: parentId };
-    if (!includeInactive) {
-      baseQuery.isActive = true;
-    }
-
-    return await this.searchWithAggregation({
-      filters: baseQuery,
-      options: {
-        page,
-        limit,
-        sort: { displayOrder: 1, name: 1 },
-      },
-      lookups: [this.departmentLookups.children],
-    });
-  }
-
-  /**
-   * Obtener toda la jerarquía descendiente de un departamento
-   */
-  async getAllDescendants(parentId, maxDepth = 10) {
     try {
-      if (!Types.ObjectId.isValid(parentId)) {
+      const { page = 1, limit = 10, includeInactive = false } = options;
+
+      // ✅ MEJORA: Usar query helper del esquema
+      let query = this.model.find().byLevel(level);
+
+      if (!includeInactive) {
+        query = query.where({ isActive: true });
+      }
+
+      const result = await this.paginate(query, { page, limit });
+      return result;
+    } catch (error) {
+      throw new Error(
+        `Error buscando departamentos por nivel: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Buscar departamentos hijos - USA QUERY HELPER
+   */
+  async findChildren(parentId, options = {}) {
+    try {
+      const { page = 1, limit = 10, includeInactive = false } = options;
+
+      // ✅ MEJORA: Usar query helper del esquema
+      let query = this.model.find().byParent(parentId);
+
+      if (!includeInactive) {
+        query = query.where({ isActive: true });
+      }
+
+      query = query.sort({ displayOrder: 1, name: 1 });
+
+      const result = await this.paginate(query, { page, limit });
+      return result;
+    } catch (error) {
+      throw new Error(`Error buscando departamentos hijos: ${error.message}`);
+    }
+  }
+
+  /**
+   * Verificar capacidad de aprobación de un departamento para un monto
+   * ✅ MEJORA: Usar método del esquema
+   */
+  async checkApprovalCapability(departmentId, amount) {
+    try {
+      const department = await this.findById(departmentId);
+      if (!department) {
+        throw new Error("Departamento no encontrado");
+      }
+
+      // ✅ Usar método del esquema
+      return department.canApprove(amount);
+    } catch (error) {
+      throw new Error(
+        `Error verificando capacidad de aprobación: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Obtener jerarquía completa de un departamento
+   * ✅ MEJORA: Usar método del esquema cuando sea apropiado
+   */
+  async getFullHierarchy(departmentId) {
+    try {
+      const department = await this.findById(departmentId);
+      if (!department) {
+        throw new Error("Departamento no encontrado");
+      }
+
+      // ✅ Usar método del esquema
+      return await department.getFullHierarchy();
+    } catch (error) {
+      throw new Error(`Error obteniendo jerarquía completa: ${error.message}`);
+    }
+  }
+
+  /**
+   * Obtener todos los descendientes usando agregación eficiente
+   */
+  async getAllDescendants(departmentId) {
+    try {
+      if (!Types.ObjectId.isValid(departmentId)) {
         throw new Error("ID de departamento no válido");
       }
 
       const pipeline = [
         {
           $match: {
-            _id: new Types.ObjectId(parentId),
+            _id: new Types.ObjectId(departmentId),
             isActive: true,
           },
         },
@@ -183,7 +202,7 @@ export class DepartmentRepository extends BaseRepository {
             connectFromField: "_id",
             connectToField: "parentDepartment",
             as: "descendants",
-            maxDepth: maxDepth - 1,
+            maxDepth: 10,
             restrictSearchWithMatch: { isActive: true },
           },
         },
@@ -205,6 +224,7 @@ export class DepartmentRepository extends BaseRepository {
                   shortName: "$$desc.shortName",
                   level: "$$desc.level",
                   parentDepartment: "$$desc.parentDepartment",
+                  displayOrder: "$$desc.displayOrder",
                 },
               },
             },
@@ -220,62 +240,192 @@ export class DepartmentRepository extends BaseRepository {
   }
 
   /**
-   * Obtener jerarquía completa hacia arriba (ancestros)
+   * Crear departamento con validaciones mejoradas
+   * ✅ MEJORA: Usar validaciones del repositorio antes de delegar al esquema
    */
-  async getAncestors(departmentId) {
+  async create(data, userData, options = {}) {
     try {
-      if (!Types.ObjectId.isValid(departmentId)) {
-        throw new Error("ID de departamento no válido");
+      // Validaciones previas
+      if (!(await this.isCodeAvailable(data.code))) {
+        throw new Error("El código ya existe");
       }
 
-      const pipeline = [
-        {
-          $match: {
-            _id: new Types.ObjectId(departmentId),
-            isActive: true,
-          },
-        },
-        {
-          $graphLookup: {
-            from: "departments",
-            startWith: "$parentDepartment",
-            connectFromField: "parentDepartment",
-            connectToField: "_id",
-            as: "ancestors",
-            restrictSearchWithMatch: { isActive: true },
-          },
-        },
-        {
-          $project: {
-            _id: 1,
-            code: 1,
-            name: 1,
-            shortName: 1,
-            level: 1,
-            parentDepartment: 1,
-            ancestors: {
-              $map: {
-                input: "$ancestors",
-                as: "anc",
-                in: {
-                  _id: "$$anc._id",
-                  code: "$$anc.code",
-                  name: "$$anc.name",
-                  shortName: "$$anc.shortName",
-                  level: "$$anc.level",
-                  parentDepartment: "$$anc.parentDepartment",
-                },
-              },
-            },
-          },
-        },
-      ];
+      if (data.parentDepartment) {
+        if (!(await this.validateHierarchy(null, data.parentDepartment))) {
+          throw new Error("Jerarquía inválida");
+        }
 
-      const result = await this.model.aggregate(pipeline);
-      return result[0] || null;
+        // Calcular nivel automáticamente
+        data.level = await this.calculateLevel(data.parentDepartment);
+      } else {
+        data.level = 0;
+      }
+
+      return await super.create(data, userData, options);
     } catch (error) {
-      throw new Error(`Error obteniendo ancestros: ${error.message}`);
+      throw new Error(`Error creando departamento: ${error.message}`);
     }
+  }
+
+  /**
+   * Actualizar departamento con validaciones mejoradas
+   */
+  async update(id, data, userData, options = {}) {
+    try {
+      // Validar código si se está cambiando
+      if (data.code && !(await this.isCodeAvailable(data.code, id))) {
+        throw new Error("El código ya existe");
+      }
+
+      // Validar jerarquía si se está cambiando el padre
+      if (data.parentDepartment !== undefined) {
+        if (!(await this.validateHierarchy(id, data.parentDepartment))) {
+          throw new Error("Jerarquía inválida - crearía referencia circular");
+        }
+
+        if (data.parentDepartment) {
+          data.level = await this.calculateLevel(data.parentDepartment);
+        } else {
+          data.level = 0;
+        }
+      }
+
+      const result = await super.update(id, data, userData, options);
+
+      // Actualizar niveles de descendientes si cambió la jerarquía
+      if (data.parentDepartment !== undefined) {
+        await this.updateDescendantLevels(id);
+      }
+
+      return result;
+    } catch (error) {
+      throw new Error(`Error actualizando departamento: ${error.message}`);
+    }
+  }
+
+  // ===== MÉTODOS DE VALIDACIÓN =====
+
+  /**
+   * Verificar si un código está disponible
+   */
+  async isCodeAvailable(code, excludeId = null) {
+    try {
+      const query = {
+        code: code.toUpperCase(),
+        isActive: true,
+      };
+
+      if (excludeId) {
+        query._id = { $ne: excludeId };
+      }
+
+      const existingDepartment = await this.model.findOne(query);
+      return !existingDepartment;
+    } catch (error) {
+      throw new Error(`Error verificando código: ${error.message}`);
+    }
+  }
+
+  /**
+   * Validar estructura jerárquica (evitar ciclos)
+   */
+  async validateHierarchy(departmentId, proposedParentId) {
+    try {
+      if (!proposedParentId) return true; // Sin padre es válido
+
+      if (
+        departmentId &&
+        departmentId.toString() === proposedParentId.toString()
+      ) {
+        return false; // No puede ser padre de sí mismo
+      }
+
+      // Verificar que el departamento propuesto como padre no sea descendiente
+      if (departmentId) {
+        const descendants = await this.getAllDescendants(departmentId);
+        if (descendants && descendants.descendants) {
+          const descendantIds = descendants.descendants.map((d) =>
+            d._id.toString()
+          );
+          return !descendantIds.includes(proposedParentId.toString());
+        }
+      }
+
+      return true;
+    } catch (error) {
+      throw new Error(`Error validando jerarquía: ${error.message}`);
+    }
+  }
+
+  /**
+   * Calcular nivel automáticamente basado en el padre
+   */
+  async calculateLevel(parentDepartmentId) {
+    try {
+      if (!parentDepartmentId) return 0; // Sin padre = nivel 0
+
+      const parent = await this.findById(parentDepartmentId);
+      return parent ? parent.level + 1 : 0;
+    } catch (error) {
+      throw new Error(`Error calculando nivel: ${error.message}`);
+    }
+  }
+
+  /**
+   * Actualizar niveles de descendientes después de cambio de jerarquía
+   */
+  async updateDescendantLevels(departmentId) {
+    try {
+      const department = await this.findById(departmentId);
+      if (!department) return;
+
+      const descendants = await this.getAllDescendants(departmentId);
+
+      if (descendants && descendants.descendants) {
+        // Actualizar niveles en lotes para mejor performance
+        const bulkOps = descendants.descendants.map((desc) => {
+          const newLevel = this.calculateLevelFromHierarchy(
+            desc,
+            descendants.descendants
+          );
+          return {
+            updateOne: {
+              filter: { _id: desc._id },
+              update: { $set: { level: newLevel } },
+            },
+          };
+        });
+
+        if (bulkOps.length > 0) {
+          await this.model.bulkWrite(bulkOps);
+        }
+      }
+    } catch (error) {
+      throw new Error(
+        `Error actualizando niveles de descendientes: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Calcular nivel basado en la jerarquía completa
+   */
+  calculateLevelFromHierarchy(department, allDescendants) {
+    let level = 0;
+    let currentParent = department.parentDepartment;
+
+    while (currentParent) {
+      level++;
+      const parent = allDescendants.find(
+        (d) => d._id.toString() === currentParent.toString()
+      );
+      currentParent = parent ? parent.parentDepartment : null;
+
+      // Prevenir bucles infinitos
+      if (level > 20) break;
+    }
+
+    return level;
   }
 
   /**
@@ -333,501 +483,68 @@ export class DepartmentRepository extends BaseRepository {
       });
     });
 
-    // Construir relaciones padre-hijo
+    // Construir árbol
     departments.forEach((dept) => {
+      const deptNode = departmentMap.get(dept._id.toString());
+
       if (dept.parentDepartment) {
         const parent = departmentMap.get(dept.parentDepartment.toString());
         if (parent && dept.level <= maxDepth) {
-          parent.children.push(departmentMap.get(dept._id.toString()));
+          parent.children.push(deptNode);
         }
       } else {
-        // Es un departamento raíz
-        tree.push(departmentMap.get(dept._id.toString()));
+        // Es un nodo raíz
+        tree.push(deptNode);
       }
     });
 
     return tree;
   }
 
-  // ===== BÚSQUEDAS POR CAPACIDADES PRESUPUESTARIAS =====
+  // ===== MÉTODOS DE BÚSQUEDA ESPECIALIZADA =====
 
   /**
-   * Buscar departamentos con capacidad de aprobación
+   * Buscar departamentos por capacidad de aprobación y monto
    */
-  async findWithApprovalCapability(minAmount = 0, options = {}) {
-    const { page = 1, limit = 50 } = options;
-
-    const filters = {
-      "budgetConfig.canApproveContracts": true,
-      "budgetConfig.maxApprovalAmount": { $gte: minAmount },
-    };
-
-    return await this.searchWithAggregation({
-      filters,
-      options: {
-        page,
-        limit,
-        sort: { "budgetConfig.maxApprovalAmount": -1 },
-      },
-    });
-  }
-
-  /**
-   * Buscar departamentos por rango de aprobación
-   */
-  async findByApprovalRange(minAmount, maxAmount, options = {}) {
-    const { page = 1, limit = 50 } = options;
-
-    const filters = {
-      "budgetConfig.canApproveContracts": true,
-      "budgetConfig.maxApprovalAmount": {
-        $gte: minAmount,
-        $lte: maxAmount,
-      },
-    };
-
-    return await this.searchWithAggregation({
-      filters,
-      options: { page, limit, sort: { "budgetConfig.maxApprovalAmount": -1 } },
-    });
-  }
-
-  /**
-   * Encontrar departamento apropiado para monto específico
-   */
-  async findApproverForAmount(amount, options = {}) {
-    const { preferHigherLevel = true } = options;
-
+  async findApprovalCapableDepartments(amount, options = {}) {
     try {
-      const query = {
-        "budgetConfig.canApproveContracts": true,
-        "budgetConfig.maxApprovalAmount": { $gte: amount },
-        isActive: true,
-      };
+      const { page = 1, limit = 10 } = options;
 
-      const sortOrder = preferHigherLevel
-        ? { level: 1, "budgetConfig.maxApprovalAmount": 1 }
-        : { "budgetConfig.maxApprovalAmount": 1, level: 1 };
+      const query = this.model
+        .find({
+          "budgetConfig.canApproveContracts": true,
+          "budgetConfig.maxApprovalAmount": { $gte: amount },
+          isActive: true,
+        })
+        .sort({ level: 1, "budgetConfig.maxApprovalAmount": 1 });
 
-      const department = await this.model
-        .findOne(query)
-        .sort(sortOrder)
-        .populate("parentDepartment", "code name level")
-        .lean();
-
-      return department;
+      return await this.paginate(query, { page, limit });
     } catch (error) {
-      throw new Error(`Error buscando aprobador: ${error.message}`);
-    }
-  }
-
-  // ===== BÚSQUEDAS AVANZADAS =====
-
-  /**
-   * Búsqueda avanzada de departamentos
-   */
-  async advancedSearch(searchParams, options = {}) {
-    try {
-      const {
-        code,
-        name,
-        level,
-        parentDepartment,
-        hasOwnBudget,
-        canApprove,
-        minApprovalAmount,
-        maxApprovalAmount,
-        responsibleName,
-        responsibleEmail,
-        tags,
-        textSearch,
-      } = searchParams;
-
-      const {
-        page = 1,
-        limit = 20,
-        sort = { displayOrder: 1, name: 1 },
-        includeInactive = false,
-        includeHierarchy = false,
-      } = options;
-
-      // Construir filtros
-      const filters = {};
-
-      if (!includeInactive) {
-        filters.isActive = true;
-      }
-
-      if (code) {
-        filters.code = { $regex: code, $options: "i" };
-      }
-
-      if (name) {
-        filters.name = { $regex: name, $options: "i" };
-      }
-
-      if (level !== undefined) {
-        filters.level = level;
-      }
-
-      if (parentDepartment) {
-        filters.parentDepartment = new Types.ObjectId(parentDepartment);
-      }
-
-      if (hasOwnBudget !== undefined) {
-        filters["budgetConfig.hasOwnBudget"] = hasOwnBudget;
-      }
-
-      if (canApprove !== undefined) {
-        filters["budgetConfig.canApproveContracts"] = canApprove;
-      }
-
-      if (minApprovalAmount !== undefined) {
-        filters["budgetConfig.maxApprovalAmount"] = {
-          $gte: minApprovalAmount,
-        };
-      }
-
-      if (maxApprovalAmount !== undefined) {
-        filters["budgetConfig.maxApprovalAmount"] = {
-          ...filters["budgetConfig.maxApprovalAmount"],
-          $lte: maxApprovalAmount,
-        };
-      }
-
-      if (responsibleName) {
-        filters["responsible.name"] = {
-          $regex: responsibleName,
-          $options: "i",
-        };
-      }
-
-      if (responsibleEmail) {
-        filters["responsible.email"] = {
-          $regex: responsibleEmail,
-          $options: "i",
-        };
-      }
-
-      if (tags && Array.isArray(tags) && tags.length > 0) {
-        filters.tags = { $in: tags };
-      }
-
-      // Configurar lookups
-      const lookups = [];
-      if (includeHierarchy) {
-        lookups.push(this.departmentLookups.parentDepartment);
-        lookups.push(this.departmentLookups.children);
-      }
-
-      // Pipeline personalizado para búsqueda de texto
-      const customPipeline = [];
-      if (textSearch) {
-        customPipeline.push({
-          $match: {
-            $or: [
-              { code: { $regex: textSearch, $options: "i" } },
-              { name: { $regex: textSearch, $options: "i" } },
-              { shortName: { $regex: textSearch, $options: "i" } },
-              { description: { $regex: textSearch, $options: "i" } },
-              { "responsible.name": { $regex: textSearch, $options: "i" } },
-              { "contact.address": { $regex: textSearch, $options: "i" } },
-            ],
-          },
-        });
-      }
-
-      return await this.searchWithAggregation({
-        filters,
-        options: { page, limit, sort },
-        lookups,
-        customPipeline,
-      });
-    } catch (error) {
-      throw new Error(`Error en búsqueda avanzada: ${error.message}`);
-    }
-  }
-
-  // ===== ESTADÍSTICAS Y REPORTES =====
-
-  /**
-   * Estadísticas generales de departamentos
-   */
-  async getGeneralStats() {
-    try {
-      const pipeline = [
-        { $match: { isActive: true } },
-        {
-          $group: {
-            _id: null,
-            totalDepartments: { $sum: 1 },
-            departmentsByLevel: {
-              $push: "$level",
-            },
-            withOwnBudget: {
-              $sum: { $cond: ["$budgetConfig.hasOwnBudget", 1, 0] },
-            },
-            canApproveContracts: {
-              $sum: { $cond: ["$budgetConfig.canApproveContracts", 1, 0] },
-            },
-            maxApprovalAmount: { $max: "$budgetConfig.maxApprovalAmount" },
-            avgApprovalAmount: { $avg: "$budgetConfig.maxApprovalAmount" },
-          },
-        },
-      ];
-
-      const result = await this.model.aggregate(pipeline);
-      return result[0] || {};
-    } catch (error) {
-      throw new Error(`Error obteniendo estadísticas: ${error.message}`);
-    }
-  }
-
-  /**
-   * Estadísticas por nivel jerárquico
-   */
-  async getStatsByLevel() {
-    try {
-      const pipeline = [
-        { $match: { isActive: true } },
-        {
-          $group: {
-            _id: "$level",
-            count: { $sum: 1 },
-            withBudget: {
-              $sum: { $cond: ["$budgetConfig.hasOwnBudget", 1, 0] },
-            },
-            canApprove: {
-              $sum: { $cond: ["$budgetConfig.canApproveContracts", 1, 0] },
-            },
-            avgApprovalAmount: { $avg: "$budgetConfig.maxApprovalAmount" },
-            maxApprovalAmount: { $max: "$budgetConfig.maxApprovalAmount" },
-          },
-        },
-        { $sort: { _id: 1 } },
-      ];
-
-      return await this.model.aggregate(pipeline);
-    } catch (error) {
-      throw new Error(`Error en estadísticas por nivel: ${error.message}`);
-    }
-  }
-
-  /**
-   * Mapa de capacidades de aprobación
-   */
-  async getApprovalCapabilityMap() {
-    try {
-      const pipeline = [
-        {
-          $match: {
-            isActive: true,
-            "budgetConfig.canApproveContracts": true,
-          },
-        },
-        {
-          $lookup: {
-            from: "departments",
-            localField: "parentDepartment",
-            foreignField: "_id",
-            as: "parent",
-          },
-        },
-        {
-          $project: {
-            code: 1,
-            name: 1,
-            shortName: 1,
-            level: 1,
-            "budgetConfig.maxApprovalAmount": 1,
-            parentName: { $arrayElemAt: ["$parent.name", 0] },
-            parentCode: { $arrayElemAt: ["$parent.code", 0] },
-          },
-        },
-        {
-          $sort: {
-            level: 1,
-            "budgetConfig.maxApprovalAmount": -1,
-          },
-        },
-      ];
-
-      return await this.model.aggregate(pipeline);
-    } catch (error) {
-      throw new Error(`Error obteniendo mapa de aprobación: ${error.message}`);
-    }
-  }
-
-  // ===== VALIDACIONES Y UTILIDADES =====
-
-  /**
-   * Verificar disponibilidad de código
-   */
-  async isCodeAvailable(code, excludeId = null) {
-    try {
-      const query = {
-        code: code.toUpperCase(),
-        isActive: true,
-      };
-
-      if (excludeId) {
-        query._id = { $ne: excludeId };
-      }
-
-      const existingDepartment = await this.model.findOne(query);
-      return !existingDepartment;
-    } catch (error) {
-      throw new Error(`Error verificando código: ${error.message}`);
-    }
-  }
-
-  /**
-   * Validar estructura jerárquica (evitar ciclos)
-   */
-  async validateHierarchy(departmentId, proposedParentId) {
-    try {
-      if (!proposedParentId) return true; // Sin padre es válido
-
-      if (departmentId.toString() === proposedParentId.toString()) {
-        return false; // No puede ser padre de sí mismo
-      }
-
-      // Verificar que el departamento propuesto como padre no sea descendiente
-      const descendants = await this.getAllDescendants(departmentId);
-
-      if (descendants && descendants.descendants) {
-        const descendantIds = descendants.descendants.map((d) =>
-          d._id.toString()
-        );
-        return !descendantIds.includes(proposedParentId.toString());
-      }
-
-      return true;
-    } catch (error) {
-      throw new Error(`Error validando jerarquía: ${error.message}`);
-    }
-  }
-
-  /**
-   * Calcular nivel automáticamente basado en el padre
-   */
-  async calculateLevel(parentDepartmentId) {
-    try {
-      if (!parentDepartmentId) return 0; // Sin padre = nivel 0
-
-      const parent = await this.findById(parentDepartmentId);
-      return parent.level + 1;
-    } catch (error) {
-      throw new Error(`Error calculando nivel: ${error.message}`);
-    }
-  }
-
-  /**
-   * Actualizar niveles de descendientes después de cambio de jerarquía
-   */
-  async updateDescendantLevels(departmentId) {
-    try {
-      const department = await this.findById(departmentId);
-      const descendants = await this.getAllDescendants(departmentId);
-
-      if (descendants && descendants.descendants) {
-        const updates = descendants.descendants.map((desc) => {
-          const newLevel = this.calculateLevelFromPath(
-            desc,
-            descendants.descendants
-          );
-          return {
-            updateOne: {
-              filter: { _id: desc._id },
-              update: { $set: { level: newLevel } },
-            },
-          };
-        });
-
-        if (updates.length > 0) {
-          await this.model.bulkWrite(updates);
-        }
-      }
-    } catch (error) {
-      throw new Error(`Error actualizando niveles: ${error.message}`);
-    }
-  }
-
-  /**
-   * Calcular nivel basado en la ruta jerárquica
-   */
-  calculateLevelFromPath(department, allDescendants) {
-    let level = 1; // Nivel mínimo para descendientes
-    let current = department;
-
-    while (current.parentDepartment) {
-      const parent = allDescendants.find(
-        (d) => d._id.toString() === current.parentDepartment.toString()
+      throw new Error(
+        `Error buscando departamentos con capacidad de aprobación: ${error.message}`
       );
-
-      if (parent) {
-        level++;
-        current = parent;
-      } else {
-        break;
-      }
-    }
-
-    return level;
-  }
-
-  /**
-   * Reordenar departamentos por displayOrder
-   */
-  async reorderDepartments(departmentIds, startOrder = 1) {
-    try {
-      const updates = departmentIds.map((id, index) => ({
-        updateOne: {
-          filter: { _id: new Types.ObjectId(id) },
-          update: { $set: { displayOrder: startOrder + index } },
-        },
-      }));
-
-      await this.model.bulkWrite(updates);
-      return true;
-    } catch (error) {
-      throw new Error(`Error reordenando departamentos: ${error.message}`);
     }
   }
 
   /**
-   * Obtener breadcrumb jerárquico
+   * Buscar departamentos por tags
    */
-  async getBreadcrumb(departmentId) {
+  async findByTags(tags, options = {}) {
     try {
-      const ancestors = await this.getAncestors(departmentId);
+      const { page = 1, limit = 10 } = options;
 
-      if (!ancestors) return [];
+      const query = this.model
+        .find({
+          tags: { $in: tags },
+          isActive: true,
+        })
+        .sort({ name: 1 });
 
-      const breadcrumb = [];
-
-      // Agregar ancestros en orden correcto (de raíz a padre)
-      if (ancestors.ancestors) {
-        const sortedAncestors = ancestors.ancestors.sort(
-          (a, b) => a.level - b.level
-        );
-        breadcrumb.push(...sortedAncestors);
-      }
-
-      // Agregar el departamento actual
-      breadcrumb.push({
-        _id: ancestors._id,
-        code: ancestors.code,
-        name: ancestors.name,
-        shortName: ancestors.shortName,
-        level: ancestors.level,
-      });
-
-      return breadcrumb;
+      return await this.paginate(query, { page, limit });
     } catch (error) {
-      throw new Error(`Error obteniendo breadcrumb: ${error.message}`);
+      throw new Error(
+        `Error buscando departamentos por tags: ${error.message}`
+      );
     }
   }
 }
-
-export default new DepartmentRepository();
