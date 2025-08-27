@@ -509,3 +509,9 @@ Para soporte técnico o consultas, contactar:
 ---
 
 _Versión: 1.0.0 | Última actualización: Agosto 2025_
+
+Comando Tree
+
+´´´
+Get-ChildItem -Recurse -Depth 3 | Where-Object { $_.FullName -notmatch 'node_modules' } | ForEach-Object { $_.FullName }
+´´´
