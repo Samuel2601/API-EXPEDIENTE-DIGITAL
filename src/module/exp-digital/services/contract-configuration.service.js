@@ -1127,4 +1127,415 @@ export class ContractConfigurationService {
       );
     }
   }
+
+  // =============================================================================
+  // MÉTODOS CRUD INDIVIDUALES PARA TIPOS DE CONTRATACIÓN
+  // =============================================================================
+
+  /**
+   * Crear un nuevo tipo de contratación
+   * @param {Object} typeData - Datos del tipo de contratación
+   * @param {Object} options - Opciones adicionales
+   * @returns {Promise<Object>} Tipo de contratación creado
+   */
+  async createContractType(typeData, options = {}) {
+    try {
+      console.log(`📝 Creando nuevo tipo de contratación: ${typeData.code}`);
+
+      // Validar datos requeridos
+      const requiredFields = ["code", "name", "category", "description"];
+      const missingFields = requiredFields.filter((field) => !typeData[field]);
+
+      if (missingFields.length > 0) {
+        throw createValidationError(
+          `Campos requeridos faltantes: ${missingFields.join(", ")}`
+        );
+      }
+
+      // Validar categoría
+      const validCategories = ["COMMON", "SPECIAL"];
+      if (!validCategories.includes(typeData.category)) {
+        throw createValidationError(
+          `Categoría inválida. Debe ser: ${validCategories.join(" o ")}`
+        );
+      }
+
+      // Verificar que el código no exista
+      const existingType = await this.contractTypeRepository.findByCode(
+        typeData.code
+      );
+      if (existingType) {
+        throw createValidationError(
+          `Ya existe un tipo de contratación con el código: ${typeData.code}`
+        );
+      }
+
+      // Preparar datos con valores por defecto
+      const contractTypeToCreate = {
+        code: typeData.code.toUpperCase(),
+        name: typeData.name,
+        category: typeData.category,
+        description: typeData.description,
+        displayOrder: typeData.displayOrder || 99,
+        requiresPublication: typeData.requiresPublication ?? true,
+        estimatedDuration: typeData.estimatedDuration || 30,
+        legalReference: typeData.legalReference || "",
+        applicableObjects: typeData.applicableObjects || [
+          "bienes",
+          "servicios",
+        ],
+        monetaryLimits: typeData.monetaryLimits || {},
+        isActive: typeData.isActive ?? true,
+        audit: {
+          createdBy: options.userId || "system",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      };
+
+      const createdType =
+        await this.contractTypeRepository.create(contractTypeToCreate);
+
+      console.log(
+        `✅ Tipo de contratación creado exitosamente: ${createdType.code}`
+      );
+
+      return createdType;
+    } catch (error) {
+      throw createError(
+        ERROR_CODES.CREATION_ERROR,
+        `Error creando tipo de contratación: ${error.message}`,
+        400
+      );
+    }
+  }
+
+  /**
+   * Actualizar un tipo de contratación existente
+   * @param {String} typeId - ID del tipo de contratación
+   * @param {Object} updateData - Datos a actualizar
+   * @param {Object} options - Opciones adicionales
+   * @returns {Promise<Object>} Tipo de contratación actualizado
+   */
+  async updateContractType(typeId, updateData, options = {}) {
+    try {
+      validateObjectId(typeId, "ID del tipo de contratación");
+
+      console.log(`📝 Actualizando tipo de contratación: ${typeId}`);
+
+      // Verificar que existe
+      const existingType = await this.contractTypeRepository.findById(typeId);
+      if (!existingType) {
+        throw createError(
+          ERROR_CODES.NOT_FOUND,
+          "Tipo de contratación no encontrado",
+          404
+        );
+      }
+
+      // Si se actualiza el código, verificar que no exista otro con el mismo código
+      if (updateData.code && updateData.code !== existingType.code) {
+        const duplicateType = await this.contractTypeRepository.findByCode(
+          updateData.code
+        );
+        if (duplicateType) {
+          throw createValidationError(
+            `Ya existe otro tipo de contratación con el código: ${updateData.code}`
+          );
+        }
+      }
+
+      // Preparar datos de actualización
+      const dataToUpdate = {
+        ...updateData,
+        audit: {
+          ...existingType.audit,
+          updatedBy: options.userId || "system",
+          updatedAt: new Date(),
+        },
+      };
+
+      const updatedType = await this.contractTypeRepository.updateById(
+        typeId,
+        dataToUpdate
+      );
+
+      console.log(`✅ Tipo de contratación actualizado: ${updatedType.code}`);
+
+      return updatedType;
+    } catch (error) {
+      throw createError(
+        ERROR_CODES.UPDATE_ERROR,
+        `Error actualizando tipo de contratación: ${error.message}`,
+        400
+      );
+    }
+  }
+
+  /**
+   * Eliminar (desactivar) un tipo de contratación
+   * @param {String} typeId - ID del tipo de contratación
+   * @param {Object} options - Opciones adicionales
+   * @returns {Promise<Object>} Resultado de la operación
+   */
+  async deleteContractType(typeId, options = {}) {
+    try {
+      validateObjectId(typeId, "ID del tipo de contratación");
+
+      console.log(`🗑️ Eliminando tipo de contratación: ${typeId}`);
+
+      // Verificar que existe
+      const existingType = await this.contractTypeRepository.findById(typeId);
+      if (!existingType) {
+        throw createError(
+          ERROR_CODES.NOT_FOUND,
+          "Tipo de contratación no encontrado",
+          404
+        );
+      }
+
+      // Verificar si está siendo usado en contratos activos
+      // TODO: Implementar verificación de uso en contratos
+
+      // Soft delete - marcar como inactivo
+      const deactivatedType = await this.contractTypeRepository.updateById(
+        typeId,
+        {
+          isActive: false,
+          audit: {
+            ...existingType.audit,
+            deactivatedBy: options.userId || "system",
+            deactivatedAt: new Date(),
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+      console.log(`✅ Tipo de contratación desactivado: ${existingType.code}`);
+
+      return {
+        success: true,
+        message: "Tipo de contratación desactivado exitosamente",
+        type: deactivatedType,
+      };
+    } catch (error) {
+      throw createError(
+        ERROR_CODES.DELETE_ERROR,
+        `Error eliminando tipo de contratación: ${error.message}`,
+        400
+      );
+    }
+  }
+
+  // =============================================================================
+  // MÉTODOS CRUD INDIVIDUALES PARA FASES DE CONTRATACIÓN
+  // =============================================================================
+
+  /**
+   * Crear una nueva fase de contratación
+   * @param {Object} phaseData - Datos de la fase
+   * @param {Object} options - Opciones adicionales
+   * @returns {Promise<Object>} Fase de contratación creada
+   */
+  async createContractPhase(phaseData, options = {}) {
+    try {
+      console.log(`📝 Creando nueva fase de contratación: ${phaseData.code}`);
+
+      // Validar datos requeridos
+      const requiredFields = ["code", "name", "category", "description"];
+      const missingFields = requiredFields.filter((field) => !phaseData[field]);
+
+      if (missingFields.length > 0) {
+        throw createValidationError(
+          `Campos requeridos faltantes: ${missingFields.join(", ")}`
+        );
+      }
+
+      // Validar categoría
+      const validCategories = [
+        "PREPARATORIA",
+        "PRECONTRACTUAL",
+        "CONTRACTUAL",
+        "PAGO",
+        "RECEPCION",
+      ];
+      if (!validCategories.includes(phaseData.category)) {
+        throw createValidationError(
+          `Categoría inválida. Debe ser: ${validCategories.join(", ")}`
+        );
+      }
+
+      // Verificar que el código no exista
+      const existingPhase = await this.contractPhaseRepository.findByCode(
+        phaseData.code
+      );
+      if (existingPhase) {
+        throw createValidationError(
+          `Ya existe una fase de contratación con el código: ${phaseData.code}`
+        );
+      }
+
+      // Preparar datos con valores por defecto
+      const phaseToCreate = {
+        code: phaseData.code.toUpperCase(),
+        name: phaseData.name,
+        category: phaseData.category,
+        description: phaseData.description,
+        order: phaseData.order || 1,
+        isRequired: phaseData.isRequired ?? true,
+        estimatedDuration: phaseData.estimatedDuration || 5,
+        allowedStatus: phaseData.allowedStatus || [
+          "IN_PROGRESS",
+          "COMPLETED",
+          "REJECTED",
+        ],
+        requiredDocuments: phaseData.requiredDocuments || [],
+        dependencies: phaseData.dependencies || { requiredPhases: [] },
+        notifications: phaseData.notifications || {
+          required: [],
+          optional: [],
+        },
+        isActive: phaseData.isActive ?? true,
+        audit: {
+          createdBy: options.userId || "system",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      };
+
+      const createdPhase =
+        await this.contractPhaseRepository.create(phaseToCreate);
+
+      console.log(
+        `✅ Fase de contratación creada exitosamente: ${createdPhase.code}`
+      );
+
+      return createdPhase;
+    } catch (error) {
+      throw createError(
+        ERROR_CODES.CREATION_ERROR,
+        `Error creando fase de contratación: ${error.message}`,
+        400
+      );
+    }
+  }
+
+  /**
+   * Actualizar una fase de contratación existente
+   * @param {String} phaseId - ID de la fase
+   * @param {Object} updateData - Datos a actualizar
+   * @param {Object} options - Opciones adicionales
+   * @returns {Promise<Object>} Fase de contratación actualizada
+   */
+  async updateContractPhase(phaseId, updateData, options = {}) {
+    try {
+      validateObjectId(phaseId, "ID de la fase de contratación");
+
+      console.log(`📝 Actualizando fase de contratación: ${phaseId}`);
+
+      // Verificar que existe
+      const existingPhase =
+        await this.contractPhaseRepository.findById(phaseId);
+      if (!existingPhase) {
+        throw createError(
+          ERROR_CODES.NOT_FOUND,
+          "Fase de contratación no encontrada",
+          404
+        );
+      }
+
+      // Si se actualiza el código, verificar que no exista otro con el mismo código
+      if (updateData.code && updateData.code !== existingPhase.code) {
+        const duplicatePhase = await this.contractPhaseRepository.findByCode(
+          updateData.code
+        );
+        if (duplicatePhase) {
+          throw createValidationError(
+            `Ya existe otra fase de contratación con el código: ${updateData.code}`
+          );
+        }
+      }
+
+      // Preparar datos de actualización
+      const dataToUpdate = {
+        ...updateData,
+        audit: {
+          ...existingPhase.audit,
+          updatedBy: options.userId || "system",
+          updatedAt: new Date(),
+        },
+      };
+
+      const updatedPhase = await this.contractPhaseRepository.updateById(
+        phaseId,
+        dataToUpdate
+      );
+
+      console.log(`✅ Fase de contratación actualizada: ${updatedPhase.code}`);
+
+      return updatedPhase;
+    } catch (error) {
+      throw createError(
+        ERROR_CODES.UPDATE_ERROR,
+        `Error actualizando fase de contratación: ${error.message}`,
+        400
+      );
+    }
+  }
+
+  /**
+   * Eliminar (desactivar) una fase de contratación
+   * @param {String} phaseId - ID de la fase
+   * @param {Object} options - Opciones adicionales
+   * @returns {Promise<Object>} Resultado de la operación
+   */
+  async deleteContractPhase(phaseId, options = {}) {
+    try {
+      validateObjectId(phaseId, "ID de la fase de contratación");
+
+      console.log(`🗑️ Eliminando fase de contratación: ${phaseId}`);
+
+      // Verificar que existe
+      const existingPhase =
+        await this.contractPhaseRepository.findById(phaseId);
+      if (!existingPhase) {
+        throw createError(
+          ERROR_CODES.NOT_FOUND,
+          "Fase de contratación no encontrada",
+          404
+        );
+      }
+
+      // Verificar si está siendo usado en contratos activos
+      // TODO: Implementar verificación de uso en contratos
+
+      // Soft delete - marcar como inactivo
+      const deactivatedPhase = await this.contractPhaseRepository.updateById(
+        phaseId,
+        {
+          isActive: false,
+          audit: {
+            ...existingPhase.audit,
+            deactivatedBy: options.userId || "system",
+            deactivatedAt: new Date(),
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+      console.log(`✅ Fase de contratación desactivada: ${existingPhase.code}`);
+
+      return {
+        success: true,
+        message: "Fase de contratación desactivada exitosamente",
+        phase: deactivatedPhase,
+      };
+    } catch (error) {
+      throw createError(
+        ERROR_CODES.DELETE_ERROR,
+        `Error eliminando fase de contratación: ${error.message}`,
+        400
+      );
+    }
+  }
 }
