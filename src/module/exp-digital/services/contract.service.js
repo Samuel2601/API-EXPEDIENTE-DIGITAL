@@ -1500,7 +1500,8 @@ export class ContractService {
 
   async _getContractPhases(contractId) {
     // Implementación pendiente - obtener fases del contrato
-    return [];
+    return await this.contractPhaseRepository.findAll({ contract: contractId });
+    //return [];
   }
 
   async _getContractHistory(contractId, options) {
