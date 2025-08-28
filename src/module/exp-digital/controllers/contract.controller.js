@@ -356,7 +356,6 @@ export class ContractController {
     auth,
     verifyModuleAccess,
     requireContractAccess("contractId"),
-
     // Controlador
     async (req, res) => {
       try {
@@ -444,6 +443,8 @@ export class ContractController {
     requirePermission({
       category: "contracts",
       permission: "canEdit",
+      contractParam: "contractId",
+      requireContractAccess: true,
       errorMessage: "No tiene permisos para editar contratos",
     }),
 
@@ -485,7 +486,11 @@ export class ContractController {
           contractId,
           updateData,
           {
-            userId: user.userId,
+            userData: {
+              ...req.user,
+              ipAddress: req.ip,
+              userAgent: req.get("User-Agent"),
+            },
             createHistory: true,
             validateTransitions: true,
           }

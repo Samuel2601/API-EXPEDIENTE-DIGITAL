@@ -16,13 +16,18 @@ export const hasPermission = async (
   category,
   permission
 ) => {
-  const result = await UserDepartmentAccess.checkUserPermission(
-    userId,
-    departmentId,
-    category,
-    permission
-  );
-  return result.allowed;
+  try {
+    const result = await UserDepartmentAccess.checkUserPermission(
+      userId,
+      departmentId,
+      category,
+      permission
+    );
+    return result.allowed;
+  } catch (error) {
+    console.error("Error verificando permiso:", error);
+    return false;
+  }
 };
 
 /**
@@ -415,6 +420,12 @@ export const requireFlexiblePermissions = (permissions = [], options = {}) => {
             ...new Set(globalPermissions.validPermissions),
           ];
 
+          console.log(`✅ Acceso global concedido`, {
+            hasGlobalAccess: globalPermissions.hasGlobalAccess,
+            departmentsCount: globalPermissions.accessibleDepartments.length,
+            permissions: globalPermissions.validPermissions,
+          });
+
           req.permissions = globalPermissions;
           return next();
         }
@@ -435,12 +446,20 @@ export const requireFlexiblePermissions = (permissions = [], options = {}) => {
         requiredPermissions: permissions.map(
           (p) => `${p.category}.${p.permission}`
         ),
+        context: {
+          userId,
+          departmentId,
+          allowGlobal,
+          requireDepartment,
+        },
       });
     } catch (error) {
       console.error("Error en middleware de permisos flexibles:", error);
       res.status(500).json({
         success: false,
         message: "Error al validar permisos",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   };

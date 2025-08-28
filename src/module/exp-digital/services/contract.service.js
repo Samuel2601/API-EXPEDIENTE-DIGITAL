@@ -552,7 +552,7 @@ export class ContractService {
       console.log(`✏️ Actualizando contrato: ${contractId}`);
 
       const {
-        userId,
+        userData,
         createHistory = true,
         validateTransitions = true,
       } = options;
@@ -585,7 +585,7 @@ export class ContractService {
       const updatedContract = await this.contractRepository.update(
         contractId,
         dataToUpdate,
-        { userId }
+        userData
       );
 
       // Crear entrada en historial si está habilitado
@@ -594,7 +594,7 @@ export class ContractService {
           contractId,
           currentContract,
           updatedContract,
-          userId
+          userData.userId
         );
       }
 
