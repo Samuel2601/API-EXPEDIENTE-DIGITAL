@@ -12,7 +12,7 @@ import mongoose from "mongoose";
  */
 export const hasPermission = async (
   userId,
-  departmentId,
+  departmentId = null,
   category,
   permission
 ) => {
@@ -173,7 +173,7 @@ export const requireContractAccess = (contractParam = "contractId") => {
 export const requireAnyPermission = (permissions = []) => {
   return async (req, res, next) => {
     try {
-      const userId = req.user._id;
+      const userId = req.user.userId;
 
       // Obtener departmentId de los parámetros o body
       const departmentId = req.params.departmentId || req.body.departmentId;

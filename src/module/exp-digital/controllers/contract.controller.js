@@ -16,11 +16,11 @@ import {
   createError,
   createValidationError,
   ERROR_CODES,
-} from "../../../utils/error.util.js";
+} from "../../../../utils/error.util.js";
 import {
   validateObjectId,
   validateRequiredFields,
-} from "../../../utils/validation.util.js";
+} from "../../../../utils/validation.util.js";
 
 export class ContractController {
   constructor() {
@@ -44,6 +44,7 @@ export class ContractController {
     requirePermission({
       category: "contracts",
       permission: "canCreate",
+      departmentParam: "requestingDepartment",
       errorMessage: "No tiene permisos para crear contratos",
     }),
 
