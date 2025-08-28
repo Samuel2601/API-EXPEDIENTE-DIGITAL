@@ -110,6 +110,7 @@ export class BaseRepository {
       populate = "",
       select = "",
       includeDeleted = false,
+      lean = true,
     } = options;
 
     const baseQuery = { ...query };
@@ -128,7 +129,7 @@ export class BaseRepository {
       sort,
       populate,
       select,
-      lean: true,
+      lean: lean,
     });
   }
 

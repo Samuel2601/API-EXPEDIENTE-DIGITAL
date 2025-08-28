@@ -10,6 +10,7 @@ import {
   requirePermission,
   requireContractAccess,
   requireAnyPermission,
+  requireFlexiblePermissions,
 } from "../../../middlewares/permission.middleware.js";
 import { auth, verifyModuleAccess } from "../../../middlewares/auth.js";
 import {
@@ -138,19 +139,27 @@ export class ContractController {
     // Middlewares
     auth,
     verifyModuleAccess,
-    requireAnyPermission([
-      { category: "contracts", permission: "canViewDepartment" },
-      { category: "contracts", permission: "canViewAll" },
-    ]),
+    requireFlexiblePermissions(
+      [
+        { category: "contracts", permission: "canViewDepartment" },
+        { category: "contracts", permission: "canViewAll" },
+      ],
+      {
+        allowGlobal: true,
+        requireDepartment: false,
+      }
+    ),
 
     // Controlador
     async (req, res) => {
       try {
         const { query, user, permissions } = req;
 
-        console.log(`📋 Usuario ${user.userId} consultando contratos`);
+        console.log(
+          `📋 Usuario ${user.userId} consultando contratos. Scope: ${permissions.scope}`
+        );
 
-        // Extraer parámetros de consulta
+        // ===== VALIDAR PARÁMETROS DE ENTRADA =====
         const {
           page = 1,
           limit = 20,
@@ -162,72 +171,176 @@ export class ContractController {
           sortBy = "createdAt",
           sortOrder = "desc",
           includeInactive = false,
+          populate = "requestingDepartment,createdBy,responsibleUser,currentResponsible",
+          departmentId, // Filtro opcional por departamento específico
         } = query;
 
-        // Construir filtros según permisos del usuario
-        const filters = {
+        // Validar parámetros
+        if (limit > 100) {
+          return res.status(400).json({
+            success: false,
+            message: "El límite máximo es 100 elementos por página",
+          });
+        }
+
+        // ===== DETERMINAR ACCESO SEGÚN PERMISOS =====
+        let departmentAccess = {};
+
+        if (permissions.scope === "specific") {
+          // Usuario accedió con departmentId específico en middleware
+          departmentAccess = {
+            type: "specific",
+            departmentId: permissions.departmentId,
+          };
+        } else if (permissions.scope === "global") {
+          if (permissions.hasGlobalAccess) {
+            // Usuario con canViewAll
+            departmentAccess = {
+              type: "all",
+            };
+          } else if (permissions.accessibleDepartments.length > 0) {
+            // Usuario con canViewDepartment en múltiples departamentos
+            departmentAccess = {
+              type: "multiple",
+              departmentIds: permissions.accessibleDepartments,
+            };
+          } else {
+            return res.status(403).json({
+              success: false,
+              message: "No tiene acceso a contratos en ningún departamento",
+            });
+          }
+        }
+
+        // ===== VALIDAR FILTRO OPCIONAL POR DEPARTAMENTO =====
+        if (departmentId) {
+          // Verificar si el usuario tiene acceso al departamento solicitado
+          const hasAccessToDepartment =
+            departmentAccess.type === "all" ||
+            departmentAccess.departmentId === departmentId ||
+            departmentAccess.departmentIds?.includes(departmentId);
+
+          if (!hasAccessToDepartment) {
+            return res.status(403).json({
+              success: false,
+              message: "No tiene acceso al departamento solicitado",
+              requestedDepartment: departmentId,
+              availableAccess: departmentAccess,
+            });
+          }
+
+          // Si tiene acceso, modificar el filtro para ser específico
+          departmentAccess = {
+            type: "specific",
+            departmentId: departmentId,
+          };
+        }
+
+        // ===== CONSTRUIR FILTROS PARA EL SERVICIO =====
+        const serviceFilters = {
+          // Paginación
           page: parseInt(page),
-          limit: Math.min(parseInt(limit), 100), // Máximo 100 por página
+          limit: parseInt(limit),
+
+          // Filtros de contenido (sin validación de acceso)
           status,
           contractType,
           dateFrom,
           dateTo,
           search,
+
+          // Configuración de consulta
           sortBy,
           sortOrder,
           includeInactive: includeInactive === "true",
+          populate: populate.split(",").filter((x) => x.trim()),
+
+          // ⭐ CLAVE: Pasar la información de acceso al servicio
+          departmentAccess,
         };
 
-        // Restricciones de acceso según permisos
-        if (permissions.hasPermission("contracts", "canViewAll")) {
-          // Puede ver todos los contratos
-          filters.departmentAccess = "all";
-        } else if (
-          permissions.hasPermission("contracts", "canViewDepartment")
-        ) {
-          // Solo contratos de su departamento
-          filters.departmentAccess = "department";
-          filters.departmentId = permissions.departmentId;
-        }
+        console.log(`🔍 Filtros para servicio:`, {
+          ...serviceFilters,
+          departmentAccess: serviceFilters.departmentAccess,
+        });
 
-        // Obtener contratos del servicio
-        const result = await this.contractService.getAllContracts(filters);
+        // ===== LLAMAR AL SERVICIO =====
+        const result =
+          await this.contractService.getAllContracts(serviceFilters);
 
-        console.log(
-          `✅ Contratos obtenidos: ${result.contracts.length}/${result.pagination.totalContracts}`
-        );
+        // ===== CONSTRUIR METADATA DE PERMISOS =====
+        const userPermissions = {
+          canCreate:
+            permissions.validPermissions?.includes("contracts.canCreate") ||
+            false,
+          canViewAll: permissions.hasGlobalAccess || false,
+          canExport:
+            permissions.validPermissions?.includes("special.canExportData") ||
+            false,
+          canManageAll:
+            permissions.validPermissions?.includes("contracts.canViewAll") ||
+            false,
+        };
 
-        res.status(200).json({
+        // ===== RESPUESTA ESTRUCTURADA =====
+        const response = {
           success: true,
           data: {
             contracts: result.contracts,
             pagination: result.pagination,
-            filters: result.appliedFilters,
             summary: {
-              totalContracts: result.pagination.totalContracts,
-              currentPage: result.pagination.currentPage,
-              totalPages: result.pagination.totalPages,
-              pageSize: result.pagination.limit,
+              total: result.pagination.totalContracts,
+              showing: result.contracts.length,
+              page: result.pagination.currentPage,
+              pages: result.pagination.totalPages,
             },
           },
+          filters: {
+            applied: result.appliedFilters,
+            access: {
+              scope: permissions.scope,
+              type: departmentAccess.type,
+              departments:
+                departmentAccess.type === "multiple"
+                  ? departmentAccess.departmentIds.length
+                  : departmentAccess.type === "specific"
+                    ? 1
+                    : "all",
+            },
+          },
+          permissions: userPermissions,
           metadata: {
             requestedBy: user.userId,
-            requestedAt: new Date(),
-            departmentAccess: filters.departmentAccess,
-            permissions: {
-              canCreate: permissions.hasPermission("contracts", "canCreate"),
-              canViewAll: permissions.hasPermission("contracts", "canViewAll"),
-              canExport: permissions.hasPermission("special", "canExportData"),
-            },
+            requestedAt: new Date().toISOString(),
+            processingTime: `${Date.now() - Date.now()}ms`, // Puedes añadir timing si quieres
           },
-        });
-      } catch (error) {
-        console.error(`❌ Error obteniendo contratos: ${error.message}`);
+        };
 
-        res.status(error.statusCode || 500).json({
+        console.log(
+          `✅ Contratos devueltos: ${result.contracts.length}/${result.pagination.totalContracts}`
+        );
+
+        res.status(200).json(response);
+      } catch (error) {
+        console.error(`❌ Error en controlador getAllContracts:`, error);
+
+        // Determinar tipo de error y código de estado
+        let statusCode = 500;
+        let message = "Error interno del servidor";
+
+        if (error.name === "ValidationError") {
+          statusCode = 400;
+          message = "Datos de entrada inválidos";
+        } else if (error.statusCode) {
+          statusCode = error.statusCode;
+          message = error.message;
+        }
+
+        res.status(statusCode).json({
           success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "FETCH_ERROR",
+          message,
+          code: error.code || "CONTROLLER_ERROR",
+          ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
         });
       }
     },

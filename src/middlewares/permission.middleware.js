@@ -217,3 +217,231 @@ export const requireAnyPermission = (permissions = []) => {
     }
   };
 };
+
+/**
+ * Middleware para verificar permisos globales/multi-departamentales
+ * Útil para endpoints como getAllContracts donde el usuario puede tener acceso a múltiples departamentos
+ * @param {Array} permissions - Array de permisos requeridos [{category, permission}]
+ * @returns {Function} Middleware de Express
+ */
+export const requireGlobalPermissions = (permissions = []) => {
+  return async (req, res, next) => {
+    try {
+      const userId = req.user.userId;
+
+      // Obtener todos los accesos activos del usuario
+      const userAccesses = await UserDepartmentAccess.getUserAccesses(userId);
+
+      if (!userAccesses || userAccesses.length === 0) {
+        return res.status(403).json({
+          success: false,
+          message: "No tiene acceso a ningún departamento",
+        });
+      }
+
+      let hasValidAccess = false;
+      const userPermissions = {
+        accesses: [],
+        hasGlobalAccess: false,
+        accessibleDepartments: [],
+        validPermissions: [],
+      };
+
+      // Verificar permisos en cada acceso del usuario
+      for (const access of userAccesses) {
+        for (const { category, permission } of permissions) {
+          if (access.hasPermission(category, permission)) {
+            hasValidAccess = true;
+
+            userPermissions.accesses.push({
+              departmentId: access.department._id,
+              departmentName: access.department.name,
+              accessLevel: access.accessLevel,
+              permission: `${category}.${permission}`,
+            });
+
+            userPermissions.accessibleDepartments.push(access.department._id);
+            userPermissions.validPermissions.push(`${category}.${permission}`);
+
+            // Verificar si tiene acceso global
+            if (
+              permission === "canViewAll" &&
+              access.hasPermission(category, permission)
+            ) {
+              userPermissions.hasGlobalAccess = true;
+            }
+          }
+        }
+      }
+
+      if (!hasValidAccess) {
+        return res.status(403).json({
+          success: false,
+          message: "No tiene los permisos necesarios para realizar esta acción",
+          requiredPermissions: permissions.map(
+            (p) => `${p.category}.${p.permission}`
+          ),
+        });
+      }
+
+      // Remover duplicados
+      userPermissions.accessibleDepartments = [
+        ...new Set(userPermissions.accessibleDepartments),
+      ];
+      userPermissions.validPermissions = [
+        ...new Set(userPermissions.validPermissions),
+      ];
+
+      // Almacenar información de permisos para uso en el controlador
+      req.globalPermissions = userPermissions;
+
+      next();
+    } catch (error) {
+      console.error("Error en middleware de permisos globales:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error al validar permisos globales",
+      });
+    }
+  };
+};
+
+/**
+ * Middleware híbrido que funciona con o sin departmentId específico
+ * @param {Array} permissions - Array de permisos requeridos [{category, permission}]
+ * @param {Object} options - Opciones del middleware
+ * @returns {Function} Middleware de Express
+ */
+export const requireFlexiblePermissions = (permissions = [], options = {}) => {
+  const { allowGlobal = true, requireDepartment = false } = options;
+
+  return async (req, res, next) => {
+    try {
+      const userId = req.user.userId;
+      const departmentId = req.params.departmentId || req.body.departmentId;
+
+      console.log(`🔐 Verificando permisos flexibles para usuario ${userId}`, {
+        departmentId,
+        allowGlobal,
+        requireDepartment,
+        permissions,
+      });
+
+      // Si se especifica un departamento específico, usar lógica tradicional
+      if (departmentId) {
+        console.log(
+          `🎯 Verificando acceso específico al departamento: ${departmentId}`
+        );
+        for (const { category, permission } of permissions) {
+          const permissionCheck =
+            await UserDepartmentAccess.checkUserPermission(
+              userId,
+              departmentId,
+              category,
+              permission
+            );
+
+          if (permissionCheck.allowed) {
+            req.permissions = {
+              ...permissionCheck,
+              departmentId,
+              scope: "specific",
+            };
+            return next();
+          }
+        }
+
+        return res.status(403).json({
+          success: false,
+          message: "No tiene permisos para acceder a este departamento",
+          departmentId,
+          requiredPermissions: permissions.map(
+            (p) => `${p.category}.${p.permission}`
+          ),
+        });
+      }
+
+      // Si no hay departmentId y allowGlobal es true, verificar permisos globales
+      if (allowGlobal) {
+        const userAccesses = await UserDepartmentAccess.getUserAccesses(userId);
+
+        if (!userAccesses || userAccesses.length === 0) {
+          return res.status(403).json({
+            success: false,
+            message: "No tiene acceso a ningún departamento",
+          });
+        }
+
+        let hasValidAccess = false;
+        const globalPermissions = {
+          accesses: [],
+          hasGlobalAccess: false,
+          accessibleDepartments: [],
+          validPermissions: [],
+          scope: "global",
+        };
+
+        for (const access of userAccesses) {
+          for (const { category, permission } of permissions) {
+            if (access.hasPermission(category, permission)) {
+              hasValidAccess = true;
+
+              globalPermissions.accesses.push({
+                departmentId: access.department._id,
+                departmentName: access.department.name,
+                accessLevel: access.accessLevel,
+                permission: `${category}.${permission}`,
+              });
+
+              globalPermissions.accessibleDepartments.push(
+                access.department._id
+              );
+              globalPermissions.validPermissions.push(
+                `${category}.${permission}`
+              );
+
+              if (permission === "canViewAll") {
+                globalPermissions.hasGlobalAccess = true;
+              }
+            }
+          }
+        }
+
+        if (hasValidAccess) {
+          globalPermissions.accessibleDepartments = [
+            ...new Set(globalPermissions.accessibleDepartments),
+          ];
+          globalPermissions.validPermissions = [
+            ...new Set(globalPermissions.validPermissions),
+          ];
+
+          req.permissions = globalPermissions;
+          return next();
+        }
+      }
+
+      // Si se requiere departamento pero no se proporcionó
+      if (requireDepartment && !departmentId) {
+        return res.status(400).json({
+          success: false,
+          message: "Se requiere un departamento para validar permisos",
+        });
+      }
+
+      // Si ningún permiso es válido
+      return res.status(403).json({
+        success: false,
+        message: "No tiene los permisos necesarios para realizar esta acción",
+        requiredPermissions: permissions.map(
+          (p) => `${p.category}.${p.permission}`
+        ),
+      });
+    } catch (error) {
+      console.error("Error en middleware de permisos flexibles:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error al validar permisos",
+      });
+    }
+  };
+};

@@ -133,89 +133,128 @@ export class ContractService {
 
   /**
    * Obtener todos los contratos con filtros y paginación
-   * @param {Object} filters - Filtros de búsqueda
+   * @param {Object} filters - Filtros de búsqueda procesados por el controlador
    * @returns {Promise<Object>} Lista paginada de contratos
    */
   async getAllContracts(filters = {}) {
     try {
-      console.log("📋 Obteniendo contratos con filtros:", filters);
+      console.log("📋 Servicio obteniendo contratos con filtros:", filters);
 
       const {
         page = 1,
         limit = 20,
         status,
         contractType,
-        departmentId,
-        departmentAccess,
         dateFrom,
         dateTo,
         search,
         sortBy = "createdAt",
         sortOrder = "desc",
         includeInactive = false,
+        populate = [],
+        departmentAccess, // ⭐ Información de acceso procesada por el controlador
       } = filters;
 
-      // Construir query de búsqueda
-      const query = {};
+      // ===== CONSTRUIR QUERY MONGODB =====
+      const mongoQuery = {};
 
-      // Filtros básicos
-      if (status) query.generalStatus = status.toUpperCase();
-      if (contractType) query.contractType = contractType;
-      if (!includeInactive) query.isActive = true;
-
-      // Filtros de acceso departamental
-      if (departmentAccess === "department" && departmentId) {
-        query.requestingDepartment = departmentId;
+      // --- Filtros básicos ---
+      if (status) {
+        mongoQuery.generalStatus = status.toUpperCase();
       }
 
-      // Filtro por rango de fechas
+      if (contractType) {
+        mongoQuery.contractType = contractType;
+      }
+
+      if (!includeInactive) {
+        mongoQuery.isActive = true;
+      }
+
+      // --- ⭐ APLICAR FILTROS DE ACCESO DEPARTAMENTAL ---
+      if (departmentAccess) {
+        switch (departmentAccess.type) {
+          case "all":
+            // Usuario con canViewAll - sin filtros departamentales
+            console.log("🌍 Acceso global - sin restricciones departamentales");
+            break;
+
+          case "specific":
+            // Usuario accediendo a un departamento específico
+            mongoQuery.requestingDepartment = departmentAccess.departmentId;
+            console.log(
+              `🎯 Filtrando por departamento específico: ${departmentAccess.departmentId}`
+            );
+            break;
+
+          case "multiple":
+            // Usuario con acceso a múltiples departamentos
+            mongoQuery.requestingDepartment = {
+              $in: departmentAccess.departmentIds,
+            };
+            console.log(
+              `🏢 Filtrando por ${departmentAccess.departmentIds.length} departamentos accesibles`
+            );
+            break;
+
+          default:
+            console.warn(
+              "⚠️ Tipo de acceso departamental desconocido:",
+              departmentAccess.type
+            );
+        }
+      }
+
+      // --- Filtros de fecha ---
       if (dateFrom || dateTo) {
-        query.createdAt = {};
-        if (dateFrom) query.createdAt.$gte = new Date(dateFrom);
-        if (dateTo) query.createdAt.$lte = new Date(dateTo);
+        mongoQuery.createdAt = {};
+        if (dateFrom) {
+          mongoQuery.createdAt.$gte = new Date(dateFrom);
+        }
+        if (dateTo) {
+          mongoQuery.createdAt.$lte = new Date(dateTo);
+        }
       }
 
-      // Búsqueda de texto
+      // --- Búsqueda de texto ---
       if (search) {
-        query.$or = [
-          { contractNumber: { $regex: search, $options: "i" } },
-          { contractualObject: { $regex: search, $options: "i" } },
-          { "contractor.name": { $regex: search, $options: "i" } },
-          { "contractor.ruc": { $regex: search, $options: "i" } },
+        const searchRegex = { $regex: search.trim(), $options: "i" };
+        mongoQuery.$or = [
+          { contractNumber: searchRegex },
+          { contractualObject: searchRegex },
+          { "contractor.name": searchRegex },
+          { "contractor.ruc": searchRegex },
+          { "budget.description": searchRegex },
         ];
       }
 
-      // Opciones de consulta
+      // ===== CONFIGURAR OPCIONES DE CONSULTA =====
       const queryOptions = {
         page: parseInt(page),
         limit: Math.min(parseInt(limit), 100), // Máximo 100
         sort: { [sortBy]: sortOrder === "asc" ? 1 : -1 },
-        populate: [
-          { path: "contractType", select: "code name category" },
-          { path: "requestingDepartment", select: "code name shortName" },
-          {
-            path: "currentPhase",
-            select: "code name shortName order category",
-          },
-        ],
+        populate: this._buildPopulateArray(populate),
+        lean: false, // Mantener como documentos Mongoose para métodos virtuales
       };
 
-      // Ejecutar búsqueda
-      const result = await this.contractRepository.findAll(query, queryOptions);
+      console.log("🔍 Query MongoDB:", JSON.stringify(mongoQuery, null, 2));
+      console.log("⚙️ Opciones consulta:", queryOptions);
 
-      // Enriquecer datos de contratos
+      // ===== EJECUTAR CONSULTA =====
+      const result = await this.contractRepository.findAll(
+        mongoQuery,
+        queryOptions
+      );
+
+      // ===== ENRIQUECER DATOS =====
       const enrichedContracts = await Promise.all(
         result.docs.map(async (contract) => {
-          const enriched = await this._enrichContractSummary(contract);
-          return enriched;
+          return await this._enrichContractSummary(contract);
         })
       );
 
-      console.log(
-        `✅ Contratos obtenidos: ${result.totalDocs} total, ${enrichedContracts.length} en página`
-      );
-
-      return {
+      // ===== CONSTRUIR RESPUESTA =====
+      const response = {
         contracts: enrichedContracts,
         pagination: {
           currentPage: result.page,
@@ -224,16 +263,196 @@ export class ContractService {
           limit: result.limit,
           hasNext: result.hasNextPage,
           hasPrev: result.hasPrevPage,
+          startIndex: (result.page - 1) * result.limit + 1,
+          endIndex: Math.min(result.page * result.limit, result.totalDocs),
         },
-        appliedFilters: filters,
+        appliedFilters: {
+          ...filters,
+          // No incluir información sensible de acceso en la respuesta
+          departmentAccess: departmentAccess
+            ? {
+                type: departmentAccess.type,
+                filterApplied: !!mongoQuery.requestingDepartment,
+              }
+            : null,
+        },
       };
+
+      console.log(
+        `✅ Servicio completado: ${enrichedContracts.length}/${result.totalDocs} contratos`
+      );
+
+      return response;
     } catch (error) {
-      console.error(`❌ Error obteniendo contratos: ${error.message}`);
+      console.error(`❌ Error en servicio getAllContracts:`, error);
+
+      // Re-lanzar con información adicional para el controlador
       throw createError(
         ERROR_CODES.FETCH_ERROR,
         `Error al obtener contratos: ${error.message}`,
-        500
+        500,
+        {
+          service: "ContractService.getAllContracts",
+          filters: filters,
+          originalError: error.name,
+        }
       );
+    }
+  }
+
+  /**
+   * Construir array de populate según los campos solicitados
+   * @private
+   */
+  _buildPopulateArray(populateFields = []) {
+    const availablePopulates = {
+      requestingDepartment: {
+        path: "requestingDepartment",
+        select: "code name shortName isActive",
+      },
+      createdBy: {
+        path: "createdBy",
+        select: "firstName lastName email",
+      },
+      responsibleUser: {
+        path: "responsibleUser",
+        select: "firstName lastName email department",
+      },
+      currentResponsible: {
+        path: "currentResponsible",
+        select: "firstName lastName email",
+      },
+      contractType: {
+        path: "contractType",
+        select: "code name category thresholds",
+      },
+      currentPhase: {
+        path: "currentPhase",
+        select: "code name shortName order category",
+      },
+    };
+
+    // Si no se especifican campos, usar populate por defecto
+    if (populateFields.length === 0) {
+      return [
+        availablePopulates.requestingDepartment,
+        availablePopulates.createdBy,
+        availablePopulates.contractType,
+        availablePopulates.currentPhase,
+      ];
+    }
+
+    // Construir array según campos solicitados
+    return populateFields
+      .map((field) => field.trim())
+      .filter((field) => availablePopulates[field])
+      .map((field) => availablePopulates[field]);
+  }
+
+  /**
+   * Enriquecer contrato con información adicional calculada
+   * @private
+   */
+  async _enrichContractSummary(contract) {
+    try {
+      const enriched = contract.toObject();
+
+      // Calcular estadísticas básicas
+      enriched.stats = {
+        daysActive: contract.createdAt
+          ? Math.floor(
+              (new Date() - contract.createdAt) / (1000 * 60 * 60 * 24)
+            )
+          : 0,
+
+        documentsCount: contract.documents ? contract.documents.length : 0,
+
+        interactionsCount: contract.interactions
+          ? contract.interactions.length
+          : 0,
+
+        budgetFormatted: contract.budget?.totalAmount
+          ? `$${contract.budget.totalAmount.toLocaleString("es-EC")}`
+          : "N/A",
+      };
+
+      // Información de estado actual
+      enriched.currentStatus = {
+        phase: contract.currentPhase?.name || "Sin asignar",
+        status: contract.generalStatus,
+        canAdvance: this._canAdvancePhase(contract),
+        nextPhase: await this._getNextPhase(contract),
+      };
+
+      // Acceso y permisos (calculado sin exponer lógica de permisos)
+      enriched.access = {
+        canEdit: true, // El controlador debe manejar esto según permisos reales
+        canDelete: true, // El controlador debe manejar esto según permisos reales
+        canViewDetails: true,
+      };
+
+      return enriched;
+    } catch (error) {
+      console.warn(
+        `⚠️ Error enriqueciendo contrato ${contract._id}:`,
+        error.message
+      );
+      return contract.toObject(); // Devolver sin enriquecer en caso de error
+    }
+  }
+
+  /**
+   * Verificar si un contrato puede avanzar de fase
+   * @private
+   */
+  _canAdvancePhase(contract) {
+    // Lógica específica según el tipo de contrato y fase actual
+    // Esta lógica debería estar en el dominio del negocio
+
+    if (!contract.currentPhase) return true; // Puede asignar primera fase
+
+    // Verificar completitud de documentos requeridos para la fase actual
+    const requiredDocs = contract.currentPhase.requiredDocuments || [];
+    const availableDocs = contract.documents || [];
+
+    const hasAllRequiredDocs = requiredDocs.every((reqDoc) =>
+      availableDocs.some((doc) => doc.category === reqDoc.category)
+    );
+
+    return hasAllRequiredDocs && contract.generalStatus === "ACTIVE";
+  }
+
+  /**
+   * Obtener siguiente fase disponible
+   * @private
+   */
+  async _getNextPhase(contract) {
+    try {
+      if (!contract.currentPhase) return null;
+
+      // Buscar la siguiente fase en el orden
+      const nextPhase = await this.phaseRepository.findOne(
+        {
+          contractType: contract.contractType,
+          order: { $gt: contract.currentPhase.order },
+          isActive: true,
+        },
+        { sort: { order: 1 } }
+      );
+
+      return nextPhase
+        ? {
+            id: nextPhase._id,
+            name: nextPhase.name,
+            order: nextPhase.order,
+          }
+        : null;
+    } catch (error) {
+      console.warn(
+        `⚠️ Error obteniendo siguiente fase para contrato ${contract._id}:`,
+        error.message
+      );
+      return null;
     }
   }
 
