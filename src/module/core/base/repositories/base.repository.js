@@ -61,11 +61,11 @@ export class BaseRepository {
     const collectionNames = {
       User: "users",
       Role: "roles",
-      Business: "businesses",
-      UserSession: "usersessions",
-      Address: "addresses",
-      Review: "reviews",
-      Category: "categories",
+      Contract: "contracts",
+      ContractHistory: "contracthistories",
+      ContractType: "contracttypes",
+      ContractPhase: "contractphases",
+      Department: "departments",
     };
 
     return collectionNames[modelName] || modelName.toLowerCase() + "s";
