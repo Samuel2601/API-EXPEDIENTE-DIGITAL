@@ -40,13 +40,13 @@ router.post(
  */
 router.get(
   "/users/:userId/accesses",
-  requireFlexiblePermissions(
+  /*  requireFlexiblePermissions(
     [
       { category: "special", permission: "canViewCrossDepartment" },
       { category: "contracts", permission: "canViewDepartment" },
     ],
     { allowGlobal: true, requireDepartment: false }
-  ),
+  ),*/
   ModulePermissionController.getUserAccesses
 );
 

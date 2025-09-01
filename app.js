@@ -47,7 +47,7 @@ const __dirname = dirname(__filename);
 
 // ===== CONFIGURACIÓN DE TRUST PROXY =====
 // CRÍTICO: Esto debe ir ANTES de los middlewares para obtener IPs reales
-app.set("trust proxy", true);
+app.set("trust proxy", false);
 
 // =============================================================================
 // MIDDLEWARES DE SEGURIDAD
