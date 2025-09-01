@@ -1,5 +1,5 @@
 // src/middlewares/autoBan.js
-import { AutoBanSystem } from "../security/autoBanSystem.js";
+import { AutoBanSystem } from "../security/auto-ban.system.js";
 import { auth } from "./auth.js";
 
 // Instancia única del sistema de baneos

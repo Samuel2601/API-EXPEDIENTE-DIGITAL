@@ -18,7 +18,7 @@ config();
 // Configuraciones del sistema
 import "./src/config/database.mongo.js";
 import "./src/config/rsync.client.js";
-import autoBanSystem from "./src/security/auto-ban.system.js";
+//import autoBanSystem from "./src/security/auto-ban.system.js";
 
 // Rutas principales
 import expDigitalRoutes from "./src/module/exp-digital/routes/index.routes.js";
@@ -28,6 +28,10 @@ import { auth, verifyModuleAccess } from "./src/middlewares/auth.js";
 
 // Utilidades
 import { setupRouteMapper } from "./utils/routeMapper.js";
+import {
+  getAutoBanSystem,
+  smartNotFoundHandler,
+} from "#src/middlewares/autoBan.js";
 
 // =============================================================================
 // CONFIGURACIÓN INICIAL
@@ -40,6 +44,10 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 // Obtener ruta del directorio actual
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// ===== CONFIGURACIÓN DE TRUST PROXY =====
+// CRÍTICO: Esto debe ir ANTES de los middlewares para obtener IPs reales
+app.set("trust proxy", true);
 
 // =============================================================================
 // MIDDLEWARES DE SEGURIDAD
@@ -193,14 +201,146 @@ if (NODE_ENV === "development") {
 
 // Ruta de health check
 app.get("/", (req, res) => {
-  res.json({
+  const autoBanSystem = getAutoBanSystem();
+  const securityStats = autoBanSystem.getStats();
+
+  res.status(200).json({
     success: true,
     message: "Sistema de Expediente Digital - GADM Cantón Esmeraldas",
     version: "1.0.0",
     timestamp: new Date().toISOString(),
+    security: {
+      status: "🛡️ Sistema de protección ACTIVO (Solo usuarios no autenticados)",
+      bannedIPs: securityStats.bannedIPs,
+      suspiciousActivity: securityStats.suspiciousActivity,
+      whitelisted: securityStats.whitelist.length,
+      policy: "⚡ Usuarios autenticados exentos de autoban",
+    },
+    server: {
+      uptime: process.uptime(),
+      memory: {
+        used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + " MB",
+        total:
+          Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + " MB",
+      },
+      nodeVersion: process.version,
+    },
     environment: NODE_ENV,
   });
 });
+
+// ===== RUTA DE SALUD DEL SISTEMA =====
+app.get("/api/bovino-status", (req, res) => {
+  const autoBanSystem = getAutoBanSystem();
+  const dashboard = autoBanSystem.getDashboard();
+
+  res.status(200).json({
+    success: true,
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    services: {
+      api: "operational",
+      database:
+        mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+      security: "active - conditional autoban",
+    },
+    security: {
+      ...dashboard.summary,
+      policy: "Autoban aplicado solo a usuarios no autenticados",
+    },
+    uptime: process.uptime(),
+    version: "1.0.0",
+  });
+});
+
+// ===== MIDDLEWARE PARA MANEJO DE ERRORES GLOBALES =====
+app.use((err, req, res, next) => {
+  const autoBanSystem = getAutoBanSystem();
+  const realIP = autoBanSystem.getRealIP(req);
+
+  console.error(`🔥 Error no manejado desde ${realIP}:`, err);
+
+  // Log del error en el sistema de seguridad
+  autoBanSystem.logSecurity("APPLICATION_ERROR", {
+    ip: realIP,
+    error: {
+      name: err.name,
+      message: err.message,
+      status: err.status || 500,
+    },
+    path: req.path,
+    method: req.method,
+    timestamp: new Date().toISOString(),
+  });
+
+  // Error de validación de Mongoose
+  if (err.name === "ValidationError") {
+    const errors = Object.values(err.errors).map((e) => ({
+      field: e.path,
+      message: e.message,
+      value: e.value,
+    }));
+    return res.status(400).json({
+      success: false,
+      message: "Error de validación",
+      errors,
+    });
+  }
+
+  // Error de cast de Mongoose (ID inválido)
+  if (err.name === "CastError") {
+    return res.status(400).json({
+      success: false,
+      message: "ID de recurso inválido",
+      field: err.path,
+      value: err.value,
+    });
+  }
+
+  // Error de duplicado (índice único)
+  if (err.code === 11000) {
+    const field = Object.keys(err.keyValue)[0];
+    const value = err.keyValue[field];
+    return res.status(409).json({
+      success: false,
+      message: `Ya existe un recurso con ${field}: ${value}`,
+      field,
+      value,
+    });
+  }
+
+  // Error de sintaxis JSON
+  if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
+    return res.status(400).json({
+      success: false,
+      message: "JSON malformado en la solicitud",
+    });
+  }
+
+  // Error de conexión a MongoDB
+  if (
+    err.name === "MongoServerError" ||
+    err.name === "MongooseServerSelectionError"
+  ) {
+    return res.status(503).json({
+      success: false,
+      message: "Error de conexión a la base de datos",
+    });
+  }
+
+  // Error genérico
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Error interno del servidor",
+    ...(process.env.NODE_ENV === "development" && {
+      stack: err.stack,
+      type: err.name,
+    }),
+  });
+});
+
+// ===== MIDDLEWARE PARA RUTAS NO ENCONTRADAS =====
+app.use("*", smartNotFoundHandler);
 
 // Ruta de health check para monitoreo
 app.get("/health", (req, res) => {

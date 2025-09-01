@@ -3,7 +3,7 @@
 import mongoose from "mongoose";
 
 import mongoosePaginate from "mongoose-paginate-v2";
-import { stripMetaFields } from "../../../../../utils/meta-field";
+import { stripMetaFields } from "#utils/meta-field.js";
 
 const { Schema } = mongoose;
 

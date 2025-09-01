@@ -6,10 +6,22 @@
 
 import { Router } from "express";
 import { FileController } from "../controllers/file.controller.js";
-import { uploadMiddleware } from "../../../middlewares/files.middleware.js";
+import { auth, verifyModuleAccess } from "../../../middlewares/auth.js";
+import {
+  requirePermission,
+  requireFlexiblePermissions,
+} from "#middlewares/permission.middleware.js";
 
 const router = Router();
 const controller = new FileController();
+
+// =============================================================================
+// MIDDLEWARES DE AUTENTICACIÓN Y PERMISOS
+// =============================================================================
+
+// Middleware de autenticación para todas las rutas
+router.use(auth);
+router.use(verifyModuleAccess);
 
 // =============================================================================
 // OPERACIONES PRINCIPALES DE ARCHIVOS
@@ -17,347 +29,237 @@ const controller = new FileController();
 
 /**
  * POST /files/upload
- * Subir archivo individual con configuración RSync
- * Permisos: documents.canUpload
- * Form data: file, contractId, phaseId, documentType, description, etc.
- */
-router.post("/upload", uploadMiddleware.single("file"), controller.uploadFile);
-
-/**
- * GET /files/:fileId/download
- * Descargar archivo desde local o remoto
- * Query params: source (auto, local, remote)
- * Permisos: documents.canDownload + acceso al archivo
- */
-router.get("/:fileId/download", controller.downloadFile);
-
-/**
- * GET /files/:fileId
- * Obtener información detallada del archivo
- * Permisos: documents.canView + acceso al archivo
- */
-router.get("/:fileId", controller.getFileById);
-
-/**
- * PUT /files/:fileId
- * Actualizar metadatos del archivo
- * Body: description, documentType, isPublic, allowedRoles
- * Permisos: documents.canManageAll + acceso al archivo
- */
-router.put("/:fileId", controller.updateFileMetadata);
-
-/**
- * DELETE /files/:fileId
- * Eliminar archivo (soft delete + cleanup RSync)
- * Permisos: documents.canDelete + acceso al archivo
- */
-router.delete("/:fileId", controller.deleteFile);
-
-// =============================================================================
-// OPERACIONES DE BÚSQUEDA Y FILTRADO
-// =============================================================================
-
-/**
- * GET /files
- * Buscar archivos con filtros avanzados
- * Query params: search, contractId, phaseId, documentType, uploadedBy, etc.
- * Permisos: documents.canView + filtros por permisos
- */
-router.get("/", controller.searchFiles);
-
-/**
- * GET /files/contract/:contractId
- * Obtener archivos de un contrato específico
- * Query params: phaseId, documentType, includeDeleted
- * Permisos: documents.canView + acceso al contrato
- */
-router.get("/contract/:contractId", controller.getFilesByContract);
-
-/**
- * GET /files/phase/:phaseId
- * Obtener archivos de una fase específica
- * Query params: documentType, sortBy, order
- * Permisos: documents.canView + acceso a la fase
- */
-router.get("/phase/:phaseId", controller.getFilesByPhase);
-
-/**
- * GET /files/user/:userId
- * Obtener archivos subidos por un usuario
- * Query params: dateFrom, dateTo, status
- * Permisos: documents.canView + (own files o admin)
- */
-router.get("/user/:userId", controller.getFilesByUser);
-
-/**
- * GET /files/department/:departmentId
- * Obtener archivos de un departamento
- * Permisos: documents.canView + acceso departamental
- */
-router.get("/department/:departmentId", controller.getFilesByDepartment);
-
-// =============================================================================
-// OPERACIONES RSYNC ESPECÍFICAS
-// =============================================================================
-
-/**
- * POST /files/:fileId/sync
- * Forzar sincronización RSync de archivo específico
- * Body: priority (LOW, NORMAL, HIGH), updatePriority
- * Permisos: documents.canManageAll
- */
-router.post("/:fileId/sync", controller.forceFileSync);
-
-/**
- * GET /files/:fileId/sync-status
- * Obtener estado detallado de sincronización
- * Permisos: documents.canView + acceso al archivo
- */
-router.get("/:fileId/sync-status", controller.getFileSyncStatus);
-
-/**
- * GET /files/sync/pending
- * Listar archivos pendientes de sincronización
- * Query params: priority, retryCount, olderThan
- * Permisos: documents.canManageAll
- */
-router.get("/sync/pending", controller.getPendingSyncFiles);
-
-/**
- * POST /files/sync/retry-failed
- * Reintentar sincronización de archivos fallidos
- * Body: fileIds[], resetRetryCount
- * Permisos: documents.canManageAll
- */
-router.post("/sync/retry-failed", controller.retryFailedSyncs);
-
-/**
- * GET /files/sync/monitor
- * Monitor en tiempo real del estado RSync
- * Permisos: documents.canManageAll
- */
-router.get("/sync/monitor", controller.getRsyncMonitor);
-
-// =============================================================================
-// VALIDACIÓN Y VERIFICACIÓN
-// =============================================================================
-
-/**
- * POST /files/:fileId/validate
- * Validar integridad del archivo (hash, tamaño, etc.)
- * Permisos: documents.canView + acceso al archivo
- */
-router.post("/:fileId/validate", controller.validateFile);
-
-/**
- * GET /files/:fileId/preview
- * Vista previa del archivo (imágenes, PDFs)
- * Query params: size, page (para PDFs)
- * Permisos: documents.canView + acceso al archivo
- */
-router.get("/:fileId/preview", controller.previewFile);
-
-/**
- * GET /files/:fileId/thumbnail
- * Miniatura del archivo
- * Query params: size (small, medium, large)
- * Permisos: documents.canView + acceso al archivo
- */
-router.get("/:fileId/thumbnail", controller.getFileThumbnail);
-
-/**
- * POST /files/:fileId/scan
- * Escanear archivo por virus/malware
- * Permisos: documents.canManageAll
- */
-router.post("/:fileId/scan", controller.scanFile);
-
-/**
- * GET /files/:fileId/versions
- * Obtener historial de versiones del archivo
- * Permisos: documents.canView + acceso al archivo
- */
-router.get("/:fileId/versions", controller.getFileVersions);
-
-// =============================================================================
-// OPERACIONES MASIVAS
-// =============================================================================
-
-/**
- * POST /files/bulk-upload
- * Subida masiva de archivos
- * Form data: files[], contractId, phaseId, documentType
+ * Subir archivos al sistema
  * Permisos: documents.canUpload
  */
 router.post(
-  "/bulk-upload",
-  uploadMiddleware.array("files", 20),
-  controller.bulkUploadFiles
+  "/upload",
+  requirePermission({
+    category: "documents",
+    permission: "canUpload",
+    errorMessage: "No tiene permisos para subir archivos",
+  }),
+  controller.uploadMiddleware,
+  controller.uploadFiles
 );
 
 /**
- * POST /files/bulk-delete
- * Eliminación masiva de archivos
- * Body: fileIds[], reason, hardDelete
- * Permisos: documents.canDelete
+ * GET /files
+ * Obtener todos los archivos con filtros
+ * Permisos: documents.canView
  */
-router.post("/bulk-delete", controller.bulkDeleteFiles);
+router.get(
+  "/",
+  requirePermission({
+    category: "documents",
+    permission: "canView",
+    errorMessage: "No tiene permisos para ver archivos",
+  }),
+  controller.getAllFiles
+);
 
 /**
- * POST /files/bulk-sync
- * Sincronización masiva RSync
- * Body: fileIds[], priority, forceSync
- * Permisos: documents.canManageAll
+ * GET /files/:id
+ * Obtener archivo por ID
+ * Permisos: documents.canView + acceso al archivo específico
  */
-router.post("/bulk-sync", controller.bulkSyncFiles);
+router.get(
+  "/:id",
+  requirePermission({
+    category: "documents",
+    permission: "canView",
+    errorMessage: "No tiene permisos para ver archivos",
+  }),
+  controller.getFileById
+);
 
 /**
- * POST /files/bulk-download
- * Descarga masiva como ZIP
- * Body: fileIds[]
- * Permisos: documents.canDownload + acceso a archivos
+ * PUT /files/:id
+ * Actualizar metadatos del archivo
+ * Permisos: documents.canEdit + propiedad del archivo
  */
-router.post("/bulk-download", controller.bulkDownloadFiles);
+router.put(
+  "/:id",
+  requirePermission({
+    category: "documents",
+    permission: "canEdit",
+    errorMessage: "No tiene permisos para editar archivos",
+  }),
+  controller.updateFile
+);
 
 /**
- * POST /files/bulk-move
- * Mover archivos entre contratos/fases
- * Body: fileIds[], targetContractId, targetPhaseId
- * Permisos: documents.canManageAll
+ * DELETE /files/:id
+ * Eliminar archivo (soft delete)
+ * Permisos: documents.canDelete + propiedad del archivo
  */
-router.post("/bulk-move", controller.bulkMoveFiles);
+router.delete(
+  "/:id",
+  requirePermission({
+    category: "documents",
+    permission: "canDelete",
+    errorMessage: "No tiene permisos para eliminar archivos",
+  }),
+  controller.deleteFile
+);
 
 // =============================================================================
-// ESTADÍSTICAS Y MONITOREO
-// =============================================================================
-
-/**
- * GET /files/statistics/storage
- * Estadísticas de almacenamiento
- * Query params: period, groupBy (contract, phase, user, department)
- * Permisos: special.canViewStatistics
- */
-router.get("/statistics/storage", controller.getStorageStatistics);
-
-/**
- * GET /files/statistics/sync
- * Estadísticas de sincronización RSync
- * Query params: period, includeErrors
- * Permisos: documents.canManageAll
- */
-router.get("/statistics/sync", controller.getSyncStatistics);
-
-/**
- * GET /files/statistics/usage
- * Estadísticas de uso de archivos
- * Query params: period, groupBy
- * Permisos: special.canViewStatistics
- */
-router.get("/statistics/usage", controller.getUsageStatistics);
-
-/**
- * GET /files/statistics/performance
- * Métricas de rendimiento del sistema
- * Permisos: documents.canManageAll
- */
-router.get("/statistics/performance", controller.getPerformanceStats);
-
-// =============================================================================
-// REPORTES Y AUDITORÍA
+// OPERACIONES DE DESCARGA
 // =============================================================================
 
 /**
- * GET /files/reports/audit
- * Reporte de auditoría de archivos
- * Query params: dateFrom, dateTo, action, userId
- * Permisos: special.canViewAuditLog
- */
-router.get("/reports/audit", controller.getAuditReport);
-
-/**
- * GET /files/reports/integrity
- * Reporte de integridad de archivos
- * Query params: includeCorrupted, includeOrphaned
- * Permisos: documents.canManageAll
- */
-router.get("/reports/integrity", controller.getIntegrityReport);
-
-/**
- * GET /files/reports/compliance
- * Reporte de cumplimiento documental
- * Query params: contractId, phaseId, missingOnly
- * Permisos: special.canViewStatistics
- */
-router.get("/reports/compliance", controller.getComplianceReport);
-
-// =============================================================================
-// CONFIGURACIÓN Y ADMINISTRACIÓN
-// =============================================================================
-
-/**
- * GET /files/config
- * Obtener configuración del sistema de archivos
- * Permisos: documents.canManageAll
- */
-router.get("/config", controller.getFileSystemConfig);
-
-/**
- * PUT /files/config
- * Actualizar configuración del sistema
- * Body: rsyncConfig, storageConfig, validationRules
- * Permisos: special.canManagePermissions
- */
-router.put("/config", controller.updateFileSystemConfig);
-
-/**
- * GET /files/health
- * Estado de salud del sistema de archivos
- * Permisos: documents.canManageAll
- */
-router.get("/health", controller.getSystemHealth);
-
-/**
- * POST /files/maintenance/cleanup
- * Limpieza de archivos huérfanos y temporales
- * Body: dryRun, olderThan, includeDeleted
- * Permisos: special.canManagePermissions
- */
-router.post("/maintenance/cleanup", controller.cleanupFiles);
-
-/**
- * POST /files/maintenance/verify-integrity
- * Verificación masiva de integridad
- * Body: contractIds[], fixCorrupted
- * Permisos: documents.canManageAll
- */
-router.post("/maintenance/verify-integrity", controller.verifyIntegrity);
-
-// =============================================================================
-// ENDPOINTS ESPECIALES
-// =============================================================================
-
-/**
- * GET /files/:fileId/share
- * Generar enlace de compartir temporal
- * Query params: expiresIn, allowedDownloads
+ * GET /files/:id/download
+ * Descargar archivo
  * Permisos: documents.canDownload + acceso al archivo
  */
-router.get("/:fileId/share", controller.generateShareLink);
+router.get(
+  "/:id/download",
+  requirePermission({
+    category: "documents",
+    permission: "canDownload",
+    errorMessage: "No tiene permisos para descargar archivos",
+  }),
+  controller.downloadFile
+);
 
 /**
- * POST /files/:fileId/convert
- * Convertir archivo a otro formato
- * Body: targetFormat, quality, options
- * Permisos: documents.canManageAll
+ * GET /files/:id/preview
+ * Previsualizar archivo (para imágenes y PDFs)
+ * Permisos: documents.canView + acceso al archivo
  */
-router.post("/:fileId/convert", controller.convertFile);
+router.get(
+  "/:id/preview",
+  requirePermission({
+    category: "documents",
+    permission: "canView",
+    errorMessage: "No tiene permisos para ver archivos",
+  }),
+  controller.previewFile
+);
+
+// =============================================================================
+// OPERACIONES DE RSYNC Y SINCRONIZACIÓN
+// =============================================================================
 
 /**
- * POST /files/:fileId/duplicate
- * Duplicar archivo en otro contrato/fase
- * Body: targetContractId, targetPhaseId, newName
+ * POST /files/:id/sync
+ * Sincronizar archivo específico
+ * Permisos: special.canManageFiles (administradores)
+ */
+router.post(
+  "/:id/sync",
+  requirePermission({
+    category: "special",
+    permission: "canManageFiles",
+    errorMessage: "Solo los administradores pueden forzar sincronización",
+  }),
+  controller.syncFile
+);
+
+/**
+ * POST /files/sync/process-queue
+ * Procesar cola de sincronización
+ * Permisos: special.canManageFiles (administradores)
+ */
+router.post(
+  "/sync/process-queue",
+  requirePermission({
+    category: "special",
+    permission: "canManageFiles",
+    errorMessage:
+      "Solo los administradores pueden procesar la cola de sincronización",
+  }),
+  controller.processRsyncQueue
+);
+
+/**
+ * GET /files/sync/queue-status
+ * Obtener estado de la cola de sincronización
+ * Permisos: special.canManageFiles (administradores)
+ */
+router.get(
+  "/sync/queue-status",
+  requirePermission({
+    category: "special",
+    permission: "canManageFiles",
+    errorMessage: "Solo los administradores pueden ver el estado de la cola",
+  }),
+  controller.getRsyncQueueStatus
+);
+
+// =============================================================================
+// OPERACIONES DE ESTADÍSTICAS Y REPORTES
+// =============================================================================
+
+/**
+ * GET /files/statistics
+ * Obtener estadísticas de archivos
+ * Permisos: documents.canView
+ */
+router.get(
+  "/statistics",
+  requirePermission({
+    category: "documents",
+    permission: "canView",
+    errorMessage: "No tiene permisos para ver estadísticas de archivos",
+  }),
+  controller.getFilesStatistics
+);
+
+// =============================================================================
+// OPERACIONES DE UTILIDADES
+// =============================================================================
+
+/**
+ * GET /files/document-types
+ * Obtener tipos de documentos disponibles
+ * Permisos: Acceso básico al módulo
+ */
+router.get("/document-types", controller.getDocumentTypes);
+
+/**
+ * POST /files/validate
+ * Validar archivos antes de subir
  * Permisos: documents.canUpload
  */
-router.post("/:fileId/duplicate", controller.duplicateFile);
+router.post(
+  "/validate",
+  requirePermission({
+    category: "documents",
+    permission: "canUpload",
+    errorMessage: "No tiene permisos para validar archivos",
+  }),
+  controller.validateFiles
+);
+
+/**
+ * POST /files/search
+ * Buscar archivos con filtros avanzados
+ * Permisos: documents.canView
+ */
+router.post(
+  "/search",
+  requirePermission({
+    category: "documents",
+    permission: "canView",
+    errorMessage: "No tiene permisos para buscar archivos",
+  }),
+  controller.searchFiles
+);
+
+/**
+ * DELETE /files/cleanup
+ * Limpiar archivos huérfanos (sin referencias en contratos)
+ * Permisos: special.canManageFiles (administradores)
+ */
+router.delete(
+  "/cleanup",
+  requirePermission({
+    category: "special",
+    permission: "canManageFiles",
+    errorMessage: "Solo los administradores pueden limpiar archivos",
+  }),
+  controller.cleanupOrphanFiles
+);
 
 export default router;

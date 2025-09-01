@@ -330,7 +330,22 @@ export const DepartmentJSON = {
 
 // === CONFIGURACIÓN DEL ESQUEMA ===
 
-const DepartmentSchema = setupBaseSchema(DepartmentJSON);
+// 2. Crea el esquema de Mongoose
+const DepartmentSchema = new Schema(stripMetaFields(DepartmentJSON), {
+  timestamps: true,
+  collection: "departments",
+});
+
+// 3. AHORA aplica la configuración base
+setupBaseSchema(DepartmentSchema, {
+  addTimestamps: true,
+  addIndexes: true,
+  addVirtuals: true,
+  addMethods: true,
+  addStatics: true,
+  addHelpers: true,
+  addBaseFields: true,
+});
 
 // === VIRTUALES ===
 

@@ -5,12 +5,11 @@
 
 import { Router } from "express";
 import ModulePermissionController from "../controllers/module-permission.controller.js";
-import { auth, permissUser } from "../../../../middlewares/auth.js";
+import { auth, permissUser, verifyModuleAccess } from "#middlewares/auth.js";
 import {
   requirePermission,
   requireFlexiblePermissions,
 } from "../../../middlewares/permission.middleware.js";
-import { verifyModuleAccess } from "../../../../middlewares/auth.js";
 
 const router = Router();
 

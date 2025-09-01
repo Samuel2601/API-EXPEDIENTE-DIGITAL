@@ -118,10 +118,12 @@ export class ContractPhaseRepository extends BaseRepository {
           {
             path: "dependencies.requiredPhases.phase",
             select: "code name shortName order",
+            match: { isActive: true },
           },
           {
             path: "dependencies.blockedBy",
             select: "code name shortName order",
+            match: { isActive: true },
           },
         ]);
       }

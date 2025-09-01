@@ -34,286 +34,246 @@ export class ContractConfigurationController {
    * GET /contract-configuration/types
    * Permisos: Acceso básico al módulo
    */
-  getAllContractTypes = [
-    auth,
-    verifyModuleAccess,
-    async (req, res) => {
-      try {
-        const { user, query } = req;
-        const {
-          includeInactive = false,
-          category = null,
-          page = 1,
-          limit = 50,
-        } = query;
+  getAllContractTypes = async (req, res) => {
+    try {
+      const { user, query } = req;
+      const {
+        includeInactive = false,
+        category = null,
+        page = 1,
+        limit = 50,
+      } = query;
 
-        console.log(
-          `📋 Usuario ${user.userId} consultando tipos de contratación`
-        );
+      console.log(
+        `📋 Usuario ${user.userId} consultando tipos de contratación`
+      );
 
-        const options = {
-          includeInactive: includeInactive === "true",
-          category,
-          page: parseInt(page),
-          limit: parseInt(limit),
-        };
+      const options = {
+        includeInactive: includeInactive === "true",
+        category,
+        page: parseInt(page),
+        limit: parseInt(limit),
+      };
 
-        const contractTypes =
-          await this.configService.getAllContractTypes(options);
+      const contractTypes =
+        await this.configService.getAllContractTypes(options);
 
-        console.log(
-          `✅ Tipos obtenidos: ${contractTypes.common?.count || 0} comunes, ${contractTypes.special?.count || 0} especiales`
-        );
+      console.log(
+        `✅ Tipos obtenidos: ${contractTypes.common?.count || 0} comunes, ${contractTypes.special?.count || 0} especiales`
+      );
 
-        res.status(200).json({
-          success: true,
-          data: contractTypes,
-          metadata: {
-            requestedBy: user.userId,
-            requestedAt: new Date(),
-            options,
-            framework: "LOSNCP",
-            version: "1.0",
-          },
-        });
-      } catch (error) {
-        console.error(
-          `❌ Error obteniendo tipos de contratación: ${error.message}`
-        );
+      res.status(200).json({
+        success: true,
+        data: contractTypes,
+        metadata: {
+          requestedBy: user.userId,
+          requestedAt: new Date(),
+          options,
+          framework: "LOSNCP",
+          version: "1.0",
+        },
+      });
+    } catch (error) {
+      console.error(
+        `❌ Error obteniendo tipos de contratación: ${error.message}`
+      );
 
-        res.status(error.statusCode || 500).json({
-          success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "CONTRACT_TYPES_ERROR",
-        });
-      }
-    },
-  ];
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "CONTRACT_TYPES_ERROR",
+      });
+    }
+  };
 
   /**
    * Obtener un tipo de contratación específico por ID
    * GET /contract-configuration/types/:id
    * Permisos: Acceso básico al módulo
    */
-  getContractTypeById = [
-    auth,
-    verifyModuleAccess,
-    async (req, res) => {
-      try {
-        const { user, params } = req;
-        const { id } = params;
+  getContractTypeById = async (req, res) => {
+    try {
+      const { user, params } = req;
+      const { id } = params;
 
-        console.log(
-          `🔍 Usuario ${user.userId} consultando tipo de contratación: ${id}`
-        );
+      console.log(
+        `🔍 Usuario ${user.userId} consultando tipo de contratación: ${id}`
+      );
 
-        validateObjectId(id, "ID del tipo de contratación");
+      validateObjectId(id, "ID del tipo de contratación");
 
-        const contractType = await this.configService.getContractTypeById(id);
+      const contractType = await this.configService.getContractTypeById(id);
 
-        if (!contractType) {
-          return res.status(404).json({
-            success: false,
-            message: "Tipo de contratación no encontrado",
-            code: "CONTRACT_TYPE_NOT_FOUND",
-          });
-        }
-
-        console.log(
-          `✅ Tipo encontrado: ${contractType.name} (${contractType.code})`
-        );
-
-        res.status(200).json({
-          success: true,
-          data: contractType,
-          metadata: {
-            requestedBy: user.userId,
-            requestedAt: new Date(),
-          },
-        });
-      } catch (error) {
-        console.error(
-          `❌ Error obteniendo tipo de contratación: ${error.message}`
-        );
-
-        res.status(error.statusCode || 500).json({
+      if (!contractType) {
+        return res.status(404).json({
           success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "CONTRACT_TYPE_ERROR",
+          message: "Tipo de contratación no encontrado",
+          code: "CONTRACT_TYPE_NOT_FOUND",
         });
       }
-    },
-  ];
+
+      console.log(
+        `✅ Tipo encontrado: ${contractType.name} (${contractType.code})`
+      );
+
+      res.status(200).json({
+        success: true,
+        data: contractType,
+        metadata: {
+          requestedBy: user.userId,
+          requestedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      console.error(
+        `❌ Error obteniendo tipo de contratación: ${error.message}`
+      );
+
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "CONTRACT_TYPE_ERROR",
+      });
+    }
+  };
 
   /**
    * Crear nuevo tipo de contratación
    * POST /contract-configuration/types
    * Permisos: special.canManagePermissions (solo administradores)
    */
-  createContractType = [
-    auth,
-    verifyModuleAccess,
-    requirePermission({
-      category: "special",
-      permission: "canManagePermissions",
-      errorMessage:
-        "Solo los administradores pueden crear tipos de contratación",
-    }),
-    async (req, res) => {
-      try {
-        const { body, user } = req;
+  createContractType = async (req, res) => {
+    try {
+      const { body, user } = req;
 
-        console.log(
-          `📝 Usuario ${user.userId} creando nuevo tipo de contratación`
-        );
+      console.log(
+        `📝 Usuario ${user.userId} creando nuevo tipo de contratación`
+      );
 
-        // Validar campos requeridos
-        validateRequiredFields(
-          body,
-          ["code", "name", "category", "description"],
-          "datos del tipo de contratación"
-        );
+      // Validar campos requeridos
+      validateRequiredFields(
+        body,
+        ["code", "name", "category", "description"],
+        "datos del tipo de contratación"
+      );
 
-        const contractType = await this.configService.createContractType(body, {
-          userId: user.userId,
-        });
+      const contractType = await this.configService.createContractType(body, {
+        userId: user.userId,
+      });
 
-        console.log(`✅ Tipo de contratación creado: ${contractType.code}`);
+      console.log(`✅ Tipo de contratación creado: ${contractType.code}`);
 
-        res.status(201).json({
-          success: true,
-          data: contractType,
-          message: "Tipo de contratación creado exitosamente",
-          metadata: {
-            createdBy: user.userId,
-            createdAt: new Date(),
-          },
-        });
-      } catch (error) {
-        console.error(
-          `❌ Error creando tipo de contratación: ${error.message}`
-        );
+      res.status(201).json({
+        success: true,
+        data: contractType,
+        message: "Tipo de contratación creado exitosamente",
+        metadata: {
+          createdBy: user.userId,
+          createdAt: new Date(),
+        },
+      });
+    } catch (error) {
+      console.error(`❌ Error creando tipo de contratación: ${error.message}`);
 
-        res.status(error.statusCode || 500).json({
-          success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "CREATE_CONTRACT_TYPE_ERROR",
-        });
-      }
-    },
-  ];
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "CREATE_CONTRACT_TYPE_ERROR",
+      });
+    }
+  };
 
   /**
    * Actualizar tipo de contratación existente
    * PUT /contract-configuration/types/:id
    * Permisos: special.canManagePermissions (solo administradores)
    */
-  updateContractType = [
-    auth,
-    verifyModuleAccess,
-    requirePermission({
-      category: "special",
-      permission: "canManagePermissions",
-      errorMessage:
-        "Solo los administradores pueden actualizar tipos de contratación",
-    }),
-    async (req, res) => {
-      try {
-        const { body, user, params } = req;
-        const { id } = params;
+  updateContractType = async (req, res) => {
+    try {
+      const { body, user, params } = req;
+      const { id } = params;
 
-        console.log(
-          `📝 Usuario ${user.userId} actualizando tipo de contratación: ${id}`
-        );
+      console.log(
+        `📝 Usuario ${user.userId} actualizando tipo de contratación: ${id}`
+      );
 
-        validateObjectId(id, "ID del tipo de contratación");
+      validateObjectId(id, "ID del tipo de contratación");
 
-        const updatedType = await this.configService.updateContractType(
-          id,
-          body,
-          {
-            userId: user.userId,
-          }
-        );
+      const updatedType = await this.configService.updateContractType(
+        id,
+        body,
+        {
+          userId: user.userId,
+        }
+      );
 
-        console.log(`✅ Tipo de contratación actualizado: ${updatedType.code}`);
+      console.log(`✅ Tipo de contratación actualizado: ${updatedType.code}`);
 
-        res.status(200).json({
-          success: true,
-          data: updatedType,
-          message: "Tipo de contratación actualizado exitosamente",
-          metadata: {
-            updatedBy: user.userId,
-            updatedAt: new Date(),
-          },
-        });
-      } catch (error) {
-        console.error(
-          `❌ Error actualizando tipo de contratación: ${error.message}`
-        );
+      res.status(200).json({
+        success: true,
+        data: updatedType,
+        message: "Tipo de contratación actualizado exitosamente",
+        metadata: {
+          updatedBy: user.userId,
+          updatedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      console.error(
+        `❌ Error actualizando tipo de contratación: ${error.message}`
+      );
 
-        res.status(error.statusCode || 500).json({
-          success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "UPDATE_CONTRACT_TYPE_ERROR",
-        });
-      }
-    },
-  ];
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "UPDATE_CONTRACT_TYPE_ERROR",
+      });
+    }
+  };
 
   /**
    * Eliminar tipo de contratación (soft delete)
    * DELETE /contract-configuration/types/:id
    * Permisos: special.canManagePermissions (solo administradores)
    */
-  deleteContractType = [
-    auth,
-    verifyModuleAccess,
-    requirePermission({
-      category: "special",
-      permission: "canManagePermissions",
-      errorMessage:
-        "Solo los administradores pueden eliminar tipos de contratación",
-    }),
-    async (req, res) => {
-      try {
-        const { user, params } = req;
-        const { id } = params;
+  deleteContractType = async (req, res) => {
+    try {
+      const { user, params } = req;
+      const { id } = params;
 
-        console.log(
-          `🗑️ Usuario ${user.userId} eliminando tipo de contratación: ${id}`
-        );
+      console.log(
+        `🗑️ Usuario ${user.userId} eliminando tipo de contratación: ${id}`
+      );
 
-        validateObjectId(id, "ID del tipo de contratación");
+      validateObjectId(id, "ID del tipo de contratación");
 
-        const deletedType = await this.configService.deleteContractType(id, {
-          userId: user.userId,
-        });
+      const deletedType = await this.configService.deleteContractType(id, {
+        userId: user.userId,
+      });
 
-        console.log(`✅ Tipo de contratación eliminado: ${deletedType.code}`);
+      console.log(`✅ Tipo de contratación eliminado: ${deletedType.code}`);
 
-        res.status(200).json({
-          success: true,
-          data: deletedType,
-          message: "Tipo de contratación eliminado exitosamente",
-          metadata: {
-            deletedBy: user.userId,
-            deletedAt: new Date(),
-          },
-        });
-      } catch (error) {
-        console.error(
-          `❌ Error eliminando tipo de contratación: ${error.message}`
-        );
+      res.status(200).json({
+        success: true,
+        data: deletedType,
+        message: "Tipo de contratación eliminado exitosamente",
+        metadata: {
+          deletedBy: user.userId,
+          deletedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      console.error(
+        `❌ Error eliminando tipo de contratación: ${error.message}`
+      );
 
-        res.status(error.statusCode || 500).json({
-          success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "DELETE_CONTRACT_TYPE_ERROR",
-        });
-      }
-    },
-  ];
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "DELETE_CONTRACT_TYPE_ERROR",
+      });
+    }
+  };
 
   // =============================================================================
   // ENDPOINTS PARA FASES DE CONTRATACIÓN (CONTRACT PHASES)
@@ -324,287 +284,242 @@ export class ContractConfigurationController {
    * GET /contract-configuration/phases
    * Permisos: Acceso básico al módulo
    */
-  getAllContractPhases = [
-    auth,
-    verifyModuleAccess,
-    async (req, res) => {
-      try {
-        const { user, query } = req;
-        const {
-          includeInactive = false,
-          contractTypeCode = null,
-          category = null,
-          page = 1,
-          limit = 50,
-        } = query;
+  getAllContractPhases = async (req, res) => {
+    try {
+      const { user, query } = req;
+      const {
+        includeInactive = false,
+        contractTypeCode = null,
+        category = null,
+        page = 1,
+        limit = 50,
+      } = query;
 
-        console.log(
-          `📋 Usuario ${user.userId} consultando fases de contratación`
-        );
+      console.log(
+        `📋 Usuario ${user.userId} consultando fases de contratación`
+      );
 
-        const options = {
-          includeInactive: includeInactive === "true",
-          contractTypeCode,
-          category,
-          page: parseInt(page),
-          limit: parseInt(limit),
-        };
+      const options = {
+        includeInactive: includeInactive === "true",
+        contractTypeCode,
+        category,
+        page: parseInt(page),
+        limit: parseInt(limit),
+      };
 
-        const contractPhases =
-          await this.configService.getAllContractPhases(options);
+      const contractPhases =
+        await this.configService.getAllContractPhases(options);
 
-        console.log(
-          `✅ Fases obtenidas: ${contractPhases.totalPhases || 0} fases`
-        );
+      console.log(
+        `✅ Fases obtenidas: ${contractPhases.totalPhases || 0} fases`
+      );
 
-        res.status(200).json({
-          success: true,
-          data: contractPhases,
-          metadata: {
-            requestedBy: user.userId,
-            requestedAt: new Date(),
-            options,
-            framework: "LOSNCP",
-            version: "1.0",
-          },
-        });
-      } catch (error) {
-        console.error(
-          `❌ Error obteniendo fases de contratación: ${error.message}`
-        );
+      res.status(200).json({
+        success: true,
+        data: contractPhases,
+        metadata: {
+          requestedBy: user.userId,
+          requestedAt: new Date(),
+          options,
+          framework: "LOSNCP",
+          version: "1.0",
+        },
+      });
+    } catch (error) {
+      console.error(
+        `❌ Error obteniendo fases de contratación: ${error.message}`
+      );
 
-        res.status(error.statusCode || 500).json({
-          success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "CONTRACT_PHASES_ERROR",
-        });
-      }
-    },
-  ];
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "CONTRACT_PHASES_ERROR",
+      });
+    }
+  };
 
   /**
    * Obtener una fase de contratación específica por ID
    * GET /contract-configuration/phases/:id
    * Permisos: Acceso básico al módulo
    */
-  getContractPhaseById = [
-    auth,
-    verifyModuleAccess,
-    async (req, res) => {
-      try {
-        const { user, params } = req;
-        const { id } = params;
+  getContractPhaseById = async (req, res) => {
+    try {
+      const { user, params } = req;
+      const { id } = params;
 
-        console.log(`🔍 Usuario ${user.userId} consultando fase: ${id}`);
+      console.log(`🔍 Usuario ${user.userId} consultando fase: ${id}`);
 
-        validateObjectId(id, "ID de la fase");
+      validateObjectId(id, "ID de la fase");
 
-        const phase = await this.configService.getContractPhaseById(id);
+      const phase = await this.configService.getContractPhaseById(id);
 
-        if (!phase) {
-          return res.status(404).json({
-            success: false,
-            message: "Fase de contratación no encontrada",
-            code: "CONTRACT_PHASE_NOT_FOUND",
-          });
-        }
-
-        console.log(`✅ Fase encontrada: ${phase.name} (${phase.code})`);
-
-        res.status(200).json({
-          success: true,
-          data: phase,
-          metadata: {
-            requestedBy: user.userId,
-            requestedAt: new Date(),
-          },
-        });
-      } catch (error) {
-        console.error(`❌ Error obteniendo fase: ${error.message}`);
-
-        res.status(error.statusCode || 500).json({
+      if (!phase) {
+        return res.status(404).json({
           success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "CONTRACT_PHASE_ERROR",
+          message: "Fase de contratación no encontrada",
+          code: "CONTRACT_PHASE_NOT_FOUND",
         });
       }
-    },
-  ];
+
+      console.log(`✅ Fase encontrada: ${phase.name} (${phase.code})`);
+
+      res.status(200).json({
+        success: true,
+        data: phase,
+        metadata: {
+          requestedBy: user.userId,
+          requestedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      console.error(`❌ Error obteniendo fase: ${error.message}`);
+
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "CONTRACT_PHASE_ERROR",
+      });
+    }
+  };
 
   /**
    * Crear nueva fase de contratación
    * POST /contract-configuration/phases
    * Permisos: special.canManagePermissions (solo administradores)
    */
-  createContractPhase = [
-    auth,
-    verifyModuleAccess,
-    requirePermission({
-      category: "special",
-      permission: "canManagePermissions",
-      errorMessage:
-        "Solo los administradores pueden crear fases de contratación",
-    }),
-    async (req, res) => {
-      try {
-        const { body, user } = req;
+  createContractPhase = async (req, res) => {
+    try {
+      const { body, user } = req;
 
-        console.log(
-          `📝 Usuario ${user.userId} creando nueva fase de contratación`
-        );
+      console.log(
+        `📝 Usuario ${user.userId} creando nueva fase de contratación`
+      );
 
-        // Validar campos requeridos
-        validateRequiredFields(
-          body,
-          ["code", "name", "category", "order"],
-          "datos de la fase de contratación"
-        );
+      // Validar campos requeridos
+      validateRequiredFields(
+        body,
+        ["code", "name", "category", "order"],
+        "datos de la fase de contratación"
+      );
 
-        const contractPhase = await this.configService.createContractPhase(
-          body,
-          {
-            userId: user.userId,
-          }
-        );
+      const contractPhase = await this.configService.createContractPhase(body, {
+        userId: user.userId,
+      });
 
-        console.log(`✅ Fase de contratación creada: ${contractPhase.code}`);
+      console.log(`✅ Fase de contratación creada: ${contractPhase.code}`);
 
-        res.status(201).json({
-          success: true,
-          data: contractPhase,
-          message: "Fase de contratación creada exitosamente",
-          metadata: {
-            createdBy: user.userId,
-            createdAt: new Date(),
-          },
-        });
-      } catch (error) {
-        console.error(
-          `❌ Error creando fase de contratación: ${error.message}`
-        );
+      res.status(201).json({
+        success: true,
+        data: contractPhase,
+        message: "Fase de contratación creada exitosamente",
+        metadata: {
+          createdBy: user.userId,
+          createdAt: new Date(),
+        },
+      });
+    } catch (error) {
+      console.error(`❌ Error creando fase de contratación: ${error.message}`);
 
-        res.status(error.statusCode || 500).json({
-          success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "CREATE_CONTRACT_PHASE_ERROR",
-        });
-      }
-    },
-  ];
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "CREATE_CONTRACT_PHASE_ERROR",
+      });
+    }
+  };
 
   /**
    * Actualizar fase de contratación existente
    * PUT /contract-configuration/phases/:id
    * Permisos: special.canManagePermissions (solo administradores)
    */
-  updateContractPhase = [
-    auth,
-    verifyModuleAccess,
-    requirePermission({
-      category: "special",
-      permission: "canManagePermissions",
-      errorMessage:
-        "Solo los administradores pueden actualizar fases de contratación",
-    }),
-    async (req, res) => {
-      try {
-        const { body, user, params } = req;
-        const { id } = params;
+  updateContractPhase = async (req, res) => {
+    try {
+      const { body, user, params } = req;
+      const { id } = params;
 
-        console.log(
-          `📝 Usuario ${user.userId} actualizando fase de contratación: ${id}`
-        );
+      console.log(
+        `📝 Usuario ${user.userId} actualizando fase de contratación: ${id}`
+      );
 
-        validateObjectId(id, "ID de la fase de contratación");
+      validateObjectId(id, "ID de la fase de contratación");
 
-        const updatedPhase = await this.configService.updateContractPhase(
-          id,
-          body,
-          {
-            userId: user.userId,
-          }
-        );
+      const updatedPhase = await this.configService.updateContractPhase(
+        id,
+        body,
+        {
+          userId: user.userId,
+        }
+      );
 
-        console.log(
-          `✅ Fase de contratación actualizada: ${updatedPhase.code}`
-        );
+      console.log(`✅ Fase de contratación actualizada: ${updatedPhase.code}`);
 
-        res.status(200).json({
-          success: true,
-          data: updatedPhase,
-          message: "Fase de contratación actualizada exitosamente",
-          metadata: {
-            updatedBy: user.userId,
-            updatedAt: new Date(),
-          },
-        });
-      } catch (error) {
-        console.error(
-          `❌ Error actualizando fase de contratación: ${error.message}`
-        );
+      res.status(200).json({
+        success: true,
+        data: updatedPhase,
+        message: "Fase de contratación actualizada exitosamente",
+        metadata: {
+          updatedBy: user.userId,
+          updatedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      console.error(
+        `❌ Error actualizando fase de contratación: ${error.message}`
+      );
 
-        res.status(error.statusCode || 500).json({
-          success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "UPDATE_CONTRACT_PHASE_ERROR",
-        });
-      }
-    },
-  ];
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "UPDATE_CONTRACT_PHASE_ERROR",
+      });
+    }
+  };
 
   /**
    * Eliminar fase de contratación (soft delete)
    * DELETE /contract-configuration/phases/:id
    * Permisos: special.canManagePermissions (solo administradores)
    */
-  deleteContractPhase = [
-    auth,
-    verifyModuleAccess,
-    requirePermission({
-      category: "special",
-      permission: "canManagePermissions",
-      errorMessage:
-        "Solo los administradores pueden eliminar fases de contratación",
-    }),
-    async (req, res) => {
-      try {
-        const { user, params } = req;
-        const { id } = params;
+  deleteContractPhase = async (req, res) => {
+    try {
+      const { user, params } = req;
+      const { id } = params;
 
-        console.log(
-          `🗑️ Usuario ${user.userId} eliminando fase de contratación: ${id}`
-        );
+      console.log(
+        `🗑️ Usuario ${user.userId} eliminando fase de contratación: ${id}`
+      );
 
-        validateObjectId(id, "ID de la fase de contratación");
+      validateObjectId(id, "ID de la fase de contratación");
 
-        const deletedPhase = await this.configService.deleteContractPhase(id, {
-          userId: user.userId,
-        });
+      const deletedPhase = await this.configService.deleteContractPhase(id, {
+        userId: user.userId,
+      });
 
-        console.log(`✅ Fase de contratación eliminada: ${deletedPhase.code}`);
+      console.log(`✅ Fase de contratación eliminada: ${deletedPhase.code}`);
 
-        res.status(200).json({
-          success: true,
-          data: deletedPhase,
-          message: "Fase de contratación eliminada exitosamente",
-          metadata: {
-            deletedBy: user.userId,
-            deletedAt: new Date(),
-          },
-        });
-      } catch (error) {
-        console.error(
-          `❌ Error eliminando fase de contratación: ${error.message}`
-        );
+      res.status(200).json({
+        success: true,
+        data: deletedPhase,
+        message: "Fase de contratación eliminada exitosamente",
+        metadata: {
+          deletedBy: user.userId,
+          deletedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      console.error(
+        `❌ Error eliminando fase de contratación: ${error.message}`
+      );
 
-        res.status(error.statusCode || 500).json({
-          success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "DELETE_CONTRACT_PHASE_ERROR",
-        });
-      }
-    },
-  ];
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "DELETE_CONTRACT_PHASE_ERROR",
+      });
+    }
+  };
 
   // =============================================================================
   // ENDPOINTS PARA CONFIGURACIÓN COMPLETA
@@ -615,110 +530,96 @@ export class ContractConfigurationController {
    * GET /contract-configuration/complete
    * Permisos: Acceso básico al módulo
    */
-  getCompleteConfiguration = [
-    auth,
-    verifyModuleAccess,
-    async (req, res) => {
-      try {
-        const { user, query } = req;
-        const { includeInactive = false, contractTypeCode = null } = query;
+  getCompleteConfiguration = async (req, res) => {
+    try {
+      const { user, query } = req;
+      const { includeInactive = false, contractTypeCode = null } = query;
 
-        console.log(
-          `⚙️ Usuario ${user.userId} consultando configuración completa del sistema`
-        );
+      console.log(
+        `⚙️ Usuario ${user.userId} consultando configuración completa del sistema`
+      );
 
-        const options = {
-          includeInactive: includeInactive === "true",
-          contractTypeCode,
-        };
+      const options = {
+        includeInactive: includeInactive === "true",
+        contractTypeCode,
+      };
 
-        const configuration =
-          await this.configService.getCompleteConfiguration(options);
+      const configuration =
+        await this.configService.getCompleteConfiguration(options);
 
-        console.log(
-          `✅ Configuración completa obtenida: ${configuration.contractTypes.common?.count || 0 + configuration.contractTypes.special?.count || 0} tipos, ${configuration.contractPhases.totalPhases || 0} fases`
-        );
+      console.log(
+        `✅ Configuración completa obtenida: ${configuration.contractTypes.common?.count || 0 + configuration.contractTypes.special?.count || 0} tipos, ${configuration.contractPhases.totalPhases || 0} fases`
+      );
 
-        res.status(200).json({
-          success: true,
-          data: configuration,
-          metadata: {
-            requestedBy: user.userId,
-            requestedAt: new Date(),
-            options,
-            framework: "LOSNCP",
-            version: "1.0",
-          },
-        });
-      } catch (error) {
-        console.error(
-          `❌ Error obteniendo configuración completa: ${error.message}`
-        );
+      res.status(200).json({
+        success: true,
+        data: configuration,
+        metadata: {
+          requestedBy: user.userId,
+          requestedAt: new Date(),
+          options,
+          framework: "LOSNCP",
+          version: "1.0",
+        },
+      });
+    } catch (error) {
+      console.error(
+        `❌ Error obteniendo configuración completa: ${error.message}`
+      );
 
-        res.status(error.statusCode || 500).json({
-          success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "COMPLETE_CONFIG_ERROR",
-        });
-      }
-    },
-  ];
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "COMPLETE_CONFIG_ERROR",
+      });
+    }
+  };
 
   /**
    * Inicializar configuración completa del sistema
    * POST /contract-configuration/initialize
    * Permisos: special.canManagePermissions (solo administradores)
    */
-  initializeCompleteConfiguration = [
-    auth,
-    verifyModuleAccess,
-    requirePermission({
-      category: "special",
-      permission: "canManagePermissions",
-      errorMessage:
-        "Solo los administradores pueden inicializar la configuración del sistema",
-    }),
-    async (req, res) => {
-      try {
-        const { user } = req;
+  initializeCompleteConfiguration = async (req, res) => {
+    try {
+      const { user } = req;
 
-        console.log(
-          `🚀 Usuario ${user.userId} inicializando configuración completa del sistema`
-        );
+      console.log(
+        `🚀 Usuario ${user.userId} inicializando configuración completa del sistema`
+      );
 
-        const initResult =
-          await this.configService.initializeCompleteConfiguration();
+      const initResult =
+        await this.configService.initializeCompleteConfiguration();
 
-        console.log(
-          `✅ Configuración inicializada: ${initResult.summary.completedOperations}/${initResult.summary.totalOperations} operaciones exitosas`
-        );
+      console.log(
+        `✅ Configuración inicializada: ${initResult.summary.completedOperations}/${initResult.summary.totalOperations} operaciones exitosas`
+      );
 
-        res.status(200).json({
-          success: true,
-          data: {
-            initializationResult: initResult,
-            message: initResult.summary.success
-              ? "Configuración inicializada exitosamente"
-              : "Configuración completada con algunos errores",
-          },
-          metadata: {
-            initializedBy: user.userId,
-            initializedAt: new Date(),
-            framework: "LOSNCP",
-            version: "1.0",
-          },
-        });
-      } catch (error) {
-        console.error(`❌ Error inicializando configuración: ${error.message}`);
+      res.status(200).json({
+        success: true,
+        data: {
+          initializationResult: initResult,
+          message: initResult.summary.success
+            ? "Configuración inicializada exitosamente"
+            : "Configuración completada con algunos errores",
+        },
+        metadata: {
+          initializedBy: user.userId,
+          initializedAt: new Date(),
+          framework: "LOSNCP",
+          version: "1.0",
+        },
+      });
+    } catch (error) {
+      console.error(`❌ Error inicializando configuración: ${error.message}`);
 
-        res.status(error.statusCode || 500).json({
-          success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "INIT_CONFIG_ERROR",
-        });
-      }
-    },
-  ];
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "INIT_CONFIG_ERROR",
+      });
+    }
+  };
 
   // =============================================================================
   // ENDPOINTS UTILITARIOS
@@ -729,41 +630,278 @@ export class ContractConfigurationController {
    * GET /contract-configuration/statistics
    * Permisos: Acceso básico al módulo
    */
-  getConfigurationStatistics = [
-    auth,
-    verifyModuleAccess,
-    async (req, res) => {
-      try {
-        const { user } = req;
+  getConfigurationStatistics = async (req, res) => {
+    try {
+      const { user } = req;
 
-        console.log(
-          `📊 Usuario ${user.userId} consultando estadísticas de configuración`
-        );
+      console.log(
+        `📊 Usuario ${user.userId} consultando estadísticas de configuración`
+      );
 
-        const statistics =
-          await this.configService.getConfigurationStatistics();
+      const statistics = await this.configService.getConfigurationStatistics();
 
-        console.log(`✅ Estadísticas generadas exitosamente`);
+      console.log(`✅ Estadísticas generadas exitosamente`);
 
-        res.status(200).json({
-          success: true,
-          data: statistics,
-          metadata: {
-            requestedBy: user.userId,
-            requestedAt: new Date(),
-            framework: "LOSNCP",
-            version: "1.0",
-          },
-        });
-      } catch (error) {
-        console.error(`❌ Error obteniendo estadísticas: ${error.message}`);
+      res.status(200).json({
+        success: true,
+        data: statistics,
+        metadata: {
+          requestedBy: user.userId,
+          requestedAt: new Date(),
+          framework: "LOSNCP",
+          version: "1.0",
+        },
+      });
+    } catch (error) {
+      console.error(`❌ Error obteniendo estadísticas: ${error.message}`);
 
-        res.status(error.statusCode || 500).json({
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "STATISTICS_ERROR",
+      });
+    }
+  };
+
+  /**
+   * POST /contract-configuration/initialize
+   * Permisos: special.canManagePermissions (solo administradores)
+   * Body: none
+   * Este endpoint inicializa la configuración del sistema completa
+   */
+  initializeConfiguration = async (req, res) => {
+    try {
+      const { user } = req;
+
+      console.log(
+        `🚀 Usuario ${user.userId} inicializando configuración del sistema`
+      );
+
+      const initResult =
+        await this.configService.initializeSystemConfiguration();
+
+      console.log(
+        `✅ Configuración inicializada: ${initResult.summary.completedOperations}/${initResult.summary.totalOperations} operaciones exitosas`
+      );
+
+      res.status(200).json({
+        success: true,
+        data: {
+          initializationResult: initResult,
+          message: initResult.summary.success
+            ? "Configuración inicializada exitosamente"
+            : "Configuración completada con algunos errores",
+        },
+        metadata: {
+          initializedBy: user.userId,
+          initializedAt: new Date(),
+          framework: "LOSNCP",
+          version: "1.0",
+        },
+      });
+    } catch (error) {
+      console.error(`❌ Error inicializando configuración: ${error.message}`);
+
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "INIT_CONFIG_ERROR",
+      });
+    }
+  };
+
+  /**
+   * POST /contract-configuration/validate
+   * Permisos: special.canManagePermissions (solo administradores)
+   * Body: none
+   * Este endpoint valida la configuración del sistema
+   */
+
+  validateConfiguration = async (req, res) => {
+    try {
+      const { user } = req;
+
+      console.log(
+        `📋 Usuario ${user.userId} validando configuración del sistema`
+      );
+
+      const validationResult =
+        await this.configService.validateSystemConfiguration();
+
+      console.log(
+        `✅ Configuración validada: ${validationResult.summary.valid} validadas, ${validationResult.summary.invalid} inválidas`
+      );
+
+      res.status(200).json({
+        success: true,
+        data: {
+          validationResult,
+          message:
+            validationResult.summary.valid > 0
+              ? "Configuración validada exitosamente"
+              : "Configuración inválida",
+        },
+        metadata: {
+          validatedBy: user.userId,
+          validatedAt: new Date(),
+          framework: "LOSNCP",
+          version: "1.0",
+        },
+      });
+    } catch (error) {
+      console.error(`❌ Error validando configuración: ${error.message}`);
+
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "VALIDATION_CONFIG_ERROR",
+      });
+    }
+  };
+
+  getContractTypeByAmount = async (req, res) => {
+    try {
+      const { user, params } = req;
+      const { amount } = params;
+
+      console.log(
+        `🔍 Usuario ${user.userId} consultando tipo de contratación por monto: ${amount}`
+      );
+
+      const contractType =
+        await this.configService.getContractTypeByAmount(amount);
+
+      if (!contractType) {
+        return res.status(404).json({
           success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "STATISTICS_ERROR",
+          message: "Tipo de contratación no encontrado",
+          code: "CONTRACT_TYPE_NOT_FOUND",
         });
       }
-    },
-  ];
+
+      console.log(
+        `✅ Tipo de contratación encontrado: ${contractType.name} (${contractType.code})`
+      );
+
+      res.status(200).json({
+        success: true,
+        data: contractType,
+        metadata: {
+          requestedBy: user.userId,
+          requestedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      console.error(
+        `❌ Error obteniendo tipo de contratación: ${error.message}`
+      );
+
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "CONTRACT_TYPE_ERROR",
+      });
+    }
+  };
+
+  getPhasesByContractType = async (req, res) => {
+    try {
+      const { user, params } = req;
+      const { id } = params;
+
+      console.log(
+        `🔍 Usuario ${user.userId} consultando fases de contratación por tipo: ${id}`
+      );
+
+      // Buscar primero el tipo de contratación para validar que existe
+      const contractType = await this.configService.getContractTypeById(id);
+
+      if (!contractType) {
+        return res.status(404).json({
+          success: false,
+          message: "Tipo de contratación no encontrado",
+          code: "CONTRACT_TYPE_NOT_FOUND",
+        });
+      }
+
+      // Obtener las fases aplicables para este tipo
+      const contractPhases =
+        await this.configService.getPhasesByContractType(id);
+
+      console.log(
+        `✅ Fases de contratación encontradas para ${contractType.code}: ${contractPhases.length} fases`
+      );
+
+      res.status(200).json({
+        success: true,
+        data: {
+          contractType: {
+            _id: contractType._id,
+            code: contractType.code,
+            name: contractType.name,
+            category: contractType.category,
+          },
+          phases: contractPhases,
+        },
+        metadata: {
+          requestedBy: user.userId,
+          requestedAt: new Date(),
+          totalPhases: contractPhases.length,
+        },
+      });
+    } catch (error) {
+      console.error(
+        `❌ Error obteniendo fases de contratación: ${error.message}`
+      );
+
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "CONTRACT_PHASES_ERROR",
+      });
+    }
+  };
+
+  updatePhasesByContractType = async (req, res) => {
+    try {
+      const { user, params, body } = req;
+      const { contractTypeCode } = params;
+
+      console.log(
+        `📝 Usuario ${user.userId} actualizando fases de contratación por tipo: ${contractTypeCode}`
+      );
+
+      const updatedPhases = await this.configService.updatePhasesByContractType(
+        contractTypeCode,
+        body,
+        {
+          userId: user.userId,
+        }
+      );
+
+      console.log(
+        `✅ Fases de contratación actualizadas: ${updatedPhases.length} fases`
+      );
+
+      res.status(200).json({
+        success: true,
+        data: updatedPhases,
+        message: "Fases de contratación actualizadas exitosamente",
+        metadata: {
+          updatedBy: user.userId,
+          updatedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      console.error(
+        `❌ Error actualizando fases de contratación: ${error.message}`
+      );
+
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "UPDATE_PHASES_ERROR",
+      });
+    }
+  };
 }

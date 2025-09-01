@@ -22,6 +22,249 @@ export class ContractConfigurationService {
     this.contractPhaseRepository = new ContractPhaseRepository();
   }
 
+  async initializeSystemConfiguration() {
+    try {
+      console.log("🚀 Service: Inicializando configuración del sistema");
+
+      const results = {
+        contractTypes: null,
+        contractPhases: null,
+        summary: {
+          success: false,
+          totalOperations: 2,
+          completedOperations: 0,
+          errors: [],
+        },
+        timestamp: new Date().toISOString(),
+      }; // Resultado de la inicialización
+
+      // Inicializar tipos de contratación
+      try {
+        console.log("📋 Inicializando tipos de contratación...");
+        results.contractTypes = await this.initializeContractTypes();
+        results.summary.completedOperations++;
+        console.log(
+          `✅ Tipos de contratación: ${results.contractTypes.summary.created} creados, ${results.contractTypes.summary.skipped} omitidos`
+        );
+      } catch (error) {
+        console.error(
+          "❌ Error inicializando tipos de contratación:",
+          error.message
+        );
+        results.summary.errors.push({
+          operation: "initializeContractTypes",
+          error: error.message,
+        });
+      }
+
+      // Inicializar fases de contratación
+      try {
+        console.log("📝 Inicializando fases de contratación...");
+        results.contractPhases = await this.initializeContractPhases();
+        results.summary.completedOperations++;
+        console.log(
+          `✅ Fases de contratación: ${results.contractPhases.summary.created} creadas, ${results.contractPhases.summary.skipped} omitidas`
+        );
+      } catch (error) {
+        console.error(
+          "❌ Error inicializando fases de contratación:",
+          error.message
+        );
+        results.summary.errors.push({
+          operation: "initializeContractPhases",
+          error: error.message,
+        });
+      }
+
+      results.summary.success = results.summary.completedOperations === 2;
+
+      if (results.summary.success) {
+        console.log(
+          "🎉 Configuración completada exitosamente, reiniciando servicio..."
+        );
+      } else {
+        console.warn("⚠️ Configuración completada con algunos errores");
+      }
+
+      return results;
+    } catch (error) {
+      throw createError(
+        ERROR_CODES.INIT_ERROR,
+        `Error inicializando configuración del sistema: ${error.message}`,
+        500
+      );
+    }
+  }
+
+  async validateSystemConfiguration() {
+    try {
+      console.log("📋 Service: Validando configuración del sistema");
+
+      const results = {
+        summary: {
+          valid: 0,
+          invalid: 0,
+        },
+        timestamp: new Date().toISOString(),
+      }; // Resultado de la validación
+
+      // Validar tipos de contratación
+      try {
+        console.log("📋 Validando tipos de contratación...");
+        results.summary.valid = await this.validateContractTypes();
+        console.log(
+          `✅ Tipos de contratación validados: ${results.summary.valid} validados, ${results.summary.invalid} inválidos`
+        );
+      } catch (error) {
+        console.error(
+          "❌ Error validando tipos de contratación:",
+          error.message
+        );
+        results.summary.invalid++;
+      }
+
+      // Validar fases de contratación
+      try {
+        console.log("📝 Validando fases de contratación...");
+        results.summary.valid += await this.validateContractPhases();
+        console.log(
+          `✅ Fases de contratación validadas: ${results.summary.valid} validadas, ${results.summary.invalid} inválidas`
+        );
+      } catch (error) {
+        console.error(
+          "❌ Error validando fases de contratación:",
+          error.message
+        );
+        results.summary.invalid++;
+      }
+
+      results.summary.valid =
+        results.summary.valid > 0 ? results.summary.valid : 1;
+
+      return results;
+    } catch (error) {
+      throw createError(
+        ERROR_CODES.VALIDATION_ERROR,
+        `Error validando configuración del sistema: ${error.message}`,
+        500
+      );
+    }
+  }
+
+  async validateContractTypes() {
+    try {
+      console.log("📋 Service: Validando tipos de contratación");
+
+      const results = {
+        summary: {
+          valid: 0,
+          invalid: 0,
+        },
+        timestamp: new Date().toISOString(),
+      }; // Resultado de la validación
+
+      // Obtener tipos de contratación
+      const contractTypes = await this.contractTypeRepository.findAll();
+
+      // Validar tipos de contratación
+      for (const contractType of contractTypes) {
+        try {
+          // Validar si existe
+          const existing = await this.contractTypeRepository.findByCode(
+            contractType.code
+          );
+          if (existing) {
+            results.summary.invalid++;
+            continue;
+          }
+
+          // Validar si es obligatorio
+          if (contractType.isRequired && !contractType.requiresPublication) {
+            results.summary.invalid++;
+            continue;
+          }
+
+          // Validar si es obligatorio
+          if (contractType.requiresPublication && !contractType.isRequired) {
+            results.summary.invalid++;
+            continue;
+          }
+        } catch (error) {
+          results.summary.invalid++;
+        }
+      }
+
+      return results.summary.valid;
+    } catch (error) {
+      throw createError(
+        ERROR_CODES.VALIDATION_ERROR,
+        `Error validando tipos de contratación: ${error.message}`,
+        500
+      );
+    }
+  }
+
+  async validateContractPhases() {
+    try {
+      console.log("📝 Service: Validando fases de contratación");
+
+      const results = {
+        summary: {
+          valid: 0,
+          invalid: 0,
+        },
+        timestamp: new Date().toISOString(),
+      }; // Resultado de la validación
+
+      // Obtener fases de contratación
+      const contractPhases = await this.contractPhaseRepository.findAll();
+
+      // Validar fases de contratación
+      for (const contractPhase of contractPhases) {
+        try {
+          // Validar si existe
+          const existing = await this.contractPhaseRepository.findByCode(
+            contractPhase.code
+          );
+          if (existing) {
+            results.summary.invalid++;
+            continue;
+          }
+
+          // Validar si es obligatorio
+          if (contractPhase.isRequired && !contractPhase.canBeSkipped) {
+            results.summary.invalid++;
+            continue;
+          }
+
+          // Validar si es obligatorio
+          if (contractPhase.canBeSkipped && !contractPhase.isRequired) {
+            results.summary.invalid++;
+            continue;
+          }
+
+          if (
+            contractPhase.requiresPublication &&
+            !contractPhase.applicableContractTypes.length
+          ) {
+            results.summary.invalid++;
+            continue;
+          }
+        } catch (error) {
+          results.summary.invalid++;
+        }
+      }
+
+      return results.summary.valid;
+    } catch (error) {
+      throw createError(
+        ERROR_CODES.VALIDATION_ERROR,
+        `Error validando fases de contratación: ${error.message}`,
+        500
+      );
+    }
+  }
+
   // =============================================================================
   // OPERACIONES CRUD PARA TIPOS DE CONTRATACIÓN
   // =============================================================================
@@ -107,6 +350,54 @@ export class ContractConfigurationService {
       throw createError(
         ERROR_CODES.QUERY_ERROR,
         `Error obteniendo tipos de contratación: ${error.message}`,
+        500
+      );
+    }
+  }
+
+  async getContractTypeByAmount(amount) {
+    try {
+      console.log("🔍 Service: Obteniendo tipo de contratación por monto");
+
+      const contractType =
+        await this.contractTypeRepository.findForAmount(amount);
+
+      return contractType;
+    } catch (error) {
+      throw createError(
+        ERROR_CODES.QUERY_ERROR,
+        `Error obteniendo tipo de contratación: ${error.message}`,
+        500
+      );
+    }
+  }
+
+  async getPhasesByContractType(contractTypeId) {
+    try {
+      console.log("🔍 Service: Obteniendo fases por tipo de contratación");
+
+      // Primero obtener el tipo para tener su código
+      const contractType =
+        await this.contractTypeRepository.findById(contractTypeId);
+      if (!contractType) {
+        throw createError(
+          ERROR_CODES.NOT_FOUND,
+          "Tipo de contratación no encontrado",
+          404
+        );
+      }
+
+      // Buscar fases aplicables a este tipo
+      const contractPhases =
+        await this.contractPhaseRepository.findForContractType(
+          contractType._id // O contractTypeId si cambiaste a ObjectId
+        );
+
+      return contractPhases;
+    } catch (error) {
+      throw createError(
+        ERROR_CODES.QUERY_ERROR,
+        `Error obteniendo fases de contratación: ${error.message}`,
         500
       );
     }

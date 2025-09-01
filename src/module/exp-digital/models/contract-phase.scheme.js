@@ -408,14 +408,32 @@ export const ContractPhaseJSON = {
   },
 
   // Aplicable a qué tipos de contratación
+  // Campo modificado para usar referencias
   applicableToTypes: {
-    type: [String],
+    type: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "ContractType",
+        required: true,
+      },
+    ],
     default: [],
     validate: {
       validator: function (v) {
         return v.length <= 20;
       },
       message: "No se pueden especificar más de 20 tipos de contratación",
+    },
+    meta: {
+      validation: {
+        isArray: true,
+        optional: true,
+        eachValidator: { isMongoId: true },
+      },
+      messages: {
+        isArray: "Los tipos aplicables deben ser una lista",
+        isMongoId: "Cada tipo debe ser un ID válido de MongoDB",
+      },
     },
   },
 };
@@ -489,11 +507,11 @@ ContractPhaseSchema.methods.getOptionalDocuments = function () {
 };
 
 ContractPhaseSchema.methods.isApplicableToContractType = function (
-  contractTypeCode
+  contractTypeId
 ) {
   return (
     this.applicableToTypes.length === 0 ||
-    this.applicableToTypes.includes(contractTypeCode)
+    this.applicableToTypes.some((typeId) => typeId.equals(contractTypeId))
   );
 };
 
@@ -532,13 +550,36 @@ ContractPhaseSchema.statics.findByCategory = function (category) {
   });
 };
 
-ContractPhaseSchema.statics.findForContractType = function (contractTypeCode) {
+ContractPhaseSchema.statics.findForContractType = function (contractTypeId) {
   return this.findActive({
     $or: [
       { applicableToTypes: { $size: 0 } },
-      { applicableToTypes: contractTypeCode },
+      { applicableToTypes: contractTypeId },
     ],
-  }).sort({ order: 1 });
+  })
+    .populate("applicableToTypes", "code name category")
+    .sort({ order: 1 });
+};
+
+// Agregar tipo aplicable
+ContractPhaseSchema.methods.addApplicableType = function (contractTypeId) {
+  if (!this.applicableToTypes.some((id) => id.equals(contractTypeId))) {
+    this.applicableToTypes.push(contractTypeId);
+  }
+  return this.save();
+};
+
+// Remover tipo aplicable
+ContractPhaseSchema.methods.removeApplicableType = function (contractTypeId) {
+  this.applicableToTypes = this.applicableToTypes.filter(
+    (id) => !id.equals(contractTypeId)
+  );
+  return this.save();
+};
+
+// Obtener tipos aplicables con populate
+ContractPhaseSchema.methods.getApplicableTypes = function () {
+  return this.populate("applicableToTypes", "code name category");
 };
 
 ContractPhaseSchema.statics.getPhaseSequence = function (contractTypeCode) {
@@ -578,8 +619,8 @@ ContractPhaseSchema.query.byCategory = function (category) {
 ContractPhaseSchema.query.forContractType = function (contractTypeCode) {
   return this.where({
     $or: [
-      { applicableToTypes: { $size: 0 } },
-      { applicableToTypes: contractTypeCode },
+      { applicableToTypes: { $size: 0 } }, // Fases que aplican a todos
+      { applicableToTypes: contractTypeCode }, // Fases específicas para este tipo
     ],
   });
 };

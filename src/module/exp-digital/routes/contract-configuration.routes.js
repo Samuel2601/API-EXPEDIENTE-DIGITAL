@@ -6,9 +6,19 @@
 
 import { Router } from "express";
 import { ContractConfigurationController } from "../controllers/contract-configuration.controller.js";
+import { auth, verifyModuleAccess } from "#src/middlewares/auth.js";
+import { requirePermission } from "#src/middlewares/permission.middleware.js";
 
 const router = Router();
 const controller = new ContractConfigurationController();
+
+// =============================================================================
+// MIDDLEWARES DE AUTENTICACIÓN Y PERMISOS
+// =============================================================================
+
+// Middleware de autenticación para todas las rutas
+router.use(auth);
+router.use(verifyModuleAccess);
 
 // =============================================================================
 // ENDPOINTS PARA TIPOS DE CONTRATACIÓN
@@ -26,7 +36,15 @@ router.get("/types", controller.getAllContractTypes);
  * Crear nuevo tipo de contratación
  * Permisos: special.canManagePermissions
  */
-router.post("/types", controller.createContractType);
+router.post(
+  "/types",
+  requirePermission({
+    category: "special",
+    permission: "canManagePermissions",
+    errorMessage: "Solo los administradores pueden crear tipos de contratación",
+  }),
+  controller.createContractType
+);
 
 /**
  * GET /contract-configuration/types/:id
@@ -39,14 +57,32 @@ router.get("/types/:id", controller.getContractTypeById);
  * Actualizar tipo de contratación
  * Permisos: special.canManagePermissions
  */
-router.put("/types/:id", controller.updateContractType);
+router.put(
+  "/types/:id",
+  requirePermission({
+    category: "special",
+    permission: "canManagePermissions",
+    errorMessage:
+      "Solo los administradores pueden actualizar tipos de contratación",
+  }),
+  controller.updateContractType
+);
 
 /**
  * DELETE /contract-configuration/types/:id
  * Eliminar tipo de contratación (soft delete)
  * Permisos: special.canManagePermissions
  */
-router.delete("/types/:id", controller.deleteContractType);
+router.delete(
+  "/types/:id",
+  requirePermission({
+    category: "special",
+    permission: "canManagePermissions",
+    errorMessage:
+      "Solo los administradores pueden eliminar tipos de contratación",
+  }),
+  controller.deleteContractType
+);
 
 // =============================================================================
 // ENDPOINTS PARA FASES DE CONTRATACIÓN
@@ -64,7 +100,15 @@ router.get("/phases", controller.getAllContractPhases);
  * Crear nueva fase de contratación
  * Permisos: special.canManagePermissions
  */
-router.post("/phases", controller.createContractPhase);
+router.post(
+  "/phases",
+  requirePermission({
+    category: "special",
+    permission: "canManagePermissions",
+    errorMessage: "Solo los administradores pueden crear fases de contratación",
+  }),
+  controller.createContractPhase
+);
 
 /**
  * GET /contract-configuration/phases/:id
@@ -77,14 +121,32 @@ router.get("/phases/:id", controller.getContractPhaseById);
  * Actualizar fase de contratación
  * Permisos: special.canManagePermissions
  */
-router.put("/phases/:id", controller.updateContractPhase);
+router.put(
+  "/phases/:id",
+  requirePermission({
+    category: "special",
+    permission: "canManagePermissions",
+    errorMessage:
+      "Solo los administradores pueden actualizar fases de contratación",
+  }),
+  controller.updateContractPhase
+);
 
 /**
  * DELETE /contract-configuration/phases/:id
  * Eliminar fase de contratación (soft delete)
  * Permisos: special.canManagePermissions
  */
-router.delete("/phases/:id", controller.deleteContractPhase);
+router.delete(
+  "/phases/:id",
+  requirePermission({
+    category: "special",
+    permission: "canManagePermissions",
+    errorMessage:
+      "Solo los administradores pueden eliminar fases de contratación",
+  }),
+  controller.deleteContractPhase
+);
 
 // =============================================================================
 // ENDPOINTS PARA CONFIGURACIÓN COMPLETA
@@ -102,7 +164,16 @@ router.get("/complete", controller.getCompleteConfiguration);
  * Inicializar configuración del sistema completa
  * Permisos: special.canManagePermissions (solo administradores)
  */
-router.post("/initialize", controller.initializeConfiguration);
+router.post(
+  "/initialize",
+  requirePermission({
+    category: "special",
+    permission: "canManagePermissions",
+    errorMessage:
+      "Solo los administradores pueden inicializar la configuración del sistema",
+  }),
+  controller.initializeConfiguration
+);
 
 /**
  * GET /contract-configuration/validate
