@@ -38,11 +38,11 @@ export class DepartmentController {
   createDepartment = [
     auth,
     verifyModuleAccess,
-    requirePermission({
+    /*requirePermission({
       category: "special",
       permission: "canManagePermissions",
       errorMessage: "Solo los administradores pueden crear departamentos",
-    }),
+    }),*/
     async (req, res) => {
       try {
         const { body, user } = req;

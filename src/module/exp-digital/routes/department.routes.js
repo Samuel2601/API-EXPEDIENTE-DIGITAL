@@ -34,11 +34,11 @@ router.use(auth, verifyModuleAccess);
  */
 router.post(
   "/",
-  requirePermission({
+  /*requirePermission({
     category: "special",
     permission: "canManagePermissions",
     errorMessage: "Solo los administradores pueden crear departamentos",
-  }),
+  }),*/
   departmentController.createDepartment
 );
 

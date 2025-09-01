@@ -234,7 +234,7 @@ export class DepartmentService {
       }
 
       const result = {
-        department: department.toObject(),
+        department: department,
       };
 
       // Incluir jerarquía completa si se solicita
