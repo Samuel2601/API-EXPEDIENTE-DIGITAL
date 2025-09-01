@@ -1,0 +1,1617 @@
+{
+  "info": {
+    "name": "GADMCE - Expediente Digital - Module Permissions",
+    "description": "Colección de APIs para gestión de permisos multi-departamentales del sistema de Expediente Digital - GADM Cantón Esmeraldas",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:3000/api",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "📋 User Department Access",
+      "item": [
+        {
+          "name": "Create User Department Access",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"department\": \"{{department_id}}\",\n  \"accessLevel\": \"editor\",\n  \"permissions\": {\n    \"contracts\": {\n      \"canRead\": true,\n      \"canCreate\": true,\n      \"canEdit\": true,\n      \"canDelete\": false\n    }\n  },\n  \"expiresAt\": \"2024-12-31T23:59:59.000Z\",\n  \"notes\": \"Acceso temporal para gestión de contratos\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/accesses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "accesses"
+              ]
+            },
+            "description": "Crear acceso de usuario a departamento. Requiere permisos contracts.canCreate para el departamento destino."
+          }
+        },
+        {
+          "name": "Get User Accesses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/users/:userId/accesses?page=1&limit=10&includeInactive=false",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "users",
+                ":userId",
+                "accesses"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "includeInactive",
+                  "value": "false"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "userId",
+                  "value": "{{user_id}}"
+                }
+              ]
+            },
+            "description": "Obtener accesos de un usuario específico. Requiere permisos special.canViewCrossDepartment o acceso al departamento."
+          }
+        },
+        {
+          "name": "Get User Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/users/:userId/dashboard",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "users",
+                ":userId",
+                "dashboard"
+              ],
+              "variable": [
+                {
+                  "key": "userId",
+                  "value": "{{user_id}}"
+                }
+              ]
+            },
+            "description": "Dashboard de permisos de usuario. El usuario solo puede ver su propio dashboard a menos que tenga permisos globales."
+          }
+        },
+        {
+          "name": "Check User Permission",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/users/:userId/departments/:departmentId/permissions/check?category=contracts&permission=canRead",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "users",
+                ":userId",
+                "departments",
+                ":departmentId",
+                "permissions",
+                "check"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "contracts"
+                },
+                {
+                  "key": "permission",
+                  "value": "canRead"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "userId",
+                  "value": "{{user_id}}"
+                },
+                {
+                  "key": "departmentId",
+                  "value": "{{department_id}}"
+                }
+              ]
+            },
+            "description": "Verificar permisos específicos de usuario en un departamento."
+          }
+        },
+        {
+          "name": "Search Accesses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/accesses/search?department={{department_id}}&accessLevel=editor&isActive=true&page=1&limit=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "accesses",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "department",
+                  "value": "{{department_id}}"
+                },
+                {
+                  "key": "accessLevel",
+                  "value": "editor"
+                },
+                {
+                  "key": "isActive",
+                  "value": "true"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Buscar accesos con filtros avanzados. Requiere permisos de administración."
+          }
+        },
+        {
+          "name": "Update User Access",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accessLevel\": \"admin\",\n  \"permissions\": {\n    \"contracts\": {\n      \"canRead\": true,\n      \"canCreate\": true,\n      \"canEdit\": true,\n      \"canDelete\": true\n    },\n    \"special\": {\n      \"canViewCrossDepartment\": true\n    }\n  },\n  \"expiresAt\": null,\n  \"notes\": \"Promoción a administrador\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/accesses/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "accesses",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{access_id}}"
+                }
+              ]
+            },
+            "description": "Actualizar acceso de usuario. Requiere permisos special.canManagePermissions o ser owner del departamento."
+          }
+        },
+        {
+          "name": "Deactivate User Access",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Usuario inactivo por cambio de departamento\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/accesses/:id/deactivate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "accesses",
+                ":id",
+                "deactivate"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{access_id}}"
+                }
+              ]
+            },
+            "description": "Desactivar acceso de usuario. Requiere permisos special.canManagePermissions o ser owner del departamento."
+          }
+        },
+        {
+          "name": "Reactivate User Access",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Reincorporación del usuario al departamento\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/accesses/:id/reactivate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "accesses",
+                ":id",
+                "reactivate"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{access_id}}"
+                }
+              ]
+            },
+            "description": "Reactivar acceso de usuario. Requiere permisos special.canManagePermissions."
+          }
+        }
+      ],
+      "description": "Endpoints para gestionar accesos de usuarios a departamentos específicos."
+    },
+    {
+      "name": "🏢 Department Management",
+      "item": [
+        {
+          "name": "Transfer Department Ownership",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newOwnerId\": \"{{new_owner_id}}\",\n  \"reason\": \"Cambio de jefatura departamental\",\n  \"transferDate\": \"2025-09-01T00:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/departments/:departmentId/transfer-ownership",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "departments",
+                ":departmentId",
+                "transfer-ownership"
+              ],
+              "variable": [
+                {
+                  "key": "departmentId",
+                  "value": "{{department_id}}"
+                }
+              ]
+            },
+            "description": "Transferir ownership de departamento. Requiere ser el owner actual del departamento."
+          }
+        }
+      ],
+      "description": "Endpoints para gestión de departamentos y transferencia de ownership."
+    },
+    {
+      "name": "📝 Permission Templates",
+      "item": [
+        {
+          "name": "Create Permission Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Editor de Contratos\",\n  \"description\": \"Plantilla para editores de contratos con permisos limitados\",\n  \"accessLevel\": \"editor\",\n  \"permissions\": {\n    \"contracts\": {\n      \"canRead\": true,\n      \"canCreate\": true,\n      \"canEdit\": true,\n      \"canDelete\": false\n    }\n  },\n  \"tags\": [\"contratos\", \"editor\", \"basico\"],\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/templates",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "templates"
+              ]
+            },
+            "description": "Crear plantilla de permisos. Requiere permisos special.canManagePermissions."
+          }
+        },
+        {
+          "name": "Find Permission Templates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/templates?accessLevel=editor&tags=contratos&isActive=true&page=1&limit=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "templates"
+              ],
+              "query": [
+                {
+                  "key": "accessLevel",
+                  "value": "editor"
+                },
+                {
+                  "key": "tags",
+                  "value": "contratos"
+                },
+                {
+                  "key": "isActive",
+                  "value": "true"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Buscar plantillas de permisos disponibles."
+          }
+        },
+        {
+          "name": "Get Applicable Templates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/templates/applicable?userId={{user_id}}&departmentId={{department_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "templates",
+                "applicable"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "{{user_id}}"
+                },
+                {
+                  "key": "departmentId",
+                  "value": "{{department_id}}"
+                }
+              ]
+            },
+            "description": "Obtener plantillas aplicables para un contexto específico."
+          }
+        },
+        {
+          "name": "Apply Template To Users",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userIds\": [\"{{user_id_1}}\", \"{{user_id_2}}\"],\n  \"departmentId\": \"{{department_id}}\",\n  \"overrideExisting\": false,\n  \"expiresAt\": \"2024-12-31T23:59:59.000Z\",\n  \"notes\": \"Aplicación masiva de plantilla de editor\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/templates/:templateId/apply",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "templates",
+                ":templateId",
+                "apply"
+              ],
+              "variable": [
+                {
+                  "key": "templateId",
+                  "value": "{{template_id}}"
+                }
+              ]
+            },
+            "description": "Aplicar plantilla a múltiples usuarios. Requiere permisos special.canManagePermissions."
+          }
+        }
+      ],
+      "description": "Endpoints para gestionar plantillas de permisos reutilizables."
+    },
+    {
+      "name": "📊 Permission History",
+      "item": [
+        {
+          "name": "Get Access Permission History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/accesses/:accessId/history?page=1&limit=10&startDate=2025-01-01&endDate=2025-09-01",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "accesses",
+                ":accessId",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2025-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2025-09-01"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "accessId",
+                  "value": "{{access_id}}"
+                }
+              ]
+            },
+            "description": "Historial de permisos de un acceso específico. Requiere ser administrador o dueño del acceso."
+          }
+        },
+        {
+          "name": "Get User Permission History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/users/:userId/permission-history?page=1&limit=20&includeSystemActions=true",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "users",
+                ":userId",
+                "permission-history"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "includeSystemActions",
+                  "value": "true"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "userId",
+                  "value": "{{user_id}}"
+                }
+              ]
+            },
+            "description": "Historial completo de usuario. Solo administradores o el propio usuario."
+          }
+        }
+      ],
+      "description": "Endpoints para consultar el historial de cambios en permisos."
+    },
+    {
+      "name": "🔐 System Actions & Verification",
+      "item": [
+        {
+          "name": "Check System Action Permission",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/users/:userId/departments/:departmentId/system-actions/:systemAction",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "users",
+                ":userId",
+                "departments",
+                ":departmentId",
+                "system-actions",
+                ":systemAction"
+              ],
+              "variable": [
+                {
+                  "key": "userId",
+                  "value": "{{user_id}}"
+                },
+                {
+                  "key": "departmentId",
+                  "value": "{{department_id}}"
+                },
+                {
+                  "key": "systemAction",
+                  "value": "CREATE_CONTRACT"
+                }
+              ]
+            },
+            "description": "Verificar si usuario puede realizar una acción específica del sistema."
+          }
+        },
+        {
+          "name": "Batch Check Permissions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"checks\": [\n    {\n      \"userId\": \"{{user_id}}\",\n      \"departmentId\": \"{{department_id}}\",\n      \"category\": \"contracts\",\n      \"permission\": \"canRead\"\n    },\n    {\n      \"userId\": \"{{user_id}}\",\n      \"departmentId\": \"{{department_id}}\",\n      \"category\": \"contracts\",\n      \"permission\": \"canCreate\"\n    },\n    {\n      \"userId\": \"{{user_id}}\",\n      \"departmentId\": \"{{department_id}}\",\n      \"category\": \"special\",\n      \"permission\": \"canViewCrossDepartment\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/permissions/batch-check",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "permissions",
+                "batch-check"
+              ]
+            },
+            "description": "Verificar múltiples permisos en una sola petición."
+          }
+        }
+      ],
+      "description": "Endpoints para verificación de acciones del sistema y validaciones masivas."
+    },
+    {
+      "name": "📈 Statistics & Reports",
+      "item": [
+        {
+          "name": "Get Permission Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/stats/permissions?timeRange=30d&groupBy=department&includeInactive=false",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "stats",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "timeRange",
+                  "value": "30d"
+                },
+                {
+                  "key": "groupBy",
+                  "value": "department"
+                },
+                {
+                  "key": "includeInactive",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Estadísticas de permisos del sistema. Requiere special.canViewCrossDepartment."
+          }
+        },
+        {
+          "name": "Get Department Access Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/departments/:departmentId/access-report?format=json&includeHistory=true&period=monthly",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "departments",
+                ":departmentId",
+                "access-report"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "json"
+                },
+                {
+                  "key": "includeHistory",
+                  "value": "true"
+                },
+                {
+                  "key": "period",
+                  "value": "monthly"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "departmentId",
+                  "value": "{{department_id}}"
+                }
+              ]
+            },
+            "description": "Reporte de accesos por departamento. Requiere acceso al departamento o permisos globales."
+          }
+        },
+        {
+          "name": "Get Department Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/departments/:departmentId/users?includeInactive=false&accessLevel=all&page=1&limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "departments",
+                ":departmentId",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "includeInactive",
+                  "value": "false"
+                },
+                {
+                  "key": "accessLevel",
+                  "value": "all"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "departmentId",
+                  "value": "{{department_id}}"
+                }
+              ]
+            },
+            "description": "Obtener usuarios con acceso a un departamento específico."
+          }
+        }
+      ],
+      "description": "Endpoints para estadísticas y reportes de permisos."
+    },
+    {
+      "name": "⚙️ Auxiliary Routes",
+      "item": [
+        {
+          "name": "Get Access Levels",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/access-levels",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "access-levels"
+              ]
+            },
+            "description": "Obtener todos los niveles de acceso disponibles en el sistema."
+          }
+        },
+        {
+          "name": "Get System Actions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/permissions/system-actions?category=all&module=expediente-digital",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "permissions",
+                "system-actions"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "all"
+                },
+                {
+                  "key": "module",
+                  "value": "expediente-digital"
+                }
+              ]
+            },
+            "description": "Obtener todas las acciones del sistema disponibles."
+          }
+        }
+      ],
+      "description": "Endpoints auxiliares para configuración y consulta de metadatos del sistema."
+    },
+    {
+      "name": "🏢 Departments Management",
+      "item": [
+        {
+          "name": "Create Department",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"OBRAS-PUB\",\n  \"name\": \"Obras Públicas\",\n  \"description\": \"Departamento encargado de la gestión de obras públicas municipales\",\n  \"level\": 2,\n  \"parentDepartment\": \"{{parent_department_id}}\",\n  \"canApproveContracts\": true,\n  \"maxApprovalAmount\": 500000,\n  \"tags\": [\"obras\", \"infraestructura\", \"construccion\"],\n  \"contact\": {\n    \"email\": \"obras@esmeraldas.gob.ec\",\n    \"phone\": \"+593-6-2722222\",\n    \"address\": \"Av. Libertad y Bolívar, Esmeraldas\"\n  },\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/departments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "departments"
+              ]
+            },
+            "description": "Crear nuevo departamento. Requiere permisos special.canManagePermissions (solo administradores)."
+          }
+        },
+        {
+          "name": "Get All Departments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/departments?page=1&limit=20&sortBy=name&sortOrder=asc&includeInactive=false&level=2&canApproveContracts=true&tags=obras,infraestructura",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "departments"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "name"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "asc"
+                },
+                {
+                  "key": "includeInactive",
+                  "value": "false"
+                },
+                {
+                  "key": "level",
+                  "value": "2"
+                },
+                {
+                  "key": "canApproveContracts",
+                  "value": "true"
+                },
+                {
+                  "key": "tags",
+                  "value": "obras,infraestructura"
+                }
+              ]
+            },
+            "description": "Obtener todos los departamentos con filtros opcionales. Acceso básico al módulo requerido."
+          }
+        },
+        {
+          "name": "Get Department By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/departments/:id?includeHierarchy=true&includeChildren=true&includeStats=false",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "departments",
+                ":id"
+              ],
+              "query": [
+                {
+                  "key": "includeHierarchy",
+                  "value": "true"
+                },
+                {
+                  "key": "includeChildren",
+                  "value": "true"
+                },
+                {
+                  "key": "includeStats",
+                  "value": "false"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{department_id}}"
+                }
+              ]
+            },
+            "description": "Obtener departamento específico por ID con opciones de inclusión."
+          }
+        },
+        {
+          "name": "Update Department",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Obras Públicas y Vialidad\",\n  \"description\": \"Departamento encargado de obras públicas y mantenimiento vial\",\n  \"maxApprovalAmount\": 750000,\n  \"tags\": [\"obras\", \"infraestructura\", \"construccion\", \"vialidad\"],\n  \"contact\": {\n    \"email\": \"obras.vialidad@esmeraldas.gob.ec\",\n    \"phone\": \"+593-6-2722223\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/departments/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "departments",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{department_id}}"
+                }
+              ]
+            },
+            "description": "Actualizar departamento existente. Requiere permisos special.canManagePermissions."
+          }
+        },
+        {
+          "name": "Delete Department",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/departments/:id?reason=Reestructuración organizacional",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "departments",
+                ":id"
+              ],
+              "query": [
+                {
+                  "key": "reason",
+                  "value": "Reestructuración organizacional"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{department_id}}"
+                }
+              ]
+            },
+            "description": "Eliminar departamento (soft delete). Requiere permisos special.canManagePermissions."
+          }
+        },
+        {
+          "name": "Get Departments for Approval Amount",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/departments/approval/:amount",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "departments",
+                "approval",
+                ":amount"
+              ],
+              "variable": [
+                {
+                  "key": "amount",
+                  "value": "250000"
+                }
+              ]
+            },
+            "description": "Obtener departamentos que pueden aprobar un monto específico de contratación."
+          }
+        },
+        {
+          "name": "Get Organizational Tree",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/departments/organizational-tree?includeInactive=false&maxDepth=5&includeStats=true",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "departments",
+                "organizational-tree"
+              ],
+              "query": [
+                {
+                  "key": "includeInactive",
+                  "value": "false"
+                },
+                {
+                  "key": "maxDepth",
+                  "value": "5"
+                },
+                {
+                  "key": "includeStats",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Obtener estructura jerárquica completa de la organización."
+          }
+        },
+        {
+          "name": "Search Departments",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"searchTerm\": \"obras\",\n  \"filters\": {\n    \"level\": [1, 2],\n    \"canApproveContracts\": true,\n    \"tags\": [\"obras\", \"infraestructura\"],\n    \"minApprovalAmount\": 100000,\n    \"maxApprovalAmount\": 1000000,\n    \"isActive\": true\n  },\n  \"sortBy\": \"maxApprovalAmount\",\n  \"sortOrder\": \"desc\",\n  \"page\": 1,\n  \"limit\": 15\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/departments/search",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "departments",
+                "search"
+              ]
+            },
+            "description": "Búsqueda avanzada de departamentos con criterios específicos."
+          }
+        },
+        {
+          "name": "Get Departments Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/departments/statistics?period=monthly&includeInactive=false&groupBy=level",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "departments",
+                "statistics"
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "monthly"
+                },
+                {
+                  "key": "includeInactive",
+                  "value": "false"
+                },
+                {
+                  "key": "groupBy",
+                  "value": "level"
+                }
+              ]
+            },
+            "description": "Obtener estadísticas generales de departamentos y su actividad."
+          }
+        },
+        {
+          "name": "Validate Department Hierarchy",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"departmentIds\": [\"{{department_id_1}}\", \"{{department_id_2}}\"],\n  \"validationType\": \"full\",\n  \"fixConflicts\": false,\n  \"checkCircularReferences\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/departments/validate-hierarchy",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "departments",
+                "validate-hierarchy"
+              ]
+            },
+            "description": "Validar integridad de la jerarquía de departamentos. Requiere permisos de administrador."
+          }
+        },
+        {
+          "name": "Get Available Tags",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/departments/available-tags?category=all&onlyActive=true",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "departments",
+                "available-tags"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "all"
+                },
+                {
+                  "key": "onlyActive",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Obtener todos los tags disponibles para categorizar departamentos."
+          }
+        },
+        {
+          "name": "Get Departments by Level",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/departments/by-level/:level?includeChildren=false&sortBy=name&sortOrder=asc",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "departments",
+                "by-level",
+                ":level"
+              ],
+              "query": [
+                {
+                  "key": "includeChildren",
+                  "value": "false"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "name"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "asc"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "level",
+                  "value": "2"
+                }
+              ]
+            },
+            "description": "Obtener departamentos de un nivel jerárquico específico."
+          }
+        },
+        {
+          "name": "Export Departments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/departments/export?format=xlsx&includeInactive=false&includeHierarchy=true&includeStats=true&fields=code,name,level,maxApprovalAmount",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "departments",
+                "export"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "xlsx"
+                },
+                {
+                  "key": "includeInactive",
+                  "value": "false"
+                },
+                {
+                  "key": "includeHierarchy",
+                  "value": "true"
+                },
+                {
+                  "key": "includeStats",
+                  "value": "true"
+                },
+                {
+                  "key": "fields",
+                  "value": "code,name,level,maxApprovalAmount"
+                }
+              ]
+            },
+            "description": "Exportar departamentos en formato Excel o CSV. Requiere permisos special.canExportData."
+          }
+        }
+      ],
+      "description": "Endpoints para gestión completa de departamentos organizacionales del GADMCE."
+    }
+  ]
+}
