@@ -6,9 +6,23 @@
 
 import { Router } from "express";
 import { ContractController } from "../controllers/contract.controller.js";
+import {
+  requireContractAccess,
+  requireFlexiblePermissions,
+  requirePermission,
+} from "#src/middlewares/permission.middleware.js";
+import { auth, verifyModuleAccess } from "#src/middlewares/auth.js";
 
 const router = Router();
 const controller = new ContractController();
+
+// =============================================================================
+// MIDDLEWARES DE AUTENTICACIÓN Y PERMISOS
+// =============================================================================
+
+// Middleware de autenticación para todas las rutas
+router.use(auth);
+router.use(verifyModuleAccess);
 
 // =============================================================================
 // OPERACIONES CRUD DE CONTRATOS
@@ -20,7 +34,16 @@ const controller = new ContractController();
  * Permisos: contracts.canCreate
  * Body: contractualObject, contractType, requestingDepartment, budget, etc.
  */
-router.post("/", controller.createContract);
+router.post(
+  "/",
+  requirePermission({
+    category: "contracts",
+    permission: "canCreate",
+    departmentParam: "requestingDepartment",
+    errorMessage: "No tiene permisos para crear contratos",
+  }),
+  controller.createContract
+);
 
 /**
  * GET /contracts
@@ -28,28 +51,63 @@ router.post("/", controller.createContract);
  * Query params: search, status, phase, department, dateFrom, dateTo, page, limit
  * Permisos: contracts.canViewOwn/canViewDepartment/canViewAll
  */
-router.get("/", controller.searchContracts);
+router.get(
+  "/",
+  requireFlexiblePermissions(
+    [
+      { category: "contracts", permission: "canViewDepartment" },
+      { category: "contracts", permission: "canViewAll" },
+    ],
+    {
+      allowGlobal: true,
+      requireDepartment: false,
+    }
+  ),
+  controller.getAllContracts
+);
 
 /**
  * GET /contracts/:contractId
  * Obtener contrato específico con detalles completos
  * Permisos: contracts.canViewOwn/canViewDepartment/canViewAll + acceso al contrato
  */
-router.get("/:contractId", controller.getContractById);
+router.get(
+  "/:contractId",
+  requireContractAccess("contractId"),
+  controller.getContractById
+);
 
 /**
  * PUT /contracts/:contractId
  * Actualizar contrato existente
  * Permisos: contracts.canEdit + acceso al contrato
  */
-router.put("/:contractId", controller.updateContract);
+router.put(
+  "/:contractId",
+  requireContractAccess("contractId"),
+  requirePermission({
+    category: "contracts",
+    permission: "canEdit",
+    errorMessage: "No tiene permisos para editar contratos",
+  }),
+  controller.updateContract
+);
 
 /**
  * DELETE /contracts/:contractId
  * Eliminar contrato (soft delete)
  * Permisos: contracts.canDelete + acceso al contrato
  */
-router.delete("/:contractId", controller.deleteContract);
+router.delete(
+  "/:contractId",
+  requireContractAccess("contractId"),
+  requirePermission({
+    category: "contracts",
+    permission: "canDelete",
+    errorMessage: "No tiene permisos para eliminar contratos",
+  }),
+  controller.deleteContract
+);
 
 // =============================================================================
 // OPERACIONES MASIVAS
@@ -228,6 +286,37 @@ router.delete(
   controller.deleteContractObservation
 );
 
+/**
+ * Avanzar a la siguiente fase del contrato
+ * POST /contracts/:contractId/advance-phase
+ * Permisos: contracts.canEdit + acceso al contrato
+ */
+router.post(
+  "/:contractId/advance-phase",
+  requireContractAccess("contractId"),
+  requirePermission({
+    category: "contracts",
+    permission: "canEdit",
+    errorMessage: "No tiene permisos para avanzar fases de contratos",
+  }),
+  controller.advanceContractPhase
+);
+
+/**
+ * Actualizar fase específica del contrato
+ * PUT /contracts/:contractId/phases/:phaseId
+ * Permisos: contracts.canEdit + validaciones de fase
+ */
+router.put(
+  "/:contractId/phases/:phaseId",
+  requireContractAccess("contractId"),
+  requirePermission({
+    category: "contracts",
+    permission: "canEdit",
+    errorMessage: "No tiene permisos para actualizar fases de contratos",
+  }),
+  controller.updateContractPhase
+);
 // =============================================================================
 // ESTADÍSTICAS Y REPORTES
 // =============================================================================
@@ -276,7 +365,15 @@ router.get("/statistics/financial", controller.getFinancialStatistics);
  * Query params: format, filters, fields
  * Permisos: special.canExportData
  */
-router.get("/reports/export", controller.exportContracts);
+router.get(
+  "/reports/export",
+  requirePermission({
+    category: "special",
+    permission: "canExportData",
+    errorMessage: "No tiene permisos para exportar datos",
+  }),
+  controller.exportContracts
+);
 
 /**
  * GET /contracts/reports/compliance
@@ -305,6 +402,13 @@ router.get("/reports/performance", controller.getPerformanceReport);
  * Permisos: Acceso básico al módulo
  */
 router.get("/configuration", controller.getContractsConfiguration);
+
+/**
+ * Obtener estadísticas de contratos
+ * GET /contracts/statistics
+ * Permisos: Acceso básico al módulo
+ */
+router.get("/statistics", controller.getContractsStatistics);
 
 /**
  * POST /contracts/configuration/initialize
