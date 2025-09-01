@@ -61,6 +61,9 @@ export class BaseRepository {
     const collectionNames = {
       User: "users",
       Role: "roles",
+      UserDepartmentAccess: "userdepartmentaccesses",
+      PermissionTemplate: "permissiontemplates",
+      PermissionHistory: "permissionhistories",
       Contract: "contracts",
       ContractHistory: "contracthistories",
       ContractType: "contracttypes",
