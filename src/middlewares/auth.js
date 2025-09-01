@@ -2,7 +2,7 @@
 import { validationResult } from "express-validator";
 import pkg from "jwt-simple";
 import moment from "moment";
-import { ModelMongoose } from "../modules/zoosanitario/models/ExportSchema.js";
+import { ModelMongoose } from "../module/core/base/models/export.schema.js";
 import * as fs from "fs";
 import path from "path";
 
