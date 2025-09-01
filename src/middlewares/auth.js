@@ -18,7 +18,7 @@ const __dirname = path.dirname(__filename);
  */
 export const verifyModuleAccess = async (req, res, next) => {
   const modulePermissionName = "ModuleExpDigital";
-  const modulePermissionMethod = "GET";
+  const modulePermissionMethod = "get";
   try {
     // Primero autenticar al usuario
     await auth(req, res, async () => {

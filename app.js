@@ -340,7 +340,6 @@ app.use((err, req, res, next) => {
 });
 
 // ===== MIDDLEWARE PARA RUTAS NO ENCONTRADAS =====
-app.use("*", smartNotFoundHandler);
 
 // Ruta de health check para monitoreo
 app.get("/health", (req, res) => {
@@ -379,7 +378,7 @@ app.get("/api/status", (req, res) => {
 
 // Aplicar rutas del módulo con prefijo
 app.use("/api/exp-digital", expDigitalRoutes);
-
+app.use("*", smartNotFoundHandler);
 // =============================================================================
 // MANEJO DE ERRORES
 // =============================================================================
