@@ -7,16 +7,16 @@
 import { ContractRepository } from "../repositories/contract.repository.js";
 import { ContractPhaseRepository } from "../repositories/contract-phase.repository.js";
 import { ContractHistoryRepository } from "../repositories/contract-history.repository.js";
+import { ContractTypeRepository } from "../repositories/contract-type.repository.js";
 import {
   createError,
   createValidationError,
   ERROR_CODES,
-} from "../../../utils/error.util.js";
+} from "../../../../utils/error.util.js";
 import {
   validateObjectId,
   validateRequiredFields,
-} from "../../../utils/validation.util.js";
-
+} from "../../../../utils/validation.util.js";
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 import { createObjectCsvWriter } from "csv-writer";
@@ -32,6 +32,7 @@ export class ContractService {
     this.contractRepository = new ContractRepository();
     this.contractPhaseRepository = new ContractPhaseRepository();
     this.contractHistoryRepository = new ContractHistoryRepository();
+    this.contractTypeRepository = new ContractTypeRepository();
   }
 
   // =============================================================================
@@ -46,7 +47,7 @@ export class ContractService {
    */
   async createContract(contractData, options = {}) {
     try {
-      console.log("📝 Iniciando creación de contrato");
+      console.log("📝 Service: Iniciando creación de contrato");
 
       // Validar datos básicos
       await this._validateContractData(contractData);
@@ -77,56 +78,61 @@ export class ContractService {
                 assignedTo: contractData.createdBy,
                 documents: [],
                 observations: [],
+                completedAt: null,
+                duration: null,
               },
             ]
           : [],
         timeline: {
-          ...contractData.timeline,
           creationDate: new Date(),
           lastStatusChange: new Date(),
+          expectedCompletion: this._calculateExpectedCompletion(initialPhase),
         },
         audit: {
-          ...contractData.audit,
+          createdBy: contractData.createdBy,
           createdAt: new Date(),
           updatedAt: new Date(),
+          version: 1,
         },
       };
 
-      // Crear contrato usando el repositorio base
-      const newContract = await this.contractRepository.create(
-        contractToCreate,
-        { userId: contractData.createdBy }
+      // Crear contrato usando el repositorio
+      const newContract =
+        await this.contractRepository.create(contractToCreate);
+
+      // Crear entrada en el historial si está habilitado
+      if (options.createHistory) {
+        await this._createHistoryEntry(newContract._id, {
+          eventType: "CREATION",
+          description: "Contrato creado en estado BORRADOR",
+          user: {
+            userId: contractData.createdBy,
+            name: contractData.createdByName || "Usuario",
+            email: contractData.createdByEmail || "",
+          },
+          changeDetails: {
+            newStatus: "DRAFT",
+            phase: initialPhase
+              ? {
+                  phaseId: initialPhase._id,
+                  phaseName: initialPhase.name,
+                }
+              : null,
+          },
+        });
+      }
+
+      console.log(
+        `✅ Service: Contrato creado exitosamente: ${contractNumber}`
       );
-
-      // Crear entrada en el historial
-      await this._createHistoryEntry(newContract._id, {
-        eventType: "CREATION",
-        description: "Contrato creado en estado BORRADOR",
-        user: {
-          userId: contractData.createdBy,
-          name: contractData.createdByName || "Usuario",
-          email: contractData.createdByEmail || "",
-        },
-        changeDetails: {
-          newStatus: "DRAFT",
-          phase: initialPhase
-            ? {
-                phaseId: initialPhase._id,
-                phaseName: initialPhase.name,
-              }
-            : null,
-        },
-      });
-
-      console.log(`✅ Contrato creado exitosamente: ${contractNumber}`);
 
       return await this._populateContractData(newContract);
     } catch (error) {
-      console.error(`❌ Error creando contrato: ${error.message}`);
+      console.error(`❌ Service: Error creando contrato: ${error.message}`);
       throw createError(
-        ERROR_CODES.CREATE_ERROR,
+        ERROR_CODES.CREATION_ERROR,
         `Error al crear contrato: ${error.message}`,
-        500
+        400
       );
     }
   }
@@ -138,122 +144,90 @@ export class ContractService {
    */
   async getAllContracts(filters = {}) {
     try {
-      console.log("📋 Servicio obteniendo contratos con filtros:", filters);
+      console.log("📋 Service: Obteniendo contratos con filtros:", filters);
 
       const {
         page = 1,
         limit = 20,
         status,
         contractType,
+        requestingDepartment,
         dateFrom,
         dateTo,
         search,
         sortBy = "createdAt",
         sortOrder = "desc",
         includeInactive = false,
+        includeDeleted = false,
         populate = [],
-        departmentAccess, // ⭐ Información de acceso procesada por el controlador
+        departmentAccess,
       } = filters;
 
-      // ===== CONSTRUIR QUERY MONGODB =====
-      const mongoQuery = {};
+      // Construir query de MongoDB basado en los filtros
+      let mongoQuery = {};
 
-      // --- Filtros básicos ---
-      if (status) {
-        mongoQuery.generalStatus = status.toUpperCase();
-      }
-
-      if (contractType) {
-        mongoQuery.contractType = contractType;
-      }
-
-      if (!includeInactive) {
+      // Filtro de eliminados
+      if (!includeDeleted) {
         mongoQuery.isActive = true;
       }
 
-      // --- ⭐ APLICAR FILTROS DE ACCESO DEPARTAMENTAL ---
-      if (departmentAccess) {
-        switch (departmentAccess.type) {
-          case "all":
-            // Usuario con canViewAll - sin filtros departamentales
-            console.log("🌍 Acceso global - sin restricciones departamentales");
-            break;
-
-          case "specific":
-            // Usuario accediendo a un departamento específico
-            mongoQuery.requestingDepartment = departmentAccess.departmentId;
-            console.log(
-              `🎯 Filtrando por departamento específico: ${departmentAccess.departmentId}`
-            );
-            break;
-
-          case "multiple":
-            // Usuario con acceso a múltiples departamentos
-            mongoQuery.requestingDepartment = {
-              $in: departmentAccess.departmentIds,
-            };
-            console.log(
-              `🏢 Filtrando por ${departmentAccess.departmentIds.length} departamentos accesibles`
-            );
-            break;
-
-          default:
-            console.warn(
-              "⚠️ Tipo de acceso departamental desconocido:",
-              departmentAccess.type
-            );
-        }
+      // Filtros de estado
+      if (status) {
+        mongoQuery.generalStatus = status;
       }
 
-      // --- Filtros de fecha ---
+      // Filtros de tipo de contrato
+      if (contractType) {
+        validateObjectId(contractType, "ID del tipo de contrato");
+        mongoQuery.contractType = contractType;
+      }
+
+      // Filtros de departamento según acceso
+      if (departmentAccess && departmentAccess.type === "specific") {
+        mongoQuery.requestingDepartment = {
+          $in: departmentAccess.departmentIds,
+        };
+      } else if (requestingDepartment) {
+        validateObjectId(requestingDepartment, "ID del departamento");
+        mongoQuery.requestingDepartment = requestingDepartment;
+      }
+
+      // Filtros de fecha
       if (dateFrom || dateTo) {
         mongoQuery.createdAt = {};
-        if (dateFrom) {
-          mongoQuery.createdAt.$gte = new Date(dateFrom);
-        }
-        if (dateTo) {
-          mongoQuery.createdAt.$lte = new Date(dateTo);
-        }
+        if (dateFrom) mongoQuery.createdAt.$gte = dateFrom;
+        if (dateTo) mongoQuery.createdAt.$lte = dateTo;
       }
 
-      // --- Búsqueda de texto ---
+      // Filtro de búsqueda textual
       if (search) {
-        const searchRegex = { $regex: search.trim(), $options: "i" };
         mongoQuery.$or = [
-          { contractNumber: searchRegex },
-          { contractualObject: searchRegex },
-          { "contractor.name": searchRegex },
-          { "contractor.ruc": searchRegex },
-          { "budget.description": searchRegex },
+          { contractNumber: { $regex: search, $options: "i" } },
+          { contractualObject: { $regex: search, $options: "i" } },
+          { "supplier.name": { $regex: search, $options: "i" } },
         ];
       }
 
-      // ===== CONFIGURAR OPCIONES DE CONSULTA =====
+      // Configurar opciones de consulta
       const queryOptions = {
-        page: parseInt(page),
-        limit: Math.min(parseInt(limit), 100), // Máximo 100
-        sort: { [sortBy]: sortOrder === "asc" ? 1 : -1 },
+        page,
+        limit,
+        sort: { [sortBy]: sortOrder === "desc" ? -1 : 1 },
         populate: this._buildPopulateArray(populate),
-        lean: false, // Mantener como documentos Mongoose para métodos virtuales
       };
 
-      console.log("🔍 Query MongoDB:", JSON.stringify(mongoQuery, null, 2));
-      console.log("⚙️ Opciones consulta:", queryOptions);
-
-      // ===== EJECUTAR CONSULTA =====
-      const result = await this.contractRepository.findAll(
+      // Ejecutar consulta usando el repositorio
+      const result = await this.contractRepository.findWithPagination(
         mongoQuery,
         queryOptions
       );
 
-      // ===== ENRIQUECER DATOS =====
+      // Enriquecer contratos con información adicional
       const enrichedContracts = await Promise.all(
-        result.docs.map(async (contract) => {
-          return await this._enrichContractSummary(contract);
-        })
+        result.docs.map((contract) => this._enrichContractSummary(contract))
       );
 
-      // ===== CONSTRUIR RESPUESTA =====
+      // Preparar respuesta
       const response = {
         contracts: enrichedContracts,
         pagination: {
@@ -261,14 +235,16 @@ export class ContractService {
           totalPages: result.totalPages,
           totalContracts: result.totalDocs,
           limit: result.limit,
-          hasNext: result.hasNextPage,
-          hasPrev: result.hasPrevPage,
-          startIndex: (result.page - 1) * result.limit + 1,
-          endIndex: Math.min(result.page * result.limit, result.totalDocs),
+          hasNextPage: result.hasNextPage,
+          hasPrevPage: result.hasPrevPage,
         },
         appliedFilters: {
-          ...filters,
-          // No incluir información sensible de acceso en la respuesta
+          status,
+          contractType,
+          requestingDepartment,
+          dateRange: dateFrom || dateTo ? { from: dateFrom, to: dateTo } : null,
+          search,
+          sorting: { field: sortBy, order: sortOrder },
           departmentAccess: departmentAccess
             ? {
                 type: departmentAccess.type,
@@ -279,29 +255,897 @@ export class ContractService {
       };
 
       console.log(
-        `✅ Servicio completado: ${enrichedContracts.length}/${result.totalDocs} contratos`
+        `✅ Service: Contratos obtenidos: ${enrichedContracts.length}/${result.totalDocs}`
       );
 
       return response;
     } catch (error) {
-      console.error(`❌ Error en servicio getAllContracts:`, error);
-
-      // Re-lanzar con información adicional para el controlador
+      console.error(`❌ Service: Error obteniendo contratos: ${error.message}`);
       throw createError(
-        ERROR_CODES.FETCH_ERROR,
+        ERROR_CODES.QUERY_ERROR,
         `Error al obtener contratos: ${error.message}`,
-        500,
-        {
-          service: "ContractService.getAllContracts",
-          filters: filters,
-          originalError: error.name,
-        }
+        500
       );
     }
   }
 
   /**
+   * Obtener contrato por ID con información completa
+   * @param {String} contractId - ID del contrato
+   * @param {Object} options - Opciones de consulta
+   * @returns {Promise<Object>} Contrato con información detallada
+   */
+  async getContractById(contractId, options = {}) {
+    try {
+      validateObjectId(contractId, "ID del contrato");
+
+      console.log(`🔍 Service: Obteniendo contrato por ID: ${contractId}`);
+
+      const {
+        includeHistory = false,
+        includeDocuments = false,
+        includePhases = false,
+      } = options;
+
+      // Obtener contrato base con populate
+      const contract = await this.contractRepository.findById(contractId, {
+        populate: [
+          { path: "contractType", select: "code name category" },
+          { path: "requestingDepartment", select: "code name shortName" },
+          {
+            path: "currentPhase",
+            select: "code name shortName order category",
+          },
+          { path: "createdBy", select: "firstName lastName email" },
+        ],
+      });
+
+      if (!contract) {
+        return null;
+      }
+
+      const result = {
+        contract: await this._enrichContractSummary(contract),
+      };
+
+      // Incluir historial si se solicita
+      if (includeHistory) {
+        result.history = await this.contractHistoryRepository.findByContractId(
+          contractId,
+          { limit: 50, sort: { createdAt: -1 } }
+        );
+      }
+
+      // Incluir documentos si se solicita
+      if (includeDocuments) {
+        result.documents = contract.documents || [];
+      }
+
+      // Incluir información de fases si se solicita
+      if (includePhases) {
+        result.phases = await this._getContractPhases(contract);
+      }
+
+      // Calcular estadísticas
+      result.statistics = await this._calculateContractStatistics(contract);
+
+      console.log(
+        `✅ Service: Contrato detallado obtenido: ${contract.contractNumber}`
+      );
+
+      return result;
+    } catch (error) {
+      console.error(`❌ Service: Error obteniendo contrato: ${error.message}`);
+      throw createError(
+        ERROR_CODES.QUERY_ERROR,
+        `Error al obtener contrato: ${error.message}`,
+        500
+      );
+    }
+  }
+
+  /**
+   * Actualizar contrato
+   * @param {String} contractId - ID del contrato
+   * @param {Object} updateData - Datos a actualizar
+   * @param {Object} options - Opciones de actualización
+   * @returns {Promise<Object>} Contrato actualizado
+   */
+  async updateContract(contractId, updateData, options = {}) {
+    try {
+      validateObjectId(contractId, "ID del contrato");
+
+      console.log(`✏️ Service: Actualizando contrato: ${contractId}`);
+
+      const {
+        userData,
+        createHistory = true,
+        validateTransitions = true,
+      } = options;
+
+      // Obtener contrato actual
+      const currentContract =
+        await this.contractRepository.findById(contractId);
+      if (!currentContract) {
+        throw createError(ERROR_CODES.NOT_FOUND, "Contrato no encontrado", 404);
+      }
+
+      // Validar transiciones de estado si está habilitado
+      if (validateTransitions && updateData.generalStatus) {
+        await this._validateStatusTransition(
+          currentContract.generalStatus,
+          updateData.generalStatus
+        );
+      }
+
+      // Preparar datos de actualización
+      const dataToUpdate = {
+        ...updateData,
+        "timeline.lastStatusChange": updateData.generalStatus
+          ? new Date()
+          : currentContract.timeline?.lastStatusChange,
+        "audit.lastModifiedAt": new Date(),
+        "audit.lastModifiedBy": userData?.userId,
+        "audit.version": (currentContract.audit?.version || 1) + 1,
+      };
+
+      // Remover campos protegidos
+      const protectedFields = [
+        "_id",
+        "contractNumber",
+        "createdAt",
+        "createdBy",
+      ];
+      protectedFields.forEach((field) => delete dataToUpdate[field]);
+
+      // Actualizar usando el repositorio
+      const updatedContract = await this.contractRepository.updateById(
+        contractId,
+        dataToUpdate
+      );
+
+      // Crear entrada en historial si está habilitado
+      if (createHistory) {
+        await this._createUpdateHistoryEntry(
+          contractId,
+          currentContract,
+          updatedContract,
+          userData?.userId
+        );
+      }
+
+      console.log(
+        `✅ Service: Contrato actualizado: ${updatedContract.contractNumber}`
+      );
+
+      return await this._populateContractData(updatedContract);
+    } catch (error) {
+      console.error(
+        `❌ Service: Error actualizando contrato: ${error.message}`
+      );
+      throw createError(
+        ERROR_CODES.UPDATE_ERROR,
+        `Error al actualizar contrato: ${error.message}`,
+        400
+      );
+    }
+  }
+
+  /**
+   * Eliminar contrato (soft delete)
+   * @param {String} contractId - ID del contrato
+   * @param {Object} options - Opciones de eliminación
+   * @returns {Promise<Object>} Resultado de la eliminación
+   */
+  async deleteContract(contractId, options = {}) {
+    try {
+      validateObjectId(contractId, "ID del contrato");
+
+      console.log(`🗑️ Service: Eliminando contrato: ${contractId}`);
+
+      const {
+        reason,
+        deletedBy,
+        createHistory = true,
+        softDelete = true,
+      } = options;
+
+      // Obtener contrato antes de eliminar
+      const contract = await this.contractRepository.findById(contractId);
+      if (!contract) {
+        throw createError(ERROR_CODES.NOT_FOUND, "Contrato no encontrado", 404);
+      }
+
+      // Validar que se puede eliminar
+      if (
+        contract.generalStatus === "EXECUTION" ||
+        contract.generalStatus === "FINISHED"
+      ) {
+        throw createValidationError(
+          "No se puede eliminar un contrato en ejecución o finalizado"
+        );
+      }
+
+      let result;
+
+      if (softDelete) {
+        // Soft delete - marcar como eliminado
+        result = await this.contractRepository.updateById(contractId, {
+          isActive: false,
+          deletedAt: new Date(),
+          deletionReason: reason,
+          generalStatus: "CANCELLED",
+          "audit.deletedBy": deletedBy,
+          "audit.deletedAt": new Date(),
+        });
+      } else {
+        // Hard delete (solo para casos excepcionales)
+        result = await this.contractRepository.deleteById(contractId);
+      }
+
+      // Crear entrada en historial
+      if (createHistory && softDelete) {
+        await this._createHistoryEntry(contractId, {
+          eventType: "DELETION",
+          description: `Contrato eliminado. Razón: ${reason}`,
+          user: {
+            userId: deletedBy,
+          },
+          changeDetails: {
+            previousStatus: contract.generalStatus,
+            newStatus: "CANCELLED",
+            reason,
+          },
+        });
+      }
+
+      console.log(`✅ Service: Contrato eliminado: ${contract.contractNumber}`);
+
+      return {
+        contractNumber: contract.contractNumber,
+        deletedAt: new Date(),
+        deletionReason: reason,
+        type: softDelete ? "soft_delete" : "hard_delete",
+      };
+    } catch (error) {
+      console.error(`❌ Service: Error eliminando contrato: ${error.message}`);
+      throw createError(
+        ERROR_CODES.DELETE_ERROR,
+        `Error al eliminar contrato: ${error.message}`,
+        400
+      );
+    }
+  }
+
+  // =============================================================================
+  // OPERACIONES DE GESTIÓN DE FASES
+  // =============================================================================
+
+  /**
+   * Avanzar a la siguiente fase del contrato
+   * @param {String} contractId - ID del contrato
+   * @param {Object} options - Opciones para el avance
+   * @returns {Promise<Object>} Resultado del avance de fase
+   */
+  async advanceContractPhase(contractId, options = {}) {
+    try {
+      validateObjectId(contractId, "ID del contrato");
+
+      console.log(`➡️ Service: Avanzando fase del contrato: ${contractId}`);
+
+      const {
+        userId,
+        observations,
+        skipValidations = false,
+        createHistory = true,
+      } = options;
+
+      // Obtener contrato actual
+      const contract = await this.contractRepository.findById(contractId, {
+        populate: [
+          { path: "currentPhase", select: "code name order category" },
+          { path: "phases.phase", select: "code name order category" },
+        ],
+      });
+
+      if (!contract) {
+        throw createError(ERROR_CODES.NOT_FOUND, "Contrato no encontrado", 404);
+      }
+
+      // Obtener la siguiente fase
+      const nextPhase = await this._getNextPhase(
+        contract.currentPhase,
+        contract.contractType
+      );
+
+      if (!nextPhase) {
+        throw createValidationError(
+          "No hay siguiente fase disponible para este contrato"
+        );
+      }
+
+      // Validar que se puede avanzar (si no se saltan las validaciones)
+      if (!skipValidations) {
+        await this._validatePhaseAdvancement(contract, nextPhase);
+      }
+
+      // Completar la fase actual
+      const updatedPhases = contract.phases.map((phaseEntry) => {
+        if (phaseEntry.phase.toString() === contract.currentPhase.toString()) {
+          return {
+            ...phaseEntry,
+            status: "COMPLETED",
+            completedAt: new Date(),
+            observations: [
+              ...(phaseEntry.observations || []),
+              ...(observations ? [observations] : []),
+            ],
+            duration: Math.floor(
+              (new Date() - phaseEntry.startDate) / (1000 * 60 * 60 * 24)
+            ), // días
+          };
+        }
+        return phaseEntry;
+      });
+
+      // Agregar nueva fase
+      updatedPhases.push({
+        phase: nextPhase._id,
+        status: "IN_PROGRESS",
+        startDate: new Date(),
+        assignedTo: userId,
+        documents: [],
+        observations: observations ? [observations] : [],
+        completedAt: null,
+        duration: null,
+      });
+
+      // Actualizar contrato
+      const updatedContract = await this.contractRepository.updateById(
+        contractId,
+        {
+          currentPhase: nextPhase._id,
+          phases: updatedPhases,
+          "timeline.lastStatusChange": new Date(),
+          "audit.lastModifiedAt": new Date(),
+          "audit.lastModifiedBy": userId,
+        }
+      );
+
+      // Crear entrada en historial
+      if (createHistory) {
+        await this._createHistoryEntry(contractId, {
+          eventType: "PHASE_ADVANCEMENT",
+          description: `Contrato avanzado de ${contract.currentPhase.name} a ${nextPhase.name}`,
+          user: { userId },
+          changeDetails: {
+            previousPhase: {
+              id: contract.currentPhase._id,
+              name: contract.currentPhase.name,
+            },
+            newPhase: {
+              id: nextPhase._id,
+              name: nextPhase.name,
+            },
+            observations,
+          },
+        });
+      }
+
+      console.log(
+        `✅ Service: Fase avanzada: ${contract.currentPhase.name} → ${nextPhase.name}`
+      );
+
+      return {
+        contract: await this._populateContractData(updatedContract),
+        previousPhase: contract.currentPhase,
+        currentPhase: nextPhase,
+        message: `Contrato avanzado a fase: ${nextPhase.name}`,
+      };
+    } catch (error) {
+      console.error(`❌ Service: Error avanzando fase: ${error.message}`);
+      throw createError(
+        ERROR_CODES.PHASE_ERROR,
+        `Error al avanzar fase del contrato: ${error.message}`,
+        400
+      );
+    }
+  }
+
+  /**
+   * Actualizar fase específica del contrato
+   * @param {String} contractId - ID del contrato
+   * @param {String} phaseId - ID de la fase
+   * @param {Object} updateData - Datos a actualizar
+   * @param {Object} options - Opciones adicionales
+   * @returns {Promise<Object>} Fase actualizada
+   */
+  async updateContractPhase(contractId, phaseId, updateData, options = {}) {
+    try {
+      validateObjectId(contractId, "ID del contrato");
+      validateObjectId(phaseId, "ID de la fase");
+
+      console.log(
+        `📝 Service: Actualizando fase ${phaseId} del contrato: ${contractId}`
+      );
+
+      const { userId, createHistory = true } = options;
+
+      // Obtener contrato
+      const contract = await this.contractRepository.findById(contractId);
+      if (!contract) {
+        throw createError(ERROR_CODES.NOT_FOUND, "Contrato no encontrado", 404);
+      }
+
+      // Encontrar y actualizar la fase específica
+      const updatedPhases = contract.phases.map((phaseEntry) => {
+        if (phaseEntry.phase.toString() === phaseId) {
+          return {
+            ...phaseEntry,
+            ...updateData,
+            lastUpdated: new Date(),
+            lastUpdatedBy: userId,
+          };
+        }
+        return phaseEntry;
+      });
+
+      // Actualizar contrato
+      await this.contractRepository.updateById(contractId, {
+        phases: updatedPhases,
+        "audit.lastModifiedAt": new Date(),
+        "audit.lastModifiedBy": userId,
+      });
+
+      // Encontrar la fase actualizada
+      const updatedPhase = updatedPhases.find(
+        (phase) => phase.phase.toString() === phaseId
+      );
+
+      // Crear entrada en historial
+      if (createHistory) {
+        await this._createHistoryEntry(contractId, {
+          eventType: "PHASE_UPDATE",
+          description: `Fase actualizada`,
+          user: { userId },
+          changeDetails: {
+            phaseId,
+            updates: updateData,
+          },
+        });
+      }
+
+      console.log(`✅ Service: Fase actualizada exitosamente`);
+
+      return updatedPhase;
+    } catch (error) {
+      console.error(`❌ Service: Error actualizando fase: ${error.message}`);
+      throw createError(
+        ERROR_CODES.UPDATE_ERROR,
+        `Error al actualizar fase del contrato: ${error.message}`,
+        400
+      );
+    }
+  }
+
+  // =============================================================================
+  // OPERACIONES DE ESTADÍSTICAS Y REPORTES
+  // =============================================================================
+
+  /**
+   * Obtener estadísticas de contratos
+   * @param {Object} options - Opciones para las estadísticas
+   * @returns {Promise<Object>} Estadísticas de contratos
+   */
+  async getContractsStatistics(options = {}) {
+    try {
+      console.log("📊 Service: Generando estadísticas de contratos");
+
+      const { period = "month", departmentId = null } = options;
+
+      // Construir filtros base
+      let matchStage = { isActive: true };
+
+      if (departmentId) {
+        validateObjectId(departmentId, "ID del departamento");
+        matchStage.requestingDepartment = departmentId;
+      }
+
+      // Definir rango de fechas según el período
+      const now = new Date();
+      let startDate;
+
+      switch (period) {
+        case "week":
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case "month":
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          break;
+        case "quarter":
+          const quarter = Math.floor(now.getMonth() / 3);
+          startDate = new Date(now.getFullYear(), quarter * 3, 1);
+          break;
+        case "year":
+          startDate = new Date(now.getFullYear(), 0, 1);
+          break;
+        default:
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      }
+
+      matchStage.createdAt = { $gte: startDate };
+
+      // Pipeline de agregación
+      const pipeline = [
+        { $match: matchStage },
+        {
+          $lookup: {
+            from: "contracttypes",
+            localField: "contractType",
+            foreignField: "_id",
+            as: "contractTypeInfo",
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalContracts: { $sum: 1 },
+            totalValue: { $sum: "$budget.totalAmount" },
+            avgValue: { $avg: "$budget.totalAmount" },
+            byStatus: {
+              $push: {
+                status: "$generalStatus",
+                value: "$budget.totalAmount",
+              },
+            },
+            byType: {
+              $push: {
+                type: { $arrayElemAt: ["$contractTypeInfo.name", 0] },
+                value: "$budget.totalAmount",
+              },
+            },
+          },
+        },
+      ];
+
+      const [stats] = await this.contractRepository.aggregate(pipeline);
+
+      if (!stats) {
+        return {
+          period,
+          departmentId,
+          totalContracts: 0,
+          totalValue: 0,
+          avgValue: 0,
+          byStatus: {},
+          byType: {},
+          trends: [],
+        };
+      }
+
+      // Procesar estadísticas por estado
+      const statusStats = {};
+      stats.byStatus.forEach((item) => {
+        if (!statusStats[item.status]) {
+          statusStats[item.status] = { count: 0, value: 0 };
+        }
+        statusStats[item.status].count += 1;
+        statusStats[item.status].value += item.value || 0;
+      });
+
+      // Procesar estadísticas por tipo
+      const typeStats = {};
+      stats.byType.forEach((item) => {
+        if (!typeStats[item.type]) {
+          typeStats[item.type] = { count: 0, value: 0 };
+        }
+        typeStats[item.type].count += 1;
+        typeStats[item.type].value += item.value || 0;
+      });
+
+      console.log("✅ Service: Estadísticas generadas exitosamente");
+
+      return {
+        period,
+        departmentId,
+        dateRange: {
+          from: startDate,
+          to: now,
+        },
+        totalContracts: stats.totalContracts,
+        totalValue: stats.totalValue,
+        avgValue: stats.avgValue,
+        byStatus: statusStats,
+        byType: typeStats,
+        generatedAt: new Date(),
+      };
+    } catch (error) {
+      console.error(
+        `❌ Service: Error generando estadísticas: ${error.message}`
+      );
+      throw createError(
+        ERROR_CODES.STATISTICS_ERROR,
+        `Error al generar estadísticas: ${error.message}`,
+        500
+      );
+    }
+  }
+
+  /**
+   * Exportar contratos en diferentes formatos
+   * @param {String} format - Formato de exportación (xlsx, csv, pdf)
+   * @param {Object} options - Opciones de exportación
+   * @returns {Promise<Object>} Archivo exportado
+   */
+  async exportContracts(format, options = {}) {
+    try {
+      console.log(`📤 Service: Exportando contratos en formato: ${format}`);
+
+      const { filters = {}, includeDeleted = false } = options;
+
+      // Obtener contratos para exportar
+      const contracts = await this.getAllContracts({
+        ...filters,
+        includeDeleted,
+        limit: 10000, // Límite alto para exportación
+        populate: ["contractType", "requestingDepartment", "currentPhase"],
+      });
+
+      let result;
+
+      switch (format.toLowerCase()) {
+        case "xlsx":
+          result = await this._exportToExcel(contracts.contracts);
+          break;
+        case "csv":
+          result = await this._exportToCSV(contracts.contracts);
+          break;
+        case "pdf":
+          result = await this._exportToPDF(contracts.contracts);
+          break;
+        default:
+          throw createValidationError(
+            `Formato de exportación no soportado: ${format}`
+          );
+      }
+
+      console.log(`✅ Service: Exportación completada: ${result.filename}`);
+
+      return result;
+    } catch (error) {
+      console.error(`❌ Service: Error exportando contratos: ${error.message}`);
+      throw createError(
+        ERROR_CODES.EXPORT_ERROR,
+        `Error al exportar contratos: ${error.message}`,
+        500
+      );
+    }
+  }
+
+  // =============================================================================
+  // MÉTODOS PRIVADOS Y UTILIDADES
+  // =============================================================================
+
+  /**
+   * Validar datos del contrato antes de crear/actualizar
+   * @param {Object} contractData - Datos del contrato
+   * @private
+   */
+  async _validateContractData(contractData) {
+    // Validar campos requeridos
+    const requiredFields = [
+      "contractualObject",
+      "contractType",
+      "requestingDepartment",
+      "budget",
+    ];
+    const missingFields = requiredFields.filter(
+      (field) => !contractData[field]
+    );
+
+    if (missingFields.length > 0) {
+      throw createValidationError(
+        `Campos requeridos faltantes: ${missingFields.join(", ")}`
+      );
+    }
+
+    // Validar ObjectIds
+    validateObjectId(contractData.contractType, "Tipo de contrato");
+    validateObjectId(
+      contractData.requestingDepartment,
+      "Departamento solicitante"
+    );
+
+    // Validar que el tipo de contrato exista y esté activo
+    const contractType = await this.contractTypeRepository.findById(
+      contractData.contractType
+    );
+    if (!contractType || !contractType.isActive) {
+      throw createValidationError("Tipo de contrato no encontrado o inactivo");
+    }
+
+    // Validar presupuesto
+    if (
+      !contractData.budget.totalAmount ||
+      contractData.budget.totalAmount <= 0
+    ) {
+      throw createValidationError(
+        "El monto total del presupuesto debe ser mayor a 0"
+      );
+    }
+  }
+
+  /**
+   * Generar número único de contrato
+   * @param {String} departmentId - ID del departamento
+   * @param {String} contractTypeId - ID del tipo de contrato
+   * @returns {Promise<String>} Número de contrato único
+   * @private
+   */
+  async _generateContractNumber(departmentId, contractTypeId) {
+    const year = new Date().getFullYear();
+
+    // Obtener información del departamento y tipo de contrato
+    const [department, contractType] = await Promise.all([
+      this.contractRepository.findById(departmentId), // Asumiendo que hay un departmentRepository
+      this.contractTypeRepository.findById(contractTypeId),
+    ]);
+
+    // Generar secuencial
+    const count = await this.contractRepository.countDocuments({
+      requestingDepartment: departmentId,
+      createdAt: {
+        $gte: new Date(year, 0, 1),
+        $lte: new Date(year, 11, 31),
+      },
+    });
+
+    const sequential = String(count + 1).padStart(4, "0");
+
+    return `${contractType?.code || "CON"}-${year}-${sequential}`;
+  }
+
+  /**
+   * Obtener fase inicial según el tipo de contrato
+   * @param {String} contractTypeId - ID del tipo de contrato
+   * @returns {Promise<Object>} Fase inicial
+   * @private
+   */
+  async _getInitialPhase(contractTypeId) {
+    // Obtener todas las fases aplicables al tipo de contrato, ordenadas por order
+    const phases = await this.contractPhaseRepository.find(
+      {
+        isActive: true,
+        $or: [
+          { applicableContractTypes: { $size: 0 } }, // Aplicable a todos
+          { "applicableContractTypes.contractType": contractTypeId },
+        ],
+      },
+      {
+        sort: { order: 1 },
+        limit: 1,
+      }
+    );
+
+    return phases.length > 0 ? phases[0] : null;
+  }
+
+  /**
+   * Obtener siguiente fase del contrato
+   * @param {String} currentPhaseId - ID de la fase actual
+   * @param {String} contractTypeId - ID del tipo de contrato
+   * @returns {Promise<Object>} Siguiente fase
+   * @private
+   */
+  async _getNextPhase(currentPhaseId, contractTypeId) {
+    const currentPhase =
+      await this.contractPhaseRepository.findById(currentPhaseId);
+    if (!currentPhase) return null;
+
+    // Buscar la siguiente fase por orden
+    const nextPhases = await this.contractPhaseRepository.find(
+      {
+        isActive: true,
+        order: { $gt: currentPhase.order },
+        $or: [
+          { applicableContractTypes: { $size: 0 } },
+          { "applicableContractTypes.contractType": contractTypeId },
+        ],
+      },
+      {
+        sort: { order: 1 },
+        limit: 1,
+      }
+    );
+
+    return nextPhases.length > 0 ? nextPhases[0] : null;
+  }
+
+  /**
+   * Calcular fecha esperada de finalización
+   * @param {Object} initialPhase - Fase inicial
+   * @returns {Date} Fecha esperada de finalización
+   * @private
+   */
+  _calculateExpectedCompletion(initialPhase) {
+    if (!initialPhase) return null;
+
+    const now = new Date();
+    const estimatedDays = initialPhase.estimatedDuration || 30;
+
+    return new Date(now.getTime() + estimatedDays * 24 * 60 * 60 * 1000);
+  }
+
+  /**
+   * Validar transición de estado
+   * @param {String} currentStatus - Estado actual
+   * @param {String} newStatus - Nuevo estado
+   * @private
+   */
+  async _validateStatusTransition(currentStatus, newStatus) {
+    const validTransitions = {
+      DRAFT: ["IN_PROCESS", "CANCELLED"],
+      IN_PROCESS: ["EXECUTION", "CANCELLED"],
+      EXECUTION: ["FINISHED", "CANCELLED"],
+      FINISHED: [], // No se puede cambiar desde finalizado
+      CANCELLED: [], // No se puede cambiar desde cancelado
+    };
+
+    if (!validTransitions[currentStatus]?.includes(newStatus)) {
+      throw createValidationError(
+        `Transición de estado no válida: ${currentStatus} → ${newStatus}`
+      );
+    }
+  }
+
+  /**
+   * Validar que se puede avanzar de fase
+   * @param {Object} contract - Contrato actual
+   * @param {Object} nextPhase - Siguiente fase
+   * @private
+   */
+  async _validatePhaseAdvancement(contract, nextPhase) {
+    // Validar que la fase actual esté completa (esto depende de la lógica de negocio)
+    const currentPhaseEntry = contract.phases.find(
+      (p) => p.phase.toString() === contract.currentPhase.toString()
+    );
+
+    if (
+      currentPhaseEntry?.status !== "COMPLETED" &&
+      currentPhaseEntry?.status !== "IN_PROGRESS"
+    ) {
+      throw createValidationError(
+        "La fase actual debe estar completada para poder avanzar"
+      );
+    }
+
+    // Validar dependencias de la siguiente fase
+    if (nextPhase.dependencies?.requiredPhases?.length > 0) {
+      // Implementar validación de dependencias según la lógica de negocio
+    }
+  }
+
+  /**
+   * Poblar datos del contrato con información relacionada
+   * @param {Object} contract - Contrato base
+   * @returns {Promise<Object>} Contrato poblado
+   * @private
+   */
+  async _populateContractData(contract) {
+    return await this.contractRepository.findById(contract._id, {
+      populate: [
+        { path: "contractType", select: "code name category" },
+        { path: "requestingDepartment", select: "code name shortName" },
+        { path: "currentPhase", select: "code name shortName order category" },
+        { path: "createdBy", select: "firstName lastName email" },
+      ],
+    });
+  }
+
+  /**
    * Construir array de populate según los campos solicitados
+   * @param {Array} populateFields - Campos a poblar
+   * @returns {Array} Array de populate
    * @private
    */
   _buildPopulateArray(populateFields = []) {
@@ -314,17 +1158,9 @@ export class ContractService {
         path: "createdBy",
         select: "firstName lastName email",
       },
-      responsibleUser: {
-        path: "responsibleUser",
-        select: "firstName lastName email department",
-      },
-      currentResponsible: {
-        path: "currentResponsible",
-        select: "firstName lastName email",
-      },
       contractType: {
         path: "contractType",
-        select: "code name category thresholds",
+        select: "code name category",
       },
       currentPhase: {
         path: "currentPhase",
@@ -351,2246 +1187,309 @@ export class ContractService {
 
   /**
    * Enriquecer contrato con información adicional calculada
+   * @param {Object} contract - Contrato base
+   * @returns {Object} Contrato enriquecido
    * @private
    */
   async _enrichContractSummary(contract) {
-    try {
-      const enriched = contract.toObject();
+    const enriched = contract.toObject ? contract.toObject() : contract;
 
-      // Calcular estadísticas básicas
-      enriched.stats = {
-        daysActive: contract.createdAt
-          ? Math.floor(
-              (new Date() - contract.createdAt) / (1000 * 60 * 60 * 24)
-            )
-          : 0,
+    // Calcular estadísticas básicas
+    enriched.stats = {
+      daysActive: contract.createdAt
+        ? Math.floor((new Date() - contract.createdAt) / (1000 * 60 * 60 * 24))
+        : 0,
+      documentsCount: contract.documents ? contract.documents.length : 0,
+      phasesCount: contract.phases ? contract.phases.length : 0,
+      budgetFormatted: contract.budget?.totalAmount
+        ? new Intl.NumberFormat("es-EC", {
+            style: "currency",
+            currency: "USD",
+          }).format(contract.budget.totalAmount)
+        : "$0.00",
+    };
 
-        documentsCount: contract.documents ? contract.documents.length : 0,
-
-        interactionsCount: contract.interactions
-          ? contract.interactions.length
-          : 0,
-
-        budgetFormatted: contract.budget?.totalAmount
-          ? `$${contract.budget.totalAmount.toLocaleString("es-EC")}`
-          : "N/A",
-      };
-
-      // Información de estado actual
-      enriched.currentStatus = {
-        phase: contract.currentPhase?.name || "Sin asignar",
-        status: contract.generalStatus,
-        canAdvance: this._canAdvancePhase(contract),
-        nextPhase: await this._getNextPhase(contract),
-      };
-
-      // Acceso y permisos (calculado sin exponer lógica de permisos)
-      enriched.access = {
-        canEdit: true, // El controlador debe manejar esto según permisos reales
-        canDelete: true, // El controlador debe manejar esto según permisos reales
-        canViewDetails: true,
-      };
-
-      return enriched;
-    } catch (error) {
-      console.warn(
-        `⚠️ Error enriqueciendo contrato ${contract._id}:`,
-        error.message
-      );
-      return contract.toObject(); // Devolver sin enriquecer en caso de error
-    }
+    return enriched;
   }
 
   /**
-   * Verificar si un contrato puede avanzar de fase
+   * Obtener fases del contrato con información detallada
+   * @param {Object} contract - Contrato
+   * @returns {Promise<Array>} Fases del contrato
    * @private
    */
-  _canAdvancePhase(contract) {
-    // Lógica específica según el tipo de contrato y fase actual
-    // Esta lógica debería estar en el dominio del negocio
+  async _getContractPhases(contract) {
+    if (!contract.phases || contract.phases.length === 0) return [];
 
-    if (!contract.currentPhase) return true; // Puede asignar primera fase
+    const phaseIds = contract.phases.map((p) => p.phase);
+    const phaseDetails = await this.contractPhaseRepository.find({
+      _id: { $in: phaseIds },
+    });
 
-    // Verificar completitud de documentos requeridos para la fase actual
-    const requiredDocs = contract.currentPhase.requiredDocuments || [];
-    const availableDocs = contract.documents || [];
-
-    const hasAllRequiredDocs = requiredDocs.every((reqDoc) =>
-      availableDocs.some((doc) => doc.category === reqDoc.category)
-    );
-
-    return hasAllRequiredDocs && contract.generalStatus === "ACTIVE";
+    return contract.phases.map((phaseEntry) => {
+      const phaseDetail = phaseDetails.find(
+        (p) => p._id.toString() === phaseEntry.phase.toString()
+      );
+      return {
+        ...phaseEntry,
+        phaseDetail,
+      };
+    });
   }
 
   /**
-   * Obtener siguiente fase disponible
+   * Calcular estadísticas del contrato
+   * @param {Object} contract - Contrato
+   * @returns {Promise<Object>} Estadísticas
    * @private
    */
-  async _getNextPhase(contract) {
-    try {
-      if (!contract.currentPhase) return null;
-
-      // Buscar la siguiente fase en el orden
-      const nextPhase = await this.phaseRepository.findOne(
-        {
-          contractType: contract.contractType,
-          order: { $gt: contract.currentPhase.order },
-          isActive: true,
-        },
-        { sort: { order: 1 } }
-      );
-
-      return nextPhase
-        ? {
-            id: nextPhase._id,
-            name: nextPhase.name,
-            order: nextPhase.order,
-          }
-        : null;
-    } catch (error) {
-      console.warn(
-        `⚠️ Error obteniendo siguiente fase para contrato ${contract._id}:`,
-        error.message
-      );
-      return null;
-    }
-  }
-
-  /**
-   * Obtener contrato por ID con información detallada
-   * @param {String} contractId - ID del contrato
-   * @param {Object} options - Opciones de consulta
-   * @returns {Promise<Object>} Contrato con información detallada
-   */
-  async getContractById(contractId, options = {}) {
-    try {
-      validateObjectId(contractId, "ID del contrato");
-
-      console.log(`👀 Obteniendo contrato por ID: ${contractId}`);
-
-      const {
-        includeHistory = false,
-        includeDocuments = false,
-        includePhases = true,
-        userId = null,
-      } = options;
-
-      // Obtener contrato con población
-      const contract = await this.contractRepository.findById(contractId, {
-        populate: [
-          { path: "contractType", select: "code name category description" },
-          {
-            path: "requestingDepartment",
-            select: "code name shortName responsible",
-          },
-          {
-            path: "currentPhase",
-            select: "code name shortName order category estimatedDuration",
-          },
-          {
-            path: "phases.phase",
-            select: "code name shortName order category",
-          },
-          { path: "audit.createdBy", select: "name email" },
-          { path: "audit.lastModifiedBy", select: "name email" },
-        ],
-      });
-
-      if (!contract) {
-        throw createError(ERROR_CODES.NOT_FOUND, "Contrato no encontrado", 404);
-      }
-
-      // Construir respuesta detallada
-      const response = {
-        contract: await this._enrichContractDetails(contract),
-        phases: null,
-        documents: null,
-        history: null,
-        statistics: null,
-      };
-
-      // Obtener información de fases si se solicita
-      if (includePhases) {
-        response.phases = await this._getContractPhases(contractId);
-      }
-
-      // Obtener historial si se solicita
-      if (includeHistory) {
-        response.history = await this._getContractHistory(contractId, {
-          limit: 50,
-        });
-      }
-
-      // Obtener documentos si se solicita
-      if (includeDocuments) {
-        response.documents = await this._getContractDocuments(contractId);
-      }
-
-      // Calcular estadísticas del contrato
-      response.statistics = await this._calculateContractStatistics(contract);
-
-      console.log(`✅ Contrato obtenido: ${contract.contractNumber}`);
-
-      return response;
-    } catch (error) {
-      console.error(`❌ Error obteniendo contrato: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Actualizar contrato
-   * @param {String} contractId - ID del contrato
-   * @param {Object} updateData - Datos a actualizar
-   * @param {Object} options - Opciones de actualización
-   * @returns {Promise<Object>} Contrato actualizado
-   */
-  async updateContract(contractId, updateData, options = {}) {
-    try {
-      validateObjectId(contractId, "ID del contrato");
-
-      console.log(`✏️ Actualizando contrato: ${contractId}`);
-
-      const {
-        userData,
-        createHistory = true,
-        validateTransitions = true,
-      } = options;
-
-      // Obtener contrato actual
-      const currentContract =
-        await this.contractRepository.findById(contractId);
-      if (!currentContract) {
-        throw createError(ERROR_CODES.NOT_FOUND, "Contrato no encontrado", 404);
-      }
-
-      // Validar transiciones si está habilitado
-      if (validateTransitions && updateData.generalStatus) {
-        await this._validateStatusTransition(
-          currentContract.generalStatus,
-          updateData.generalStatus
-        );
-      }
-
-      // Preparar datos de actualización
-      const dataToUpdate = {
-        ...updateData,
-        "timeline.lastStatusChange": updateData.generalStatus
-          ? new Date()
-          : currentContract.timeline?.lastStatusChange,
-        "audit.lastModifiedAt": new Date(),
-      };
-
-      // Actualizar usando el repositorio
-      const updatedContract = await this.contractRepository.update(
-        contractId,
-        dataToUpdate,
-        userData
-      );
-
-      // Crear entrada en historial si está habilitado
-      if (createHistory) {
-        await this._createUpdateHistoryEntry(
-          contractId,
-          currentContract,
-          updatedContract,
-          userData.userId
-        );
-      }
-
-      console.log(`✅ Contrato actualizado: ${updatedContract.contractNumber}`);
-
-      return await this._populateContractData(updatedContract);
-    } catch (error) {
-      console.error(`❌ Error actualizando contrato: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Eliminar contrato (soft delete)
-   * @param {String} contractId - ID del contrato
-   * @param {Object} options - Opciones de eliminación
-   * @returns {Promise<Object>} Resultado de la eliminación
-   */
-  async deleteContract(contractId, options = {}) {
-    try {
-      validateObjectId(contractId, "ID del contrato");
-
-      console.log(`🗑️ Eliminando contrato: ${contractId}`);
-
-      const {
-        reason,
-        deletedBy,
-        createHistory = true,
-        softDelete = true,
-      } = options;
-
-      // Obtener contrato antes de eliminar
-      const contract = await this.contractRepository.findById(contractId);
-      if (!contract) {
-        throw createError(ERROR_CODES.NOT_FOUND, "Contrato no encontrado", 404);
-      }
-
-      // Validar que se puede eliminar
-      if (
-        contract.generalStatus === "EXECUTION" ||
-        contract.generalStatus === "FINISHED"
-      ) {
-        throw createError(
-          ERROR_CODES.VALIDATION_ERROR,
-          "No se puede eliminar un contrato en ejecución o finalizado",
-          400
-        );
-      }
-
-      let result;
-
-      if (softDelete) {
-        // Soft delete usando el repositorio base
-        result = await this.contractRepository.softDelete(contractId, {
-          userId: deletedBy,
-        });
-
-        // Agregar información de eliminación
-        await this.contractRepository.update(
-          contractId,
-          {
-            deletionReason: reason,
-            generalStatus: "CANCELLED",
-          },
-          { userId: deletedBy }
-        );
-      } else {
-        // Hard delete (solo para administradores)
-        result = await this.contractRepository.forceDelete(contractId, {
-          userId: deletedBy,
-        });
-      }
-
-      // Crear entrada en historial
-      if (createHistory) {
-        await this._createHistoryEntry(contractId, {
-          eventType: softDelete ? "STATUS_CHANGE" : "PROCESS_CANCELLATION",
-          description: softDelete
-            ? `Contrato cancelado. Razón: ${reason}`
-            : "Contrato eliminado permanentemente",
-          user: {
-            userId: deletedBy,
-            name: "Usuario",
-          },
-          changeDetails: {
-            previousStatus: contract.generalStatus,
-            newStatus: "CANCELLED",
-            reason: reason,
-          },
-        });
-      }
-
-      console.log(`✅ Contrato eliminado: ${contract.contractNumber}`);
-
-      return {
-        contractNumber: contract.contractNumber,
-        deletedAt: new Date(),
-        deletionReason: reason,
-        type: softDelete ? "soft_delete" : "hard_delete",
-      };
-    } catch (error) {
-      console.error(`❌ Error eliminando contrato: ${error.message}`);
-      throw error;
-    }
-  }
-
-  // =============================================================================
-  // GESTIÓN DE FASES Y ESTADOS
-  // =============================================================================
-
-  /**
-   * Avanzar contrato a la siguiente fase
-   * @param {String} contractId - ID del contrato
-   * @param {Object} options - Opciones de avance
-   * @returns {Promise<Object>} Resultado del avance
-   */
-  async advanceContractPhase(contractId, options = {}) {
-    try {
-      validateObjectId(contractId, "ID del contrato");
-
-      console.log(`⏭️ Avanzando fase del contrato: ${contractId}`);
-
-      const {
-        notes = "",
-        userId,
-        skipValidations = false,
-        createHistory = true,
-        validateDocuments = true,
-      } = options;
-
-      // Obtener contrato actual
-      const contract = await this.contractRepository.findById(contractId, {
-        populate: [{ path: "currentPhase" }, { path: "phases.phase" }],
-      });
-
-      if (!contract) {
-        throw createError(ERROR_CODES.NOT_FOUND, "Contrato no encontrado", 404);
-      }
-
-      // Verificar que puede avanzar de fase
-      if (!skipValidations && !contract.canAdvanceToNextPhase()) {
-        throw createError(
-          ERROR_CODES.VALIDATION_ERROR,
-          "El contrato no puede avanzar a la siguiente fase. La fase actual no está completada",
-          400
-        );
-      }
-
-      // Obtener siguiente fase
-      const nextPhase = contract.getNextPhase();
-      if (!nextPhase) {
-        throw createError(
-          ERROR_CODES.VALIDATION_ERROR,
-          "No hay más fases disponibles para este contrato",
-          400
-        );
-      }
-
-      // Obtener información detallada de la siguiente fase
-      const nextPhaseDetails = await this.contractPhaseRepository.findById(
-        nextPhase.phase
-      );
-
-      // Validar documentos de la fase actual si está habilitado
-      if (validateDocuments && contract.currentPhase) {
-        await this._validatePhaseDocuments(
-          contractId,
-          contract.currentPhase._id
-        );
-      }
-
-      // Marcar fase actual como completada
-      const updatedPhases = contract.phases.map((phase) => {
-        if (phase.phase.toString() === contract.currentPhase._id.toString()) {
-          return {
-            ...phase,
-            status: "COMPLETED",
-            endDate: new Date(),
-            completionNotes: notes,
-          };
-        }
-        return phase;
-      });
-
-      // Agregar nueva fase en progreso
-      updatedPhases.push({
-        phase: nextPhase.phase,
-        status: "IN_PROGRESS",
-        startDate: new Date(),
-        assignedTo: userId,
-        documents: [],
-        observations: [],
-      });
-
-      // Actualizar contrato
-      const updatedContract = await this.contractRepository.update(
-        contractId,
-        {
-          currentPhase: nextPhase.phase,
-          phases: updatedPhases,
-          generalStatus: this._getStatusFromPhase(nextPhaseDetails.category),
-          "timeline.lastStatusChange": new Date(),
-        },
-        { userId }
-      );
-
-      // Crear entrada en historial
-      if (createHistory) {
-        await this._createHistoryEntry(contractId, {
-          eventType: "PHASE_CHANGE",
-          description: `Avance de fase: ${contract.currentPhase?.name} → ${nextPhaseDetails.name}`,
-          user: { userId, name: "Usuario" },
-          changeDetails: {
-            previousPhase: {
-              phaseId: contract.currentPhase._id,
-              phaseName: contract.currentPhase.name,
-            },
-            newPhase: {
-              phaseId: nextPhaseDetails._id,
-              phaseName: nextPhaseDetails.name,
-            },
-            notes: notes,
-          },
-        });
-      }
-
-      console.log(
-        `✅ Fase avanzada: ${contract.currentPhase?.name} → ${nextPhaseDetails.name}`
-      );
-
-      return {
-        contract: await this._populateContractData(updatedContract),
-        previousPhase: {
-          id: contract.currentPhase._id,
-          name: contract.currentPhase.name,
-          completedAt: new Date(),
-        },
-        currentPhase: {
-          id: nextPhaseDetails._id,
-          name: nextPhaseDetails.name,
-          category: nextPhaseDetails.category,
-          estimatedDuration: nextPhaseDetails.estimatedDuration,
-        },
-        nextSteps: this._getPhaseNextSteps(nextPhaseDetails),
-      };
-    } catch (error) {
-      console.error(`❌ Error avanzando fase: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Cambiar estado del contrato
-   * @param {String} contractId - ID del contrato
-   * @param {Object} statusData - Datos del cambio de estado
-   * @returns {Promise<Object>} Resultado del cambio
-   */
-  async changeContractStatus(contractId, statusData) {
-    try {
-      validateObjectId(contractId, "ID del contrato");
-
-      console.log(`🔄 Cambiando estado del contrato: ${contractId}`);
-
-      const {
-        newStatus,
-        reason,
-        effectiveDate = new Date(),
-        userId,
-        createHistory = true,
-        validateTransition = true,
-      } = statusData;
-
-      // Obtener contrato actual
-      const contract = await this.contractRepository.findById(contractId);
-      if (!contract) {
-        throw createError(ERROR_CODES.NOT_FOUND, "Contrato no encontrado", 404);
-      }
-
-      // Validar transición de estado
-      if (validateTransition) {
-        await this._validateStatusTransition(contract.generalStatus, newStatus);
-      }
-
-      // Actualizar estado
-      const updatedContract = await this.contractRepository.update(
-        contractId,
-        {
-          generalStatus: newStatus,
-          "timeline.lastStatusChange": effectiveDate,
-          statusChangeReason: reason,
-        },
-        { userId }
-      );
-
-      // Crear entrada en historial
-      if (createHistory) {
-        await this._createHistoryEntry(contractId, {
-          eventType: "STATUS_CHANGE",
-          description: `Cambio de estado: ${contract.generalStatus} → ${newStatus}. Razón: ${reason}`,
-          user: { userId, name: "Usuario" },
-          changeDetails: {
-            previousStatus: contract.generalStatus,
-            newStatus: newStatus,
-            reason: reason,
-            effectiveDate: effectiveDate,
-          },
-        });
-      }
-
-      console.log(
-        `✅ Estado cambiado: ${contract.generalStatus} → ${newStatus}`
-      );
-
-      return {
-        contract: await this._populateContractData(updatedContract),
-        previousStatus: contract.generalStatus,
-        currentStatus: newStatus,
-        effectiveDate,
-        reason,
-      };
-    } catch (error) {
-      console.error(`❌ Error cambiando estado: ${error.message}`);
-      throw error;
-    }
-  }
-
-  // =============================================================================
-  // CONSULTAS Y REPORTES
-  // =============================================================================
-
-  /**
-   * Obtener dashboard de contratos
-   * @param {Object} options - Opciones del dashboard
-   * @returns {Promise<Object>} Datos del dashboard
-   */
-  async getContractsDashboard(options = {}) {
-    try {
-      console.log("📊 Generando dashboard de contratos");
-
-      const {
-        scope = "department",
-        departmentId = null,
-        userId = null,
-        includeFinancialData = false,
-        includeTrends = true,
-        includeAlerts = true,
-      } = options;
-
-      // Construir filtros base según el alcance
-      const baseFilters = {
-        isActive: true,
-      };
-
-      if (scope === "department" && departmentId) {
-        baseFilters.requestingDepartment = departmentId;
-      }
-
-      // Usar agregación para obtener estadísticas
-      const dashboardData = await this.contractRepository.searchWithAggregation(
-        {
-          filters: baseFilters,
-          customPipeline: [
-            {
-              $group: {
-                _id: null,
-                totalContracts: { $sum: 1 },
-                totalValue: { $sum: "$budget.estimatedValue" },
-                averageValue: { $avg: "$budget.estimatedValue" },
-                statusDistribution: {
-                  $push: {
-                    status: "$generalStatus",
-                    value: "$budget.estimatedValue",
-                  },
-                },
-              },
-            },
-          ],
-        }
-      );
-
-      // Obtener distribución por estados
-      const statusStats = await this._getStatusDistribution(baseFilters);
-
-      // Obtener distribución por fases
-      const phaseStats = await this._getPhaseDistribution(baseFilters);
-
-      // Obtener distribución por tipos
-      const typeStats = await this._getTypeDistribution(baseFilters);
-
-      // Construir resumen
-      const summary = {
-        totalContracts: dashboardData.docs[0]?.totalContracts || 0,
-        totalValue: dashboardData.docs[0]?.totalValue || 0,
-        averageValue: dashboardData.docs[0]?.averageValue || 0,
-        activeContracts: statusStats
-          .filter((s) =>
-            ["PREPARATION", "CALL", "EVALUATION", "EXECUTION"].includes(s._id)
-          )
-          .reduce((sum, s) => sum + s.count, 0),
-      };
-
-      const result = {
-        summary,
-        statusDistribution: statusStats,
-        phaseDistribution: phaseStats,
-        typeDistribution: typeStats,
-        trends: includeTrends ? await this._getTrendData(baseFilters) : null,
-        alerts: includeAlerts ? await this._getAlerts(baseFilters) : null,
-        recentActivity: await this._getRecentActivity(baseFilters, 10),
-        upcomingDeadlines: await this._getUpcomingDeadlines(baseFilters, 15),
-        financialSummary: includeFinancialData
-          ? await this._getFinancialSummary(baseFilters)
-          : null,
-      };
-
-      console.log(
-        `✅ Dashboard generado con ${summary.totalContracts} contratos`
-      );
-
-      return result;
-    } catch (error) {
-      console.error(`❌ Error generando dashboard: ${error.message}`);
-      throw createError(
-        ERROR_CODES.STATISTICS_ERROR,
-        `Error generando dashboard: ${error.message}`,
-        500
-      );
-    }
-  }
-
-  /**
-   * Buscar contratos con criterios avanzados
-   * @param {Object} searchCriteria - Criterios de búsqueda
-   * @returns {Promise<Object>} Resultados de búsqueda
-   */
-  async searchContracts(searchCriteria) {
-    try {
-      console.log("🔍 Ejecutando búsqueda avanzada de contratos");
-
-      const {
-        query = {},
-        aggregations = {},
-        pagination = { page: 1, limit: 20 },
-        sorting = { createdAt: -1 },
-        accessRestrictions = {},
-      } = searchCriteria;
-
-      // Aplicar restricciones de acceso
-      const searchFilters = { ...query };
-      if (accessRestrictions.scope === "department") {
-        searchFilters.requestingDepartment = accessRestrictions.departmentId;
-      }
-
-      // Configurar búsqueda con agregación
-      const searchConfig = {
-        filters: searchFilters,
-        options: {
-          page: pagination.page,
-          limit: pagination.limit,
-          sort: sorting,
-        },
-        enableAutoLookups: true,
-        customPipeline: [],
-      };
-
-      // Ejecutar búsqueda
-      const startTime = Date.now();
-      const searchResults =
-        await this.contractRepository.searchWithAggregation(searchConfig);
-      const searchDuration = Date.now() - startTime;
-
-      // Obtener agregaciones adicionales si se solicitan
-      const aggregationResults = {};
-      if (aggregations.byStatus) {
-        aggregationResults.byStatus =
-          await this._getStatusDistribution(searchFilters);
-      }
-      if (aggregations.byType) {
-        aggregationResults.byType =
-          await this._getTypeDistribution(searchFilters);
-      }
-
-      console.log(
-        `✅ Búsqueda completada en ${searchDuration}ms: ${searchResults.totalDocs} resultados`
-      );
-
-      return {
-        results: searchResults.docs,
-        pagination: {
-          currentPage: searchResults.page,
-          totalPages: searchResults.totalPages,
-          totalResults: searchResults.totalDocs,
-          limit: searchResults.limit,
-        },
-        aggregations: aggregationResults,
-        appliedFilters: searchFilters,
-        searchMetadata: {
-          duration: searchDuration,
-          query: searchCriteria,
-        },
-      };
-    } catch (error) {
-      console.error(`❌ Error en búsqueda: ${error.message}`);
-      throw createError(
-        ERROR_CODES.FETCH_ERROR,
-        `Error en búsqueda de contratos: ${error.message}`,
-        500
-      );
-    }
-  }
-
-  /**
-   * Obtener estadísticas de contratos
-   * @param {Object} statsOptions - Opciones de estadísticas
-   * @returns {Promise<Object>} Estadísticas completas
-   */
-  async getContractStatistics(statsOptions = {}) {
-    try {
-      console.log("📈 Generando estadísticas de contratos");
-
-      const {
-        dateFrom,
-        dateTo,
-        groupBy = "status",
-        includeFinancialData = false,
-        includeComparison = false,
-        scope = "department",
-        departmentId = null,
-      } = statsOptions;
-
-      // Construir filtros base
-      const baseFilters = { isActive: true };
-
-      if (scope === "department" && departmentId) {
-        baseFilters.requestingDepartment = departmentId;
-      }
-
-      if (dateFrom || dateTo) {
-        baseFilters.createdAt = {};
-        if (dateFrom) baseFilters.createdAt.$gte = dateFrom;
-        if (dateTo) baseFilters.createdAt.$lte = dateTo;
-      }
-
-      // Obtener estadísticas usando agregación
-      const stats = await this.contractRepository.getStatsWithAggregation({
-        groupBy:
-          groupBy === "status"
-            ? "$generalStatus"
-            : groupBy === "type"
-              ? "$contractType"
-              : groupBy === "department"
-                ? "$requestingDepartment"
-                : groupBy === "phase"
-                  ? "$currentPhase"
-                  : null,
-        filters: baseFilters,
-        customPipeline: includeFinancialData
-          ? [
-              {
-                $addFields: {
-                  budgetValue: { $ifNull: ["$budget.estimatedValue", 0] },
-                },
-              },
-            ]
-          : [],
-      });
-
-      // Calcular totales
-      const summary = {
-        totalContracts: stats.reduce((sum, stat) => sum + stat.count, 0),
-        totalValue: includeFinancialData
-          ? stats.reduce((sum, stat) => sum + (stat.totalValue || 0), 0)
-          : null,
-        averageValue: includeFinancialData
-          ? stats.reduce((sum, stat) => sum + (stat.totalValue || 0), 0) /
-            stats.reduce((sum, stat) => sum + stat.count, 0)
-          : null,
-        dateRange: { from: dateFrom, to: dateTo },
-      };
-
-      // Obtener tendencias
-      const trends = await this._calculateTrends(baseFilters, dateFrom, dateTo);
-
-      // Obtener comparaciones si se solicita
-      const comparisons = includeComparison
-        ? await this._calculateComparisons(baseFilters, dateFrom, dateTo)
-        : null;
-
-      console.log(
-        `✅ Estadísticas generadas para ${summary.totalContracts} contratos`
-      );
-
-      return {
-        data: stats,
-        summary,
-        trends,
-        comparisons,
-        chartData: this._formatChartData(stats, groupBy),
-        metadata: {
-          generatedAt: new Date(),
-          totalContracts: summary.totalContracts,
-          groupedBy: groupBy,
-          includeFinancialData,
-          scope,
-        },
-      };
-    } catch (error) {
-      console.error(`❌ Error generando estadísticas: ${error.message}`);
-      throw createError(
-        ERROR_CODES.STATISTICS_ERROR,
-        `Error generando estadísticas: ${error.message}`,
-        500
-      );
-    }
-  }
-
-  /**
-   * Exportar contratos en diferentes formatos
-   * @param {Object} exportOptions - Opciones de exportación
-   * @returns {Promise<Object>} Archivo exportado
-   */
-  async exportContracts(exportOptions) {
-    try {
-      console.log("📤 Iniciando exportación de contratos");
-
-      const {
-        format = "excel",
-        filters = {},
-        includeDocuments = false,
-        includeHistory = false,
-        includeFinancialData = false,
-        exportedBy,
-        exportDate = new Date(),
-      } = exportOptions;
-
-      // Obtener contratos para exportar (sin paginación)
-      const contractsQuery = await this.contractRepository.findAll(filters, {
-        limit: 10000, // Límite alto para exportación
-        populate: [
-          { path: "contractType", select: "code name category" },
-          { path: "requestingDepartment", select: "code name" },
-          { path: "currentPhase", select: "code name category" },
-        ],
-      });
-
-      const contracts = contractsQuery.docs;
-
-      // Formatear datos para exportación
-      const exportData = await this._formatContractsForExport(contracts, {
-        includeDocuments,
-        includeHistory,
-        includeFinancialData,
-      });
-
-      // Generar archivo según el formato
-      let exportResult;
-      switch (format.toLowerCase()) {
-        case "excel":
-          exportResult = await this._generateExcelExport(
-            exportData,
-            exportOptions
-          );
-          break;
-        case "pdf":
-          exportResult = await this._generatePDFExport(
-            exportData,
-            exportOptions
-          );
-          break;
-        case "csv":
-          exportResult = await this._generateCSVExport(
-            exportData,
-            exportOptions
-          );
-          break;
-        default:
-          throw new Error(`Formato de exportación no soportado: ${format}`);
-      }
-
-      console.log(
-        `✅ Exportación completada: ${contracts.length} contratos en formato ${format}`
-      );
-
-      return {
-        ...exportResult,
-        recordCount: contracts.length,
-        exportedAt: exportDate,
-        exportedBy,
-      };
-    } catch (error) {
-      console.error(`❌ Error exportando contratos: ${error.message}`);
-      throw createError(
-        ERROR_CODES.EXPORT_ERROR,
-        `Error al exportar contratos: ${error.message}`,
-        500
-      );
-    }
-  }
-
-  // =============================================================================
-  // MÉTODOS PRIVADOS DE UTILIDAD
-  // =============================================================================
-
-  /**
-   * Validar datos del contrato antes de crear/actualizar
-   * @private
-   */
-  async _validateContractData(contractData) {
-    // Validar campos requeridos
-    const requiredFields = [
-      "contractualObject",
-      "contractType",
-      "requestingDepartment",
-      "budget",
-    ];
-
-    validateRequiredFields(contractData, requiredFields, "datos del contrato");
-
-    // Validaciones específicas
-    if (
-      !contractData.budget.estimatedValue ||
-      contractData.budget.estimatedValue <= 0
-    ) {
-      throw createValidationError(
-        "El valor estimado del presupuesto debe ser mayor a 0"
-      );
-    }
-
-    // Validar ObjectIds
-    validateObjectId(contractData.contractType, "Tipo de contrato");
-    validateObjectId(
-      contractData.requestingDepartment,
-      "Departamento solicitante"
-    );
-
-    return true;
-  }
-
-  /**
-   * Generar número único de contrato
-   * @private
-   */
-  async _generateContractNumber(departmentId, contractTypeId) {
-    const year = new Date().getFullYear();
-    const month = String(new Date().getMonth() + 1).padStart(2, "0");
-
-    // Obtener contador de contratos para este año
-    const count = await this.contractRepository.model.countDocuments({
-      createdAt: {
-        $gte: new Date(year, 0, 1),
-        $lt: new Date(year + 1, 0, 1),
+  async _calculateContractStatistics(contract) {
+    const completedPhases =
+      contract.phases?.filter((p) => p.status === "COMPLETED") || [];
+    const totalPhases = contract.phases?.length || 0;
+
+    return {
+      completion: {
+        completed: completedPhases.length,
+        total: totalPhases,
+        percentage:
+          totalPhases > 0
+            ? Math.round((completedPhases.length / totalPhases) * 100)
+            : 0,
       },
-    });
-
-    const sequence = String(count + 1).padStart(4, "0");
-    return `CON-${year}${month}-${sequence}`;
-  }
-
-  /**
-   * Obtener fase inicial del proceso
-   * @private
-   */
-  async _getInitialPhase(contractTypeId) {
-    try {
-      // Buscar la primera fase (orden 1)
-      const initialPhases = await this.contractPhaseRepository.findAll(
-        { order: 1, isActive: true },
-        { limit: 1, sort: { order: 1 } }
-      );
-
-      return initialPhases.docs[0] || null;
-    } catch (error) {
-      console.warn("No se pudo obtener fase inicial:", error.message);
-      return null;
-    }
-  }
-
-  /**
-   * Poblar datos del contrato con información relacionada
-   * @private
-   */
-  async _populateContractData(contract) {
-    if (!contract) return null;
-
-    return await this.contractRepository.findById(contract._id || contract.id, {
-      populate: [
-        { path: "contractType", select: "code name category" },
-        { path: "requestingDepartment", select: "code name shortName" },
-        { path: "currentPhase", select: "code name shortName order category" },
-      ],
-    });
-  }
-
-  /**
-   * Enriquecer resumen de contrato con datos calculados
-   * @private
-   */
-  async _enrichContractSummary(contract) {
-    const enriched = { ...contract };
-
-    // Calcular progreso usando método del esquema
-    if (typeof contract.calculateProgress === "function") {
-      enriched.progress = contract.calculateProgress();
-    } else {
-      enriched.progress = 0;
-    }
-
-    // Calcular días restantes
-    if (typeof contract.getDaysRemaining === "function") {
-      enriched.daysRemaining = contract.getDaysRemaining();
-      enriched.isOverdue = contract.isOverdue();
-    }
-
-    // Información de la fase actual
-    if (typeof contract.getCurrentPhaseInfo === "function") {
-      enriched.currentPhaseInfo = contract.getCurrentPhaseInfo();
-    }
-
-    return enriched;
-  }
-
-  /**
-   * Enriquecer detalles completos del contrato
-   * @private
-   */
-  async _enrichContractDetails(contract) {
-    const enriched = await this._enrichContractSummary(contract);
-
-    // Información adicional para vista detallada
-    if (typeof contract.getBudgetUtilization === "function") {
-      enriched.budgetUtilization = contract.getBudgetUtilization();
-    }
-
-    return enriched;
+      timeline: {
+        created: contract.createdAt,
+        lastUpdate: contract.audit?.lastModifiedAt || contract.createdAt,
+        expectedCompletion: contract.timeline?.expectedCompletion,
+      },
+      budget: {
+        total: contract.budget?.totalAmount || 0,
+        executed: contract.budget?.executedAmount || 0,
+        remaining:
+          (contract.budget?.totalAmount || 0) -
+          (contract.budget?.executedAmount || 0),
+      },
+    };
   }
 
   /**
    * Crear entrada en el historial
+   * @param {String} contractId - ID del contrato
+   * @param {Object} eventData - Datos del evento
    * @private
    */
-  async _createHistoryEntry(contractId, historyData) {
+  async _createHistoryEntry(contractId, eventData) {
     try {
-      const historyEntry = {
+      await this.contractHistoryRepository.create({
         contract: contractId,
-        eventType: historyData.eventType,
-        description: historyData.description,
-        eventDate: new Date(),
-        user: historyData.user,
-        changeDetails: historyData.changeDetails || {},
-        classification: {
-          category: this._getHistoryCategory(historyData.eventType),
-          severity: this._getHistorySeverity(historyData.eventType),
-        },
-      };
-
-      await this.contractHistoryRepository.create(historyEntry, {
-        userId: historyData.user.userId,
+        ...eventData,
+        createdAt: new Date(),
       });
     } catch (error) {
-      console.error("Error creando entrada de historial:", error.message);
-      // No lanzar error para no interrumpir la operación principal
+      console.warn(`⚠️ Error creando entrada en historial: ${error.message}`);
     }
   }
 
   /**
    * Crear entrada de historial para actualización
+   * @param {String} contractId - ID del contrato
+   * @param {Object} oldContract - Contrato anterior
+   * @param {Object} newContract - Contrato actualizado
+   * @param {String} userId - ID del usuario
    * @private
    */
   async _createUpdateHistoryEntry(
     contractId,
-    originalContract,
-    updatedContract,
+    oldContract,
+    newContract,
     userId
   ) {
-    // Detectar cambios significativos
-    const changes = [];
+    try {
+      const changes = this._detectChanges(oldContract, newContract);
 
-    if (originalContract.generalStatus !== updatedContract.generalStatus) {
-      changes.push(
-        `Estado: ${originalContract.generalStatus} → ${updatedContract.generalStatus}`
-      );
-    }
+      if (changes.length === 0) return;
 
-    if (
-      originalContract.budget?.estimatedValue !==
-      updatedContract.budget?.estimatedValue
-    ) {
-      changes.push(
-        `Presupuesto: ${originalContract.budget?.estimatedValue} → ${updatedContract.budget?.estimatedValue}`
-      );
-    }
-
-    if (changes.length > 0) {
       await this._createHistoryEntry(contractId, {
-        eventType: "DATA_MODIFICATION",
-        description: `Contrato actualizado: ${changes.join(", ")}`,
-        user: { userId, name: "Usuario" },
+        eventType: "UPDATE",
+        description: `Contrato actualizado - ${changes.length} cambio(s)`,
+        user: { userId },
         changeDetails: {
-          changes: changes,
+          changes,
+          version: newContract.audit?.version || 1,
         },
       });
-    }
-  }
-
-  /**
-   * Validar transición de estado
-   * @private
-   */
-  async _validateStatusTransition(currentStatus, newStatus) {
-    const validTransitions = {
-      DRAFT: ["PREPARATION", "CANCELLED"],
-      PREPARATION: ["CALL", "CANCELLED"],
-      CALL: ["EVALUATION", "CANCELLED"],
-      EVALUATION: ["AWARD", "CANCELLED"],
-      AWARD: ["CONTRACTING", "CANCELLED"],
-      CONTRACTING: ["EXECUTION", "CANCELLED"],
-      EXECUTION: ["FINISHED", "SUSPENDED", "CANCELLED"],
-      FINISHED: ["LIQUIDATED"],
-      SUSPENDED: ["EXECUTION", "CANCELLED"],
-      CANCELLED: [], // Estado final
-      LIQUIDATED: [], // Estado final
-    };
-
-    const allowedTransitions = validTransitions[currentStatus] || [];
-
-    if (!allowedTransitions.includes(newStatus)) {
-      throw createError(
-        ERROR_CODES.VALIDATION_ERROR,
-        `Transición de estado no válida: ${currentStatus} → ${newStatus}`,
-        400
-      );
-    }
-  }
-
-  /**
-   * Obtener estado general basado en la categoría de fase
-   * @private
-   */
-  _getStatusFromPhase(phaseCategory) {
-    const statusMapping = {
-      PREPARATORY: "PREPARATION",
-      PRECONTRACTUAL: "CALL",
-      EXECUTION: "EXECUTION",
-      PAYMENT: "EXECUTION",
-      RECEPTION: "FINISHED",
-    };
-
-    return statusMapping[phaseCategory] || "PREPARATION";
-  }
-
-  /**
-   * Obtener pasos siguientes para una fase
-   * @private
-   */
-  _getPhaseNextSteps(phase) {
-    const nextSteps = {
-      PREPARATORY: [
-        "Completar certificación presupuestaria",
-        "Elaborar términos de referencia",
-        "Realizar estudios de mercado",
-      ],
-      PRECONTRACTUAL: [
-        "Publicar proceso en portal de compras",
-        "Recibir ofertas de proveedores",
-        "Evaluar propuestas técnicas y económicas",
-      ],
-      EXECUTION: [
-        "Suscribir contrato con adjudicatario",
-        "Obtener garantías de cumplimiento",
-        "Iniciar ejecución de trabajos",
-      ],
-      PAYMENT: [
-        "Procesar facturas del proveedor",
-        "Aplicar retenciones tributarias",
-        "Autorizar pagos correspondientes",
-      ],
-      RECEPTION: [
-        "Realizar acta de entrega-recepción",
-        "Elaborar informe final de fiscalización",
-        "Proceder con liquidación del contrato",
-      ],
-    };
-
-    return nextSteps[phase.category] || ["Seguir procedimientos estándar"];
-  }
-
-  /**
-   * Obtener categoría de historial para un evento
-   * @private
-   */
-  _getHistoryCategory(eventType) {
-    const categories = {
-      CREATION: "PROCESS",
-      PHASE_CHANGE: "PROCESS",
-      STATUS_CHANGE: "PROCESS",
-      DOCUMENT_UPLOAD: "DOCUMENT",
-      DOCUMENT_APPROVAL: "DOCUMENT",
-      DATA_MODIFICATION: "MODIFICATION",
-      PAYMENT_MADE: "FINANCIAL",
-    };
-
-    return categories[eventType] || "OTHER";
-  }
-
-  /**
-   * Obtener severidad de historial para un evento
-   * @private
-   */
-  _getHistorySeverity(eventType) {
-    const severities = {
-      CREATION: "NORMAL",
-      PHASE_CHANGE: "IMPORTANT",
-      STATUS_CHANGE: "IMPORTANT",
-      PROCESS_CANCELLATION: "CRITICAL",
-      PAYMENT_MADE: "NORMAL",
-    };
-
-    return severities[eventType] || "NORMAL";
-  }
-
-  /**
-   * Métodos auxiliares para estadísticas (implementaciones simplificadas)
-   * @private
-   */
-  async _getStatusDistribution(filters) {
-    return await this.contractRepository.model.aggregate([
-      { $match: filters },
-      { $group: { _id: "$generalStatus", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ]);
-  }
-
-  async _getPhaseDistribution(filters) {
-    return await this.contractRepository.model.aggregate([
-      { $match: filters },
-      {
-        $lookup: {
-          from: "contractphases",
-          localField: "currentPhase",
-          foreignField: "_id",
-          as: "phaseInfo",
-        },
-      },
-      { $unwind: { path: "$phaseInfo", preserveNullAndEmptyArrays: true } },
-      { $group: { _id: "$phaseInfo.name", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ]);
-  }
-
-  async _getTypeDistribution(filters) {
-    return await this.contractRepository.model.aggregate([
-      { $match: filters },
-      {
-        $lookup: {
-          from: "contracttypes",
-          localField: "contractType",
-          foreignField: "_id",
-          as: "typeInfo",
-        },
-      },
-      { $unwind: { path: "$typeInfo", preserveNullAndEmptyArrays: true } },
-      { $group: { _id: "$typeInfo.name", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ]);
-  }
-
-  async _getTrendData(filters) {
-    // Implementación simplificada de tendencias
-    return {
-      monthly: [],
-      status: "stable",
-      growth: 0,
-    };
-  }
-
-  async _getAlerts(filters) {
-    // Implementación simplificada de alertas
-    return [];
-  }
-
-  async _getRecentActivity(filters, limit) {
-    return await this.contractHistoryRepository.findAll(
-      { ...filters },
-      { limit, sort: { eventDate: -1 } }
-    );
-  }
-
-  async _getUpcomingDeadlines(filters, days) {
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + days);
-
-    return await this.contractRepository.findAll(
-      {
-        ...filters,
-        "timeline.executionEndDate": { $lte: futureDate },
-      },
-      { limit: 10 }
-    );
-  }
-
-  async _getFinancialSummary(filters) {
-    const result = await this.contractRepository.model.aggregate([
-      { $match: filters },
-      {
-        $group: {
-          _id: null,
-          totalEstimated: { $sum: "$budget.estimatedValue" },
-          totalAwarded: { $sum: "$budget.awardedValue" },
-          avgValue: { $avg: "$budget.estimatedValue" },
-        },
-      },
-    ]);
-
-    return result[0] || { totalEstimated: 0, totalAwarded: 0, avgValue: 0 };
-  }
-
-  // Métodos simplificados para funcionalidades avanzadas
-  async _validatePhaseDocuments(contractId, phaseId) {
-    // Implementación pendiente - validar documentos requeridos
-    return true;
-  }
-
-  async _getContractPhases(contractId) {
-    // Implementación pendiente - obtener fases del contrato
-    return await this.contractPhaseRepository.findAll({ contract: contractId });
-    //return [];
-  }
-
-  async _getContractHistory(contractId, options) {
-    return await this.contractHistoryRepository.findAll(
-      { contract: contractId },
-      options
-    );
-  }
-
-  async _getContractDocuments(contractId) {
-    // Implementación pendiente - obtener documentos del contrato
-    return [];
-  }
-
-  async _calculateContractStatistics(contract) {
-    return {
-      progress: contract.calculateProgress ? contract.calculateProgress() : 0,
-      daysRemaining: contract.getDaysRemaining
-        ? contract.getDaysRemaining()
-        : null,
-      isOverdue: contract.isOverdue ? contract.isOverdue() : false,
-      budgetUtilization: contract.getBudgetUtilization
-        ? contract.getBudgetUtilization()
-        : 0,
-    };
-  }
-
-  async _calculateTrends(filters, dateFrom, dateTo) {
-    // Implementación simplificada
-    return { direction: "stable", percentage: 0 };
-  }
-
-  async _calculateComparisons(filters, dateFrom, dateTo) {
-    // Implementación simplificada
-    return { previousPeriod: {}, variance: 0 };
-  }
-
-  _formatChartData(stats, groupBy) {
-    return {
-      labels: stats.map((s) => s._id),
-      data: stats.map((s) => s.count),
-      type: "pie",
-    };
-  }
-
-  async _formatContractsForExport(contracts, options) {
-    // Formatear datos para exportación
-    return contracts.map((contract) => ({
-      Número: contract.contractNumber,
-      "Objeto Contractual": contract.contractualObject,
-      Estado: contract.generalStatus,
-      Departamento: contract.requestingDepartment?.name,
-      "Valor Estimado": contract.budget?.estimatedValue,
-      "Fecha Creación": contract.createdAt,
-    }));
-  }
-
-  // =============================================================================
-  // EXPORTACIÓN A EXCEL
-  // =============================================================================
-
-  /**
-   * Generar exportación a Excel con formato profesional
-   * @param {Array} data - Datos de contratos formateados
-   * @param {Object} options - Opciones de exportación
-   * @returns {Promise<Object>} Buffer y metadatos del archivo Excel
-   */
-  async _generateExcelExport(data, options = {}) {
-    try {
-      console.log("📊 Generando exportación a Excel...");
-
-      const {
-        includeDocuments = false,
-        includeHistory = false,
-        includeFinancialData = true,
-        exportedBy = "Sistema",
-        exportDate = new Date(),
-        filters = {},
-      } = options;
-
-      // Crear nuevo workbook
-      const workbook = new ExcelJS.Workbook();
-
-      // Configurar metadatos del archivo
-      workbook.creator = "GADM Cantón Esmeraldas";
-      workbook.lastModifiedBy = exportedBy;
-      workbook.created = exportDate;
-      workbook.modified = exportDate;
-      workbook.lastPrinted = exportDate;
-
-      // === HOJA PRINCIPAL: CONTRATOS ===
-      const contractsSheet = workbook.addWorksheet("Contratos", {
-        pageSetup: {
-          paperSize: 9, // A4
-          orientation: "landscape",
-          fitToPage: true,
-          margins: {
-            left: 0.7,
-            right: 0.7,
-            top: 0.75,
-            bottom: 0.75,
-            header: 0.3,
-            footer: 0.3,
-          },
-        },
-      });
-
-      // Configurar columnas principales
-      const columns = [
-        { header: "N° Contrato", key: "contractNumber", width: 15 },
-        { header: "Objeto Contractual", key: "contractualObject", width: 40 },
-        { header: "Estado", key: "generalStatus", width: 15 },
-        { header: "Tipo", key: "contractType", width: 20 },
-        { header: "Departamento", key: "department", width: 25 },
-        { header: "Fase Actual", key: "currentPhase", width: 20 },
-        { header: "Progreso (%)", key: "progress", width: 12 },
-      ];
-
-      // Agregar columnas financieras si se incluyen
-      if (includeFinancialData) {
-        columns.push(
-          { header: "Valor Estimado", key: "estimatedValue", width: 18 },
-          { header: "Valor Adjudicado", key: "awardedValue", width: 18 },
-          { header: "Moneda", key: "currency", width: 10 }
-        );
-      }
-
-      columns.push(
-        { header: "Fecha Creación", key: "createdAt", width: 15 },
-        { header: "Días Restantes", key: "daysRemaining", width: 15 },
-        { header: "Estado Tiempo", key: "timeStatus", width: 12 }
-      );
-
-      contractsSheet.columns = columns;
-
-      // === ESTILOS DE ENCABEZADO ===
-      const headerRow = contractsSheet.getRow(1);
-      headerRow.height = 25;
-
-      headerRow.eachCell((cell) => {
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FF2E7D32" }, // Verde oscuro del GADM
-        };
-        cell.font = {
-          name: "Arial",
-          size: 11,
-          bold: true,
-          color: { argb: "FFFFFFFF" },
-        };
-        cell.alignment = {
-          vertical: "middle",
-          horizontal: "center",
-          wrapText: true,
-        };
-        cell.border = {
-          top: { style: "thin" },
-          left: { style: "thin" },
-          bottom: { style: "thin" },
-          right: { style: "thin" },
-        };
-      });
-
-      // === LLENAR DATOS ===
-      data.forEach((contract, index) => {
-        const rowIndex = index + 2;
-        const row = contractsSheet.getRow(rowIndex);
-
-        row.values = {
-          contractNumber: contract.contractNumber || "N/A",
-          contractualObject: contract.contractualObject || "N/A",
-          generalStatus: this._translateStatus(contract.generalStatus),
-          contractType: contract.contractTypeInfo?.name || "N/A",
-          department: contract.departmentInfo?.name || "N/A",
-          currentPhase: contract.currentPhaseInfo?.name || "N/A",
-          progress: contract.progress || 0,
-          ...(includeFinancialData && {
-            estimatedValue: contract.budget?.estimatedValue || 0,
-            awardedValue: contract.budget?.awardedValue || 0,
-            currency: contract.budget?.currency || "USD",
-          }),
-          createdAt: contract.createdAt ? new Date(contract.createdAt) : null,
-          daysRemaining: contract.daysRemaining || "N/A",
-          timeStatus: this._getTimeStatus(
-            contract.daysRemaining,
-            contract.isOverdue
-          ),
-        };
-
-        // Aplicar formato condicional por estado
-        this._applyContractRowFormatting(row, contract, includeFinancialData);
-      });
-
-      // === HOJA DE RESUMEN ===
-      const summarySheet = workbook.addWorksheet("Resumen Ejecutivo");
-      await this._generateSummarySheet(
-        summarySheet,
-        data,
-        includeFinancialData
-      );
-
-      // === HOJA DE FILTROS APLICADOS ===
-      const filtersSheet = workbook.addWorksheet("Filtros Aplicados");
-      await this._generateFiltersSheet(
-        filtersSheet,
-        filters,
-        exportDate,
-        exportedBy
-      );
-
-      // === AGREGAR HOJAS ADICIONALES ===
-      if (includeDocuments) {
-        const documentsSheet = workbook.addWorksheet("Documentos por Fase");
-        await this._generateDocumentsSheet(documentsSheet, data);
-      }
-
-      if (includeHistory) {
-        const historySheet = workbook.addWorksheet("Historial de Cambios");
-        await this._generateHistorySheet(historySheet, data);
-      }
-
-      // === GENERAR BUFFER ===
-      const buffer = await workbook.xlsx.writeBuffer();
-      const filename = `contratos_${new Date().toISOString().split("T")[0]}_${Date.now()}.xlsx`;
-
-      console.log(
-        `✅ Excel generado: ${data.length} contratos, ${workbook.worksheets.length} hojas`
-      );
-
-      return {
-        buffer,
-        filename,
-        mimeType:
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        size: buffer.length,
-        sheets: workbook.worksheets.map((ws) => ({
-          name: ws.name,
-          rowCount: ws.rowCount,
-          columnCount: ws.columnCount,
-        })),
-      };
     } catch (error) {
-      console.error("❌ Error generando Excel:", error);
-      throw new Error(`Error generando exportación Excel: ${error.message}`);
-    }
-  }
-
-  // =============================================================================
-  // EXPORTACIÓN A PDF
-  // =============================================================================
-
-  /**
-   * Generar exportación a PDF con diseño profesional
-   * @param {Array} data - Datos de contratos formateados
-   * @param {Object} options - Opciones de exportación
-   * @returns {Promise<Object>} Buffer y metadatos del archivo PDF
-   */
-  async _generatePDFExport(data, options = {}) {
-    try {
-      console.log("📄 Generando exportación a PDF...");
-
-      const {
-        includeDocuments = false,
-        includeFinancialData = true,
-        exportedBy = "Sistema",
-        exportDate = new Date(),
-        filters = {},
-      } = options;
-
-      // Crear documento PDF
-      const doc = new PDFDocument({
-        size: "A4",
-        layout: "landscape", // Para mejor visualización de tablas
-        margins: {
-          top: 50,
-          bottom: 50,
-          left: 30,
-          right: 30,
-        },
-      });
-
-      // Buffer para almacenar el PDF
-      const buffers = [];
-      doc.on("data", buffers.push.bind(buffers));
-
-      const pdfPromise = new Promise((resolve) => {
-        doc.on("end", () => {
-          const pdfBuffer = Buffer.concat(buffers);
-          resolve(pdfBuffer);
-        });
-      });
-
-      // === ENCABEZADO DEL DOCUMENTO ===
-      await this._generatePDFHeader(doc, exportDate, exportedBy, data.length);
-
-      // === INFORMACIÓN DE FILTROS ===
-      if (Object.keys(filters).length > 0) {
-        await this._generatePDFFilters(doc, filters);
-      }
-
-      // === TABLA DE CONTRATOS ===
-      await this._generatePDFContractsTable(doc, data, includeFinancialData);
-
-      // === RESUMEN ESTADÍSTICO ===
-      doc.addPage();
-      await this._generatePDFSummary(doc, data, includeFinancialData);
-
-      // === GRÁFICOS ESTADÍSTICOS ===
-      if (data.length > 0) {
-        doc.addPage();
-        await this._generatePDFCharts(doc, data);
-      }
-
-      // === PIE DE PÁGINA ===
-      this._generatePDFFooter(doc, exportDate);
-
-      // Finalizar documento
-      doc.end();
-
-      const buffer = await pdfPromise;
-      const filename = `contratos_reporte_${new Date().toISOString().split("T")[0]}.pdf`;
-
-      console.log(
-        `✅ PDF generado: ${data.length} contratos, ${buffer.length} bytes`
+      console.warn(
+        `⚠️ Error creando entrada de actualización: ${error.message}`
       );
-
-      return {
-        buffer,
-        filename,
-        mimeType: "application/pdf",
-        size: buffer.length,
-        pages: doc._pageBuffer.length || 1,
-      };
-    } catch (error) {
-      console.error("❌ Error generando PDF:", error);
-      throw new Error(`Error generando exportación PDF: ${error.message}`);
     }
   }
 
-  // =============================================================================
-  // EXPORTACIÓN A CSV
-  // =============================================================================
-
   /**
-   * Generar exportación a CSV con codificación UTF-8
-   * @param {Array} data - Datos de contratos formateados
-   * @param {Object} options - Opciones de exportación
-   * @returns {Promise<Object>} Buffer y metadatos del archivo CSV
-   */
-  async _generateCSVExport(data, options = {}) {
-    try {
-      console.log("📝 Generando exportación a CSV...");
-
-      const {
-        includeFinancialData = true,
-        exportedBy = "Sistema",
-        exportDate = new Date(),
-        delimiter = ",",
-        encoding = "utf8",
-      } = options;
-
-      // Definir estructura de columnas
-      const baseHeaders = [
-        { id: "contractNumber", title: "Número de Contrato" },
-        { id: "contractualObject", title: "Objeto Contractual" },
-        { id: "generalStatus", title: "Estado General" },
-        { id: "contractType", title: "Tipo de Contratación" },
-        { id: "department", title: "Departamento Solicitante" },
-        { id: "currentPhase", title: "Fase Actual" },
-        { id: "progress", title: "Progreso (%)" },
-      ];
-
-      // Agregar columnas financieras si se incluyen
-      const financialHeaders = includeFinancialData
-        ? [
-            { id: "estimatedValue", title: "Valor Estimado" },
-            { id: "awardedValue", title: "Valor Adjudicado" },
-            { id: "currency", title: "Moneda" },
-            { id: "budgetUtilization", title: "Utilización Presupuesto (%)" },
-          ]
-        : [];
-
-      const timeHeaders = [
-        { id: "createdAt", title: "Fecha de Creación" },
-        { id: "lastUpdate", title: "Última Actualización" },
-        { id: "daysRemaining", title: "Días Restantes" },
-        { id: "timeStatus", title: "Estado de Tiempo" },
-        { id: "isOverdue", title: "Vencido" },
-      ];
-
-      const headers = [...baseHeaders, ...financialHeaders, ...timeHeaders];
-
-      // Crear archivo temporal para CSV
-      const tempDir = path.join(__dirname, "../../../temp");
-      await fs.mkdir(tempDir, { recursive: true });
-
-      const tempFile = path.join(tempDir, `contracts_${Date.now()}.csv`);
-
-      // Configurar writer CSV
-      const csvWriter = createObjectCsvWriter({
-        path: tempFile,
-        header: headers,
-        encoding: encoding,
-        fieldDelimiter: delimiter,
-      });
-
-      // Formatear datos para CSV
-      const csvData = data.map((contract) => {
-        const baseData = {
-          contractNumber: contract.contractNumber || "N/A",
-          contractualObject: this._cleanTextForCSV(contract.contractualObject),
-          generalStatus: this._translateStatus(contract.generalStatus),
-          contractType: contract.contractTypeInfo?.name || "N/A",
-          department: contract.departmentInfo?.name || "N/A",
-          currentPhase: contract.currentPhaseInfo?.name || "N/A",
-          progress: contract.progress || 0,
-        };
-
-        const financialData = includeFinancialData
-          ? {
-              estimatedValue: contract.budget?.estimatedValue || 0,
-              awardedValue: contract.budget?.awardedValue || 0,
-              currency: contract.budget?.currency || "USD",
-              budgetUtilization: contract.budgetUtilization || 0,
-            }
-          : {};
-
-        const timeData = {
-          createdAt: contract.createdAt
-            ? new Date(contract.createdAt).toLocaleDateString("es-EC")
-            : "N/A",
-          lastUpdate: contract.updatedAt
-            ? new Date(contract.updatedAt).toLocaleDateString("es-EC")
-            : "N/A",
-          daysRemaining: contract.daysRemaining || "N/A",
-          timeStatus: this._getTimeStatus(
-            contract.daysRemaining,
-            contract.isOverdue
-          ),
-          isOverdue: contract.isOverdue ? "Sí" : "No",
-        };
-
-        return { ...baseData, ...financialData, ...timeData };
-      });
-
-      // Escribir datos al CSV
-      await csvWriter.writeRecords(csvData);
-
-      // Leer el archivo generado
-      const csvBuffer = await fs.readFile(tempFile);
-
-      // Agregar BOM para UTF-8 (mejor compatibilidad con Excel)
-      const bomBuffer = Buffer.from([0xef, 0xbb, 0xbf]);
-      const finalBuffer = Buffer.concat([bomBuffer, csvBuffer]);
-
-      // Limpiar archivo temporal
-      await fs.unlink(tempFile);
-
-      const filename = `contratos_${new Date().toISOString().split("T")[0]}.csv`;
-
-      console.log(
-        `✅ CSV generado: ${data.length} registros, ${finalBuffer.length} bytes`
-      );
-
-      return {
-        buffer: finalBuffer,
-        filename,
-        mimeType: "text/csv; charset=utf-8",
-        size: finalBuffer.length,
-        recordCount: csvData.length,
-        columnCount: headers.length,
-      };
-    } catch (error) {
-      console.error("❌ Error generando CSV:", error);
-      throw new Error(`Error generando exportación CSV: ${error.message}`);
-    }
-  }
-
-  // =============================================================================
-  // FUNCIONES AUXILIARES PARA EXCEL
-  // =============================================================================
-
-  /**
-   * Aplicar formato condicional a filas de contratos
+   * Detectar cambios entre dos versiones del contrato
+   * @param {Object} oldContract - Contrato anterior
+   * @param {Object} newContract - Contrato actualizado
+   * @returns {Array} Lista de cambios detectados
    * @private
    */
-  _applyContractRowFormatting(row, contract, includeFinancialData) {
-    // Altura de fila
-    row.height = 20;
-
-    // Aplicar bordes a todas las celdas
-    row.eachCell((cell, colNumber) => {
-      cell.border = {
-        top: { style: "thin" },
-        left: { style: "thin" },
-        bottom: { style: "thin" },
-        right: { style: "thin" },
-      };
-      cell.alignment = { vertical: "middle" };
-    });
-
-    // Colorear por estado
-    const statusColors = {
-      DRAFT: "FFF3E0", // Naranja claro
-      PREPARATION: "E8F5E8", // Verde claro
-      EXECUTION: "E3F2FD", // Azul claro
-      FINISHED: "F1F8E9", // Verde muy claro
-      CANCELLED: "FFEBEE", // Rojo claro
-    };
-
-    const statusColor = statusColors[contract.generalStatus] || "FFFFFF";
-    row.eachCell((cell) => {
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: statusColor },
-      };
-    });
-
-    // Formatear columnas específicas
-    if (includeFinancialData) {
-      // Formato de moneda para valores
-      const estimatedValueCell = row.getCell("estimatedValue");
-      const awardedValueCell = row.getCell("awardedValue");
-
-      if (estimatedValueCell.value) {
-        estimatedValueCell.numFmt = '"$"#,##0.00';
-      }
-      if (awardedValueCell.value) {
-        awardedValueCell.numFmt = '"$"#,##0.00';
-      }
-    }
-
-    // Formato de porcentaje para progreso
-    const progressCell = row.getCell("progress");
-    if (progressCell.value !== undefined) {
-      progressCell.numFmt = '0"%"';
-    }
-
-    // Formato de fecha
-    const dateCell = row.getCell("createdAt");
-    if (dateCell.value) {
-      dateCell.numFmt = "dd/mm/yyyy";
-    }
-
-    // Destacar contratos vencidos
-    if (contract.isOverdue) {
-      const timeStatusCell = row.getCell("timeStatus");
-      if (timeStatusCell) {
-        timeStatusCell.font = { color: { argb: "FFFF0000" }, bold: true };
-      }
-    }
-  }
-
-  /**
-   * Generar hoja de resumen ejecutivo
-   * @private
-   */
-  async _generateSummarySheet(sheet, data, includeFinancialData) {
-    // Título
-    sheet.getCell("A1").value = "RESUMEN EJECUTIVO DE CONTRATOS";
-    sheet.getCell("A1").font = { size: 16, bold: true };
-    sheet.mergeCells("A1:E1");
-
-    let rowIndex = 3;
-
-    // Estadísticas generales
-    const stats = this._calculateDataStatistics(data, includeFinancialData);
-
-    sheet.getCell(`A${rowIndex}`).value = "ESTADÍSTICAS GENERALES";
-    sheet.getCell(`A${rowIndex}`).font = { size: 12, bold: true };
-    rowIndex += 2;
-
-    Object.entries(stats.general).forEach(([key, value]) => {
-      sheet.getCell(`A${rowIndex}`).value = key;
-      sheet.getCell(`B${rowIndex}`).value = value;
-      rowIndex++;
-    });
-
-    rowIndex += 2;
-
-    // Distribución por estado
-    sheet.getCell(`A${rowIndex}`).value = "DISTRIBUCIÓN POR ESTADO";
-    sheet.getCell(`A${rowIndex}`).font = { size: 12, bold: true };
-    rowIndex += 2;
-
-    Object.entries(stats.byStatus).forEach(([status, count]) => {
-      sheet.getCell(`A${rowIndex}`).value = this._translateStatus(status);
-      sheet.getCell(`B${rowIndex}`).value = count;
-      rowIndex++;
-    });
-
-    // Aplicar formato a la hoja
-    sheet.columns = [{ width: 30 }, { width: 20 }];
-  }
-
-  /**
-   * Generar hoja de filtros aplicados
-   * @private
-   */
-  async _generateFiltersSheet(sheet, filters, exportDate, exportedBy) {
-    sheet.getCell("A1").value = "FILTROS APLICADOS EN LA EXPORTACIÓN";
-    sheet.getCell("A1").font = { size: 14, bold: true };
-
-    let rowIndex = 3;
-
-    // Información de exportación
-    sheet.getCell(`A${rowIndex}`).value = "Exportado por:";
-    sheet.getCell(`B${rowIndex}`).value = exportedBy;
-    rowIndex++;
-
-    sheet.getCell(`A${rowIndex}`).value = "Fecha de exportación:";
-    sheet.getCell(`B${rowIndex}`).value = exportDate.toLocaleString("es-EC");
-    rowIndex += 2;
-
-    // Filtros aplicados
-    if (Object.keys(filters).length > 0) {
-      sheet.getCell(`A${rowIndex}`).value = "FILTROS APLICADOS:";
-      sheet.getCell(`A${rowIndex}`).font = { bold: true };
-      rowIndex += 2;
-
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-          sheet.getCell(`A${rowIndex}`).value = this._translateFilterName(key);
-          sheet.getCell(`B${rowIndex}`).value = value.toString();
-          rowIndex++;
-        }
-      });
-    } else {
-      sheet.getCell(`A${rowIndex}`).value =
-        "Sin filtros aplicados - Exportación completa";
-    }
-
-    sheet.columns = [{ width: 25 }, { width: 30 }];
-  }
-
-  // =============================================================================
-  // FUNCIONES AUXILIARES PARA PDF
-  // =============================================================================
-
-  /**
-   * Generar encabezado del PDF
-   * @private
-   */
-  async _generatePDFHeader(doc, exportDate, exportedBy, recordCount) {
-    // Logo y encabezado institucional
-    doc
-      .fontSize(18)
-      .font("Helvetica-Bold")
-      .text("GOBIERNO AUTÓNOMO DESCENTRALIZADO MUNICIPAL", 50, 50)
-      .fontSize(16)
-      .text("CANTÓN ESMERALDAS", 50, 75)
-      .fontSize(14)
-      .font("Helvetica")
-      .text("Sistema de Expediente Digital - Reporte de Contratos", 50, 100);
-
-    // Información del reporte
-    doc
-      .fontSize(10)
-      .text(`Generado el: ${exportDate.toLocaleString("es-EC")}`, 500, 50)
-      .text(`Exportado por: ${exportedBy}`, 500, 65)
-      .text(`Total de registros: ${recordCount}`, 500, 80);
-
-    // Línea separadora
-    doc
-      .moveTo(50, 130)
-      .lineTo(750, 130)
-      .strokeColor("#2E7D32")
-      .lineWidth(2)
-      .stroke();
-
-    doc.y = 150;
-  }
-
-  /**
-   * Generar tabla de contratos en PDF
-   * @private
-   */
-  async _generatePDFContractsTable(doc, data, includeFinancialData) {
-    const tableTop = doc.y + 20;
-    const itemHeight = 20;
-    const headers = [
-      "N° Contrato",
-      "Objeto",
-      "Estado",
-      "Departamento",
-      "Progreso",
+  _detectChanges(oldContract, newContract) {
+    const changes = [];
+    const fieldsToWatch = [
+      "contractualObject",
+      "generalStatus",
+      "budget.totalAmount",
+      "currentPhase",
     ];
 
-    if (includeFinancialData) {
-      headers.push("Valor ($)");
-    }
+    fieldsToWatch.forEach((field) => {
+      const oldValue = this._getNestedValue(oldContract, field);
+      const newValue = this._getNestedValue(newContract, field);
 
-    // Dibujar encabezados
-    let x = 50;
-    const columnWidths = [80, 200, 80, 150, 60];
-    if (includeFinancialData) columnWidths.push(80);
-
-    doc.fontSize(10).font("Helvetica-Bold");
-    headers.forEach((header, i) => {
-      doc
-        .rect(x, tableTop, columnWidths[i], itemHeight)
-        .fillAndStroke("#2E7D32", "#000000")
-        .fill("#FFFFFF")
-        .text(header, x + 5, tableTop + 6, {
-          width: columnWidths[i] - 10,
-          align: "center",
+      if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
+        changes.push({
+          field,
+          oldValue,
+          newValue,
         });
-      x += columnWidths[i];
+      }
     });
 
-    // Dibujar filas de datos
-    doc.font("Helvetica").fontSize(8);
-    data.slice(0, 25).forEach((contract, index) => {
-      // Limitar a 25 registros por página
-      const y = tableTop + itemHeight * (index + 1);
-      x = 50;
+    return changes;
+  }
 
-      const row = [
-        contract.contractNumber || "N/A",
-        this._truncateText(contract.contractualObject || "N/A", 30),
-        this._translateStatus(contract.generalStatus),
-        this._truncateText(contract.departmentInfo?.name || "N/A", 20),
-        `${contract.progress || 0}%`,
-      ];
+  /**
+   * Obtener valor anidado de un objeto
+   * @param {Object} obj - Objeto
+   * @param {String} path - Ruta del campo (ej: "budget.totalAmount")
+   * @returns {*} Valor del campo
+   * @private
+   */
+  _getNestedValue(obj, path) {
+    return path.split(".").reduce((current, key) => current?.[key], obj);
+  }
 
-      if (includeFinancialData) {
-        row.push(`$${(contract.budget?.estimatedValue || 0).toLocaleString()}`);
-      }
+  /**
+   * Exportar contratos a Excel
+   * @param {Array} contracts - Lista de contratos
+   * @returns {Promise<Object>} Archivo Excel
+   * @private
+   */
+  async _exportToExcel(contracts) {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Contratos");
 
-      row.forEach((cellData, i) => {
-        doc
-          .rect(x, y, columnWidths[i], itemHeight)
-          .stroke("#000000")
-          .text(cellData, x + 5, y + 6, {
-            width: columnWidths[i] - 10,
-            height: itemHeight - 12,
-            ellipsis: true,
-          });
-        x += columnWidths[i];
+    // Definir columnas
+    worksheet.columns = [
+      { header: "Número", key: "contractNumber", width: 15 },
+      { header: "Objeto Contractual", key: "contractualObject", width: 30 },
+      { header: "Estado", key: "generalStatus", width: 12 },
+      { header: "Tipo", key: "contractType", width: 20 },
+      { header: "Departamento", key: "department", width: 20 },
+      { header: "Monto Total", key: "totalAmount", width: 15 },
+      { header: "Fase Actual", key: "currentPhase", width: 20 },
+      { header: "Fecha Creación", key: "createdAt", width: 12 },
+    ];
+
+    // Agregar datos
+    contracts.forEach((contract) => {
+      worksheet.addRow({
+        contractNumber: contract.contractNumber,
+        contractualObject: contract.contractualObject,
+        generalStatus: contract.generalStatus,
+        contractType: contract.contractType?.name || "N/A",
+        department: contract.requestingDepartment?.name || "N/A",
+        totalAmount: contract.budget?.totalAmount || 0,
+        currentPhase: contract.currentPhase?.name || "N/A",
+        createdAt: contract.createdAt,
       });
     });
-  }
 
-  // =============================================================================
-  // FUNCIONES AUXILIARES GENERALES
-  // =============================================================================
+    // Generar buffer
+    const buffer = await workbook.xlsx.writeBuffer();
+    const filename = `contratos_${new Date().toISOString().split("T")[0]}.xlsx`;
 
-  /**
-   * Traducir códigos de estado a texto legible
-   * @private
-   */
-  _translateStatus(status) {
-    const translations = {
-      DRAFT: "Borrador",
-      PREPARATION: "Preparación",
-      CALL: "Convocatoria",
-      EVALUATION: "Evaluación",
-      AWARD: "Adjudicación",
-      CONTRACTING: "Contratación",
-      EXECUTION: "Ejecución",
-      FINISHED: "Finalizado",
-      LIQUIDATED: "Liquidado",
-      CANCELLED: "Cancelado",
-      SUSPENDED: "Suspendido",
+    return {
+      buffer,
+      filename,
+      contentType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     };
-
-    return translations[status] || status;
   }
 
   /**
-   * Obtener estado de tiempo basado en días restantes
+   * Exportar contratos a CSV
+   * @param {Array} contracts - Lista de contratos
+   * @returns {Promise<Object>} Archivo CSV
    * @private
    */
-  _getTimeStatus(daysRemaining, isOverdue) {
-    if (isOverdue) return "Vencido";
-    if (daysRemaining === null || daysRemaining === "N/A")
-      return "Sin fecha límite";
-    if (daysRemaining <= 0) return "Vencido";
-    if (daysRemaining <= 7) return "Próximo a vencer";
-    if (daysRemaining <= 30) return "En plazo crítico";
-    return "En plazo normal";
-  }
+  async _exportToCSV(contracts) {
+    const csvData = contracts.map((contract) => ({
+      numero: contract.contractNumber,
+      objeto: contract.contractualObject,
+      estado: contract.generalStatus,
+      tipo: contract.contractType?.name || "N/A",
+      departamento: contract.requestingDepartment?.name || "N/A",
+      monto: contract.budget?.totalAmount || 0,
+      fase: contract.currentPhase?.name || "N/A",
+      fecha: contract.createdAt?.toISOString().split("T")[0],
+    }));
 
-  /**
-   * Limpiar texto para CSV
-   * @private
-   */
-  _cleanTextForCSV(text) {
-    if (!text) return "";
-    return text
-      .replace(/"/g, '""')
-      .replace(/[\r\n]/g, " ")
-      .trim();
-  }
+    const csvString = [
+      // Headers
+      Object.keys(csvData[0] || {}).join(","),
+      // Data
+      ...csvData.map((row) => Object.values(row).join(",")),
+    ].join("\n");
 
-  /**
-   * Truncar texto para PDF
-   * @private
-   */
-  _truncateText(text, maxLength) {
-    if (!text) return "";
-    return text.length > maxLength
-      ? text.substring(0, maxLength) + "..."
-      : text;
-  }
+    const buffer = Buffer.from(csvString, "utf8");
+    const filename = `contratos_${new Date().toISOString().split("T")[0]}.csv`;
 
-  /**
-   * Traducir nombres de filtros
-   * @private
-   */
-  _translateFilterName(filterKey) {
-    const translations = {
-      status: "Estado",
-      contractType: "Tipo de Contrato",
-      departmentId: "Departamento",
-      dateFrom: "Fecha desde",
-      dateTo: "Fecha hasta",
-      search: "Búsqueda de texto",
-      includeInactive: "Incluir inactivos",
+    return {
+      buffer,
+      filename,
+      contentType: "text/csv",
     };
-
-    return translations[filterKey] || filterKey;
   }
 
   /**
-   * Calcular estadísticas de los datos
+   * Exportar contratos a PDF
+   * @param {Array} contracts - Lista de contratos
+   * @returns {Promise<Object>} Archivo PDF
    * @private
    */
-  _calculateDataStatistics(data, includeFinancialData) {
-    const stats = {
-      general: {
-        "Total de contratos": data.length,
-        "Contratos activos": data.filter((c) => c.generalStatus !== "CANCELLED")
-          .length,
-        "Progreso promedio":
-          Math.round(
-            data.reduce((sum, c) => sum + (c.progress || 0), 0) / data.length
-          ) + "%",
-        "Contratos vencidos": data.filter((c) => c.isOverdue).length,
-      },
-      byStatus: {},
-    };
+  async _exportToPDF(contracts) {
+    const doc = new PDFDocument();
+    const buffers = [];
 
-    // Calcular distribución por estado
-    data.forEach((contract) => {
-      const status = contract.generalStatus;
-      stats.byStatus[status] = (stats.byStatus[status] || 0) + 1;
+    doc.on("data", buffers.push.bind(buffers));
+
+    // Título
+    doc.fontSize(16).text("Reporte de Contratos", { align: "center" });
+    doc.moveDown();
+
+    // Información básica
+    contracts.forEach((contract) => {
+      doc
+        .fontSize(12)
+        .text(`${contract.contractNumber} - ${contract.contractualObject}`)
+        .text(`Estado: ${contract.generalStatus}`)
+        .text(`Monto: $${contract.budget?.totalAmount || 0}`)
+        .moveDown();
     });
 
-    // Agregar estadísticas financieras si están incluidas
-    if (includeFinancialData) {
-      const totalEstimated = data.reduce(
-        (sum, c) => sum + (c.budget?.estimatedValue || 0),
-        0
-      );
-      const totalAwarded = data.reduce(
-        (sum, c) => sum + (c.budget?.awardedValue || 0),
-        0
-      );
+    doc.end();
 
-      stats.general["Valor total estimado"] =
-        `$${totalEstimated.toLocaleString()}`;
-      stats.general["Valor total adjudicado"] =
-        `$${totalAwarded.toLocaleString()}`;
-      stats.general["Valor promedio"] =
-        `$${Math.round(totalEstimated / data.length).toLocaleString()}`;
-    }
+    return new Promise((resolve) => {
+      doc.on("end", () => {
+        const buffer = Buffer.concat(buffers);
+        const filename = `contratos_${new Date().toISOString().split("T")[0]}.pdf`;
 
-    return stats;
+        resolve({
+          buffer,
+          filename,
+          contentType: "application/pdf",
+        });
+      });
+    });
   }
 }

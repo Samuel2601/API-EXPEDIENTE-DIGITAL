@@ -39,7 +39,6 @@ export class ContractController {
    * Permisos: contracts.canCreate
    */
   createContract = [
-    // Middlewares de autenticación y permisos
     auth,
     verifyModuleAccess,
     requirePermission({
@@ -48,8 +47,6 @@ export class ContractController {
       departmentParam: "requestingDepartment",
       errorMessage: "No tiene permisos para crear contratos",
     }),
-
-    // Controlador
     async (req, res) => {
       try {
         const { body, user } = req;
@@ -82,7 +79,6 @@ export class ContractController {
           ...body,
           createdBy: user.userId,
           generalStatus: "DRAFT",
-          currentPhase: null, // Se asignará automáticamente
           audit: {
             createdBy: user.userId,
             createdAt: new Date(),
@@ -92,8 +88,13 @@ export class ContractController {
         };
 
         // Crear contrato usando el servicio
-        const newContract =
-          await this.contractService.createContract(contractData);
+        const newContract = await this.contractService.createContract(
+          contractData,
+          {
+            userId: user.userId,
+            createHistory: true,
+          }
+        );
 
         console.log(
           `✅ Contrato creado exitosamente: ${newContract.contractNumber}`
@@ -122,7 +123,7 @@ export class ContractController {
         res.status(error.statusCode || 500).json({
           success: false,
           message: error.message || "Error interno del servidor",
-          code: error.code || "INTERNAL_ERROR",
+          code: error.code || "CREATE_CONTRACT_ERROR",
           details:
             process.env.NODE_ENV === "development" ? error.details : undefined,
         });
@@ -136,7 +137,6 @@ export class ContractController {
    * Permisos: contracts.canViewDepartment o contracts.canViewAll
    */
   getAllContracts = [
-    // Middlewares
     auth,
     verifyModuleAccess,
     requireFlexiblePermissions(
@@ -149,113 +149,74 @@ export class ContractController {
         requireDepartment: false,
       }
     ),
-
-    // Controlador
     async (req, res) => {
       try {
         const { query, user, permissions } = req;
 
-        console.log(
-          `📋 Usuario ${user.userId} consultando contratos. Scope: ${permissions.scope}`
-        );
+        console.log(`📋 Usuario ${user.userId} consultando contratos.`);
 
-        // ===== VALIDAR PARÁMETROS DE ENTRADA =====
+        // Extraer y procesar parámetros de consulta
         const {
           page = 1,
           limit = 20,
           status,
           contractType,
+          requestingDepartment,
           dateFrom,
           dateTo,
           search,
           sortBy = "createdAt",
           sortOrder = "desc",
           includeInactive = false,
-          populate = "requestingDepartment,createdBy,responsibleUser,currentResponsible",
-          departmentId, // Filtro opcional por departamento específico
+          includeDeleted = false,
+          populate = "",
         } = query;
 
-        // Validar parámetros
-        if (limit > 100) {
-          return res.status(400).json({
-            success: false,
-            message: "El límite máximo es 100 elementos por página",
-          });
-        }
+        // Determinar acceso por departamento basado en permisos
+        let departmentAccess = { type: "all" };
 
-        // ===== DETERMINAR ACCESO SEGÚN PERMISOS =====
-        let departmentAccess = {};
-
-        if (permissions.scope === "specific") {
-          // Usuario accedió con departmentId específico en middleware
-          departmentAccess = {
-            type: "specific",
-            departmentId: permissions.departmentId,
-          };
-        } else if (permissions.scope === "global") {
-          if (permissions.hasGlobalAccess) {
-            // Usuario con canViewAll
+        if (!permissions.hasGlobalAccess) {
+          if (permissions.departmentId) {
             departmentAccess = {
-              type: "all",
-            };
-          } else if (permissions.accessibleDepartments.length > 0) {
-            // Usuario con canViewDepartment en múltiples departamentos
-            departmentAccess = {
-              type: "multiple",
-              departmentIds: permissions.accessibleDepartments,
+              type: "specific",
+              departmentIds: [permissions.departmentId],
             };
           } else {
             return res.status(403).json({
               success: false,
-              message: "No tiene acceso a contratos en ningún departamento",
+              message: "No tiene acceso para consultar contratos",
+              code: "INSUFFICIENT_PERMISSIONS",
             });
           }
         }
 
-        // ===== VALIDAR FILTRO OPCIONAL POR DEPARTAMENTO =====
-        if (departmentId) {
-          // Verificar si el usuario tiene acceso al departamento solicitado
-          const hasAccessToDepartment =
-            departmentAccess.type === "all" ||
-            departmentAccess.departmentId === departmentId ||
-            departmentAccess.departmentIds?.includes(departmentId);
-
-          if (!hasAccessToDepartment) {
+        // Si se especifica departamento en query, validar acceso
+        if (requestingDepartment && !permissions.hasGlobalAccess) {
+          if (requestingDepartment !== permissions.departmentId) {
             return res.status(403).json({
               success: false,
-              message: "No tiene acceso al departamento solicitado",
-              requestedDepartment: departmentId,
-              availableAccess: departmentAccess,
+              message:
+                "No tiene acceso a los contratos del departamento especificado",
+              code: "DEPARTMENT_ACCESS_DENIED",
             });
           }
-
-          // Si tiene acceso, modificar el filtro para ser específico
-          departmentAccess = {
-            type: "specific",
-            departmentId: departmentId,
-          };
         }
 
-        // ===== CONSTRUIR FILTROS PARA EL SERVICIO =====
+        // Preparar filtros para el servicio
         const serviceFilters = {
-          // Paginación
           page: parseInt(page),
           limit: parseInt(limit),
-
-          // Filtros de contenido (sin validación de acceso)
           status,
           contractType,
-          dateFrom,
-          dateTo,
+          requestingDepartment: requestingDepartment || null,
+          dateFrom: dateFrom ? new Date(dateFrom) : null,
+          dateTo: dateTo ? new Date(dateTo) : null,
           search,
-
-          // Configuración de consulta
           sortBy,
           sortOrder,
           includeInactive: includeInactive === "true",
-          populate: populate.split(",").filter((x) => x.trim()),
-
-          // ⭐ CLAVE: Pasar la información de acceso al servicio
+          includeDeleted: includeDeleted === "true",
+          populate: populate ? populate.split(",").map((p) => p.trim()) : [],
           departmentAccess,
         };
 
@@ -264,11 +225,11 @@ export class ContractController {
           departmentAccess: serviceFilters.departmentAccess,
         });
 
-        // ===== LLAMAR AL SERVICIO =====
+        // Llamar al servicio
         const result =
           await this.contractService.getAllContracts(serviceFilters);
 
-        // ===== CONSTRUIR METADATA DE PERMISOS =====
+        // Construir metadata de permisos
         const userPermissions = {
           canCreate:
             permissions.validPermissions?.includes("contracts.canCreate") ||
@@ -282,7 +243,7 @@ export class ContractController {
             false,
         };
 
-        // ===== RESPUESTA ESTRUCTURADA =====
+        // Respuesta estructurada
         const response = {
           success: true,
           data: {
@@ -300,19 +261,13 @@ export class ContractController {
             access: {
               scope: permissions.scope,
               type: departmentAccess.type,
-              departments:
-                departmentAccess.type === "multiple"
-                  ? departmentAccess.departmentIds.length
-                  : departmentAccess.type === "specific"
-                    ? 1
-                    : "all",
+              departments: departmentAccess.type === "specific" ? 1 : "all",
             },
           },
           permissions: userPermissions,
           metadata: {
             requestedBy: user.userId,
             requestedAt: new Date().toISOString(),
-            processingTime: `${Date.now() - Date.now()}ms`, // Puedes añadir timing si quieres
           },
         };
 
@@ -324,7 +279,6 @@ export class ContractController {
       } catch (error) {
         console.error(`❌ Error en controlador getAllContracts:`, error);
 
-        // Determinar tipo de error y código de estado
         let statusCode = 500;
         let message = "Error interno del servidor";
 
@@ -352,33 +306,43 @@ export class ContractController {
    * Permisos: Acceso al contrato específico
    */
   getContractById = [
-    // Middlewares
     auth,
     verifyModuleAccess,
     requireContractAccess("contractId"),
-    // Controlador
     async (req, res) => {
       try {
         const { contractId } = req.params;
-        const { user, contract: contractAccess } = req;
+        const { user } = req;
+        const {
+          includeHistory = true,
+          includeDocuments = true,
+          includePhases = true,
+        } = req.query;
 
         console.log(
           `👀 Usuario ${user.userId} consultando contrato: ${contractId}`
         );
 
-        // Validar ID del contrato
         validateObjectId(contractId, "ID del contrato");
 
         // Obtener contrato detallado
         const contractDetails = await this.contractService.getContractById(
           contractId,
           {
-            includeHistory: true,
-            includeDocuments: true,
-            includePhases: true,
+            includeHistory: includeHistory === "true",
+            includeDocuments: includeDocuments === "true",
+            includePhases: includePhases === "true",
             userId: user.userId,
           }
         );
+
+        if (!contractDetails) {
+          return res.status(404).json({
+            success: false,
+            message: "Contrato no encontrado",
+            code: "CONTRACT_NOT_FOUND",
+          });
+        }
 
         // Verificar permisos específicos para este contrato
         const userPermissions = {
@@ -424,7 +388,7 @@ export class ContractController {
         res.status(error.statusCode || 500).json({
           success: false,
           message: error.message || "Error interno del servidor",
-          code: error.code || "NOT_FOUND",
+          code: error.code || "GET_CONTRACT_ERROR",
         });
       }
     },
@@ -436,19 +400,14 @@ export class ContractController {
    * Permisos: contracts.canEdit + acceso al contrato
    */
   updateContract = [
-    // Middlewares
     auth,
     verifyModuleAccess,
     requireContractAccess("contractId"),
     requirePermission({
       category: "contracts",
       permission: "canEdit",
-      contractParam: "contractId",
-      requireContractAccess: true,
       errorMessage: "No tiene permisos para editar contratos",
     }),
-
-    // Controlador
     async (req, res) => {
       try {
         const { contractId } = req.params;
@@ -458,7 +417,6 @@ export class ContractController {
           `✏️ Usuario ${user.userId} actualizando contrato: ${contractId}`
         );
 
-        // Validar ID del contrato
         validateObjectId(contractId, "ID del contrato");
 
         // Preparar datos de actualización
@@ -487,7 +445,7 @@ export class ContractController {
           updateData,
           {
             userData: {
-              ...req.user,
+              userId: user.userId,
               ipAddress: req.ip,
               userAgent: req.get("User-Agent"),
             },
@@ -520,7 +478,7 @@ export class ContractController {
         res.status(error.statusCode || 500).json({
           success: false,
           message: error.message || "Error interno del servidor",
-          code: error.code || "UPDATE_ERROR",
+          code: error.code || "UPDATE_CONTRACT_ERROR",
         });
       }
     },
@@ -532,7 +490,6 @@ export class ContractController {
    * Permisos: contracts.canDelete + acceso al contrato
    */
   deleteContract = [
-    // Middlewares
     auth,
     verifyModuleAccess,
     requireContractAccess("contractId"),
@@ -541,8 +498,6 @@ export class ContractController {
       permission: "canDelete",
       errorMessage: "No tiene permisos para eliminar contratos",
     }),
-
-    // Controlador
     async (req, res) => {
       try {
         const { contractId } = req.params;
@@ -553,7 +508,6 @@ export class ContractController {
           `🗑️ Usuario ${user.userId} eliminando contrato: ${contractId}`
         );
 
-        // Validar ID del contrato
         validateObjectId(contractId, "ID del contrato");
 
         // Validar razón de eliminación
@@ -597,7 +551,7 @@ export class ContractController {
         res.status(error.statusCode || 500).json({
           success: false,
           message: error.message || "Error interno del servidor",
-          code: error.code || "DELETE_ERROR",
+          code: error.code || "DELETE_CONTRACT_ERROR",
         });
       }
     },
@@ -608,44 +562,38 @@ export class ContractController {
   // =============================================================================
 
   /**
-   * Avanzar contrato a la siguiente fase
+   * Avanzar a la siguiente fase del contrato
    * POST /contracts/:contractId/advance-phase
-   * Permisos: contracts.canEdit + verificaciones de fase
+   * Permisos: contracts.canEdit + acceso al contrato
    */
   advanceContractPhase = [
-    // Middlewares
     auth,
     verifyModuleAccess,
     requireContractAccess("contractId"),
     requirePermission({
       category: "contracts",
       permission: "canEdit",
-      errorMessage: "No tiene permisos para cambiar fases de contratos",
+      errorMessage: "No tiene permisos para avanzar fases de contratos",
     }),
-
-    // Controlador
     async (req, res) => {
       try {
         const { contractId } = req.params;
         const { user } = req;
-        const { notes, skipValidations = false } = req.body;
+        const { observations, skipValidations = false } = req.body;
 
         console.log(
-          `⏭️ Usuario ${user.userId} avanzando fase del contrato: ${contractId}`
+          `➡️ Usuario ${user.userId} avanzando fase del contrato: ${contractId}`
         );
 
-        // Validar ID del contrato
         validateObjectId(contractId, "ID del contrato");
 
-        // Avanzar fase usando el servicio
         const result = await this.contractService.advanceContractPhase(
           contractId,
           {
-            notes: notes || "",
             userId: user.userId,
+            observations,
             skipValidations: skipValidations === true,
             createHistory: true,
-            validateDocuments: true,
           }
         );
 
@@ -657,14 +605,9 @@ export class ContractController {
           success: true,
           data: {
             contract: result.contract,
-            phaseTransition: {
-              from: result.previousPhase,
-              to: result.currentPhase,
-              transitionDate: new Date(),
-              notes: notes,
-            },
-            nextSteps: result.nextSteps || [],
-            message: `Contrato avanzado a la fase: ${result.currentPhase?.name}`,
+            previousPhase: result.previousPhase,
+            currentPhase: result.currentPhase,
+            message: `Contrato avanzado a fase: ${result.currentPhase?.name}`,
           },
           metadata: {
             advancedBy: user.userId,
@@ -673,302 +616,84 @@ export class ContractController {
           },
         });
       } catch (error) {
-        console.error(`❌ Error avanzando fase: ${error.message}`);
+        console.error(`❌ Error avanzando fase del contrato: ${error.message}`);
 
         res.status(error.statusCode || 500).json({
           success: false,
           message: error.message || "Error interno del servidor",
-          code: error.code || "PHASE_ADVANCE_ERROR",
-          details: {
-            currentPhase: error.currentPhase,
-            blockedBy: error.blockedBy,
-            missingRequirements: error.missingRequirements,
-          },
+          code: error.code || "ADVANCE_PHASE_ERROR",
         });
       }
     },
   ];
 
   /**
-   * Cambiar estado del contrato
-   * POST /contracts/:contractId/change-status
-   * Permisos: contracts.canEdit + validaciones de estado
+   * Actualizar fase específica del contrato
+   * PUT /contracts/:contractId/phases/:phaseId
+   * Permisos: contracts.canEdit + acceso al contrato
    */
-  changeContractStatus = [
-    // Middlewares
+  updateContractPhase = [
     auth,
     verifyModuleAccess,
     requireContractAccess("contractId"),
     requirePermission({
       category: "contracts",
       permission: "canEdit",
-      errorMessage: "No tiene permisos para cambiar estados de contratos",
+      errorMessage: "No tiene permisos para actualizar fases de contratos",
     }),
-
-    // Controlador
     async (req, res) => {
       try {
-        const { contractId } = req.params;
-        const { newStatus, reason, effectiveDate } = req.body;
-        const { user } = req;
+        const { contractId, phaseId } = req.params;
+        const { body, user } = req;
 
         console.log(
-          `🔄 Usuario ${user.userId} cambiando estado del contrato: ${contractId}`
+          `📝 Usuario ${user.userId} actualizando fase ${phaseId} del contrato: ${contractId}`
         );
 
-        // Validaciones básicas
         validateObjectId(contractId, "ID del contrato");
-        validateRequiredFields(
-          { newStatus, reason },
-          ["newStatus", "reason"],
-          "cambio de estado"
-        );
+        validateObjectId(phaseId, "ID de la fase");
 
-        // Validar nuevo estado
-        const validStatuses = [
-          "DRAFT",
-          "PREPARATION",
-          "CALL",
-          "EVALUATION",
-          "AWARD",
-          "CONTRACTING",
-          "EXECUTION",
-          "FINISHED",
-          "LIQUIDATED",
-          "CANCELLED",
-          "SUSPENDED",
-        ];
-
-        if (!validStatuses.includes(newStatus)) {
-          return res.status(400).json({
-            success: false,
-            message: "Estado no válido",
-            validStatuses,
-            provided: newStatus,
-          });
-        }
-
-        // Cambiar estado usando el servicio
-        const result = await this.contractService.changeContractStatus(
+        const updatedPhase = await this.contractService.updateContractPhase(
           contractId,
+          phaseId,
+          body,
           {
-            newStatus,
-            reason: reason.trim(),
-            effectiveDate: effectiveDate ? new Date(effectiveDate) : new Date(),
             userId: user.userId,
             createHistory: true,
-            validateTransition: true,
           }
         );
 
-        console.log(
-          `✅ Estado cambiado: ${result.previousStatus} → ${result.currentStatus}`
-        );
+        console.log(`✅ Fase actualizada exitosamente`);
 
         res.status(200).json({
           success: true,
           data: {
-            contract: result.contract,
-            statusChange: {
-              from: result.previousStatus,
-              to: result.currentStatus,
-              reason: reason.trim(),
-              effectiveDate: result.effectiveDate,
-              changedBy: user.userId,
-            },
-            message: `Estado del contrato cambiado a: ${result.currentStatus}`,
+            phase: updatedPhase,
+            message: "Fase actualizada exitosamente",
           },
           metadata: {
-            changedBy: user.userId,
-            changedAt: new Date(),
+            updatedBy: user.userId,
+            updatedAt: new Date(),
             contractId,
+            phaseId,
           },
         });
       } catch (error) {
-        console.error(`❌ Error cambiando estado: ${error.message}`);
+        console.error(
+          `❌ Error actualizando fase del contrato: ${error.message}`
+        );
 
         res.status(error.statusCode || 500).json({
           success: false,
           message: error.message || "Error interno del servidor",
-          code: error.code || "STATUS_CHANGE_ERROR",
+          code: error.code || "UPDATE_PHASE_ERROR",
         });
       }
     },
   ];
 
   // =============================================================================
-  // OPERACIONES DE CONSULTA Y REPORTES
-  // =============================================================================
-
-  /**
-   * Obtener dashboard de contratos
-   * GET /contracts/dashboard
-   * Permisos: contracts.canViewDepartment o contracts.canViewAll
-   */
-  getContractsDashboard = [
-    // Middlewares
-    auth,
-    verifyModuleAccess,
-    requireAnyPermission([
-      { category: "contracts", permission: "canViewDepartment" },
-      { category: "contracts", permission: "canViewAll" },
-    ]),
-
-    // Controlador
-    async (req, res) => {
-      try {
-        const { user, permissions } = req;
-
-        console.log(
-          `📊 Usuario ${user.userId} consultando dashboard de contratos`
-        );
-
-        // Determinar alcance del dashboard según permisos
-        const scope = permissions.hasPermission("contracts", "canViewAll")
-          ? "global"
-          : "department";
-
-        const dashboardOptions = {
-          scope,
-          departmentId:
-            scope === "department" ? permissions.departmentId : null,
-          userId: user.userId,
-          includeFinancialData: permissions.hasPermission(
-            "special",
-            "canViewFinancialData"
-          ),
-          includeTrends: true,
-          includeAlerts: true,
-        };
-
-        // Obtener datos del dashboard
-        const dashboard =
-          await this.contractService.getContractsDashboard(dashboardOptions);
-
-        console.log(
-          `✅ Dashboard generado con ${dashboard.summary.totalContracts} contratos`
-        );
-
-        res.status(200).json({
-          success: true,
-          data: {
-            summary: dashboard.summary,
-            statusDistribution: dashboard.statusDistribution,
-            phaseDistribution: dashboard.phaseDistribution,
-            typeDistribution: dashboard.typeDistribution,
-            trends: dashboard.trends,
-            alerts: dashboard.alerts,
-            recentActivity: dashboard.recentActivity,
-            upcomingDeadlines: dashboard.upcomingDeadlines,
-            financialSummary: dashboard.financialSummary, // Solo si tiene permisos
-          },
-          metadata: {
-            scope,
-            departmentId: dashboardOptions.departmentId,
-            generatedAt: new Date(),
-            generatedBy: user.userId,
-            permissions: {
-              canViewAll: permissions.hasPermission("contracts", "canViewAll"),
-              canViewFinancialData: permissions.hasPermission(
-                "special",
-                "canViewFinancialData"
-              ),
-              canExportData: permissions.hasPermission(
-                "special",
-                "canExportData"
-              ),
-            },
-          },
-        });
-      } catch (error) {
-        console.error(`❌ Error obteniendo dashboard: ${error.message}`);
-
-        res.status(error.statusCode || 500).json({
-          success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "DASHBOARD_ERROR",
-        });
-      }
-    },
-  ];
-
-  /**
-   * Buscar contratos con filtros avanzados
-   * POST /contracts/search
-   * Permisos: contracts.canViewDepartment o contracts.canViewAll
-   */
-  searchContracts = [
-    // Middlewares
-    auth,
-    verifyModuleAccess,
-    requireAnyPermission([
-      { category: "contracts", permission: "canViewDepartment" },
-      { category: "contracts", permission: "canViewAll" },
-    ]),
-
-    // Controlador
-    async (req, res) => {
-      try {
-        const { body, user, permissions } = req;
-
-        console.log(
-          `🔍 Usuario ${user.userId} ejecutando búsqueda avanzada de contratos`
-        );
-
-        // Construir criterios de búsqueda
-        const searchCriteria = {
-          ...body,
-          // Aplicar restricciones de acceso
-          accessRestrictions: {
-            scope: permissions.hasPermission("contracts", "canViewAll")
-              ? "global"
-              : "department",
-            departmentId: permissions.hasPermission("contracts", "canViewAll")
-              ? null
-              : permissions.departmentId,
-            userId: user.userId,
-          },
-        };
-
-        // Ejecutar búsqueda usando el servicio
-        const searchResults =
-          await this.contractService.searchContracts(searchCriteria);
-
-        console.log(
-          `✅ Búsqueda completada: ${searchResults.results.length} contratos encontrados`
-        );
-
-        res.status(200).json({
-          success: true,
-          data: {
-            results: searchResults.results,
-            pagination: searchResults.pagination,
-            aggregations: searchResults.aggregations,
-            appliedFilters: searchResults.appliedFilters,
-            searchMetadata: searchResults.searchMetadata,
-          },
-          metadata: {
-            searchedBy: user.userId,
-            searchedAt: new Date(),
-            totalResults: searchResults.pagination.totalResults,
-            searchDuration: searchResults.searchMetadata.duration,
-            scope: searchCriteria.accessRestrictions.scope,
-          },
-        });
-      } catch (error) {
-        console.error(`❌ Error en búsqueda: ${error.message}`);
-
-        res.status(error.statusCode || 500).json({
-          success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "SEARCH_ERROR",
-        });
-      }
-    },
-  ];
-
-  // =============================================================================
-  // OPERACIONES DE CONFIGURACIÓN
+  // OPERACIONES DE CONFIGURACIÓN Y UTILIDADES
   // =============================================================================
 
   /**
@@ -977,11 +702,8 @@ export class ContractController {
    * Permisos: Acceso básico al módulo
    */
   getContractsConfiguration = [
-    // Middlewares
     auth,
     verifyModuleAccess,
-
-    // Controlador
     async (req, res) => {
       try {
         const { user } = req;
@@ -1030,258 +752,53 @@ export class ContractController {
   ];
 
   /**
-   * Inicializar configuración del sistema
-   * POST /contracts/configuration/initialize
-   * Permisos: special.canManagePermissions (solo administradores)
-   */
-  initializeConfiguration = [
-    // Middlewares
-    auth,
-    verifyModuleAccess,
-    requirePermission({
-      category: "special",
-      permission: "canManagePermissions",
-      errorMessage:
-        "Solo los administradores pueden inicializar la configuración del sistema",
-    }),
-
-    // Controlador
-    async (req, res) => {
-      try {
-        const { user } = req;
-
-        console.log(
-          `🚀 Usuario ${user.userId} inicializando configuración del sistema`
-        );
-
-        // Inicializar configuración completa usando el servicio de configuración
-        const initResult =
-          await this.configService.initializeCompleteConfiguration();
-
-        console.log(
-          `✅ Configuración inicializada: ${initResult.summary.completedOperations}/${initResult.summary.totalOperations} operaciones exitosas`
-        );
-
-        res.status(200).json({
-          success: true,
-          data: {
-            initializationResult: initResult,
-            message: initResult.summary.success
-              ? "Configuración inicializada exitosamente"
-              : "Configuración inicializada con algunos errores",
-            summary: initResult.summary,
-          },
-          metadata: {
-            initializedBy: user.userId,
-            initializedAt: new Date(),
-            systemReady: initResult.summary.success,
-          },
-        });
-      } catch (error) {
-        console.error(`❌ Error inicializando configuración: ${error.message}`);
-
-        res.status(error.statusCode || 500).json({
-          success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "INIT_ERROR",
-        });
-      }
-    },
-  ];
-
-  // =============================================================================
-  // OPERACIONES DE EXPORTACIÓN Y REPORTES
-  // =============================================================================
-
-  /**
-   * Exportar contratos a Excel/PDF
-   * POST /contracts/export
-   * Permisos: special.canExportData
-   */
-  exportContracts = [
-    // Middlewares
-    auth,
-    verifyModuleAccess,
-    requirePermission({
-      category: "special",
-      permission: "canExportData",
-      errorMessage: "No tiene permisos para exportar datos",
-    }),
-
-    // Controlador
-    async (req, res) => {
-      try {
-        const { body, user, permissions } = req;
-
-        console.log(`📤 Usuario ${user.userId} exportando contratos`);
-
-        // Extraer opciones de exportación
-        const {
-          format = "excel", // excel, pdf, csv
-          filters = {},
-          includeDocuments = false,
-          includeHistory = false,
-          includeFinancialData = false,
-        } = body;
-
-        // Validar formato
-        const validFormats = ["excel", "pdf", "csv"];
-        if (!validFormats.includes(format)) {
-          return res.status(400).json({
-            success: false,
-            message: "Formato de exportación no válido",
-            validFormats,
-            provided: format,
-          });
-        }
-
-        // Verificar permisos adicionales
-        if (
-          includeFinancialData &&
-          !permissions.hasPermission("special", "canViewFinancialData")
-        ) {
-          return res.status(403).json({
-            success: false,
-            message: "No tiene permisos para exportar datos financieros",
-          });
-        }
-
-        // Aplicar restricciones de acceso
-        const exportOptions = {
-          format,
-          filters: {
-            ...filters,
-            // Aplicar restricciones departamentales si es necesario
-            ...(permissions.hasPermission("contracts", "canViewAll")
-              ? {}
-              : { departmentId: permissions.departmentId }),
-          },
-          includeDocuments,
-          includeHistory,
-          includeFinancialData,
-          exportedBy: user.userId,
-          exportDate: new Date(),
-        };
-
-        // Generar exportación usando el servicio
-        const exportResult =
-          await this.contractService.exportContracts(exportOptions);
-
-        console.log(
-          `✅ Exportación completada: ${exportResult.recordCount} registros en formato ${format}`
-        );
-
-        // Configurar headers para descarga
-        res.setHeader("Content-Type", exportResult.mimeType);
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename="${exportResult.filename}"`
-        );
-        res.setHeader("Content-Length", exportResult.size);
-
-        // Enviar archivo
-        res.send(exportResult.buffer);
-      } catch (error) {
-        console.error(`❌ Error exportando contratos: ${error.message}`);
-
-        res.status(error.statusCode || 500).json({
-          success: false,
-          message: error.message || "Error interno del servidor",
-          code: error.code || "EXPORT_ERROR",
-        });
-      }
-    },
-  ];
-
-  /**
-   * Generar reporte estadístico de contratos
+   * Obtener estadísticas de contratos
    * GET /contracts/statistics
-   * Permisos: contracts.canViewDepartment o contracts.canViewAll
+   * Permisos: Acceso básico al módulo
    */
-  getContractStatistics = [
-    // Middlewares
+  getContractsStatistics = [
     auth,
     verifyModuleAccess,
-    requireAnyPermission([
-      { category: "contracts", permission: "canViewDepartment" },
-      { category: "contracts", permission: "canViewAll" },
-    ]),
-
-    // Controlador
     async (req, res) => {
       try {
-        const { query, user, permissions } = req;
+        const { user, permissions } = req;
+        const { period = "month", departmentId = null } = req.query;
 
         console.log(
-          `📈 Usuario ${user.userId} consultando estadísticas de contratos`
+          `📊 Usuario ${user.userId} consultando estadísticas de contratos`
         );
 
-        // Extraer parámetros de consulta
-        const {
-          dateFrom,
-          dateTo,
-          groupBy = "status", // status, type, department, phase
-          includeFinancialData = "false",
-          includeComparison = "false",
-        } = query;
-
-        // Verificar permisos para datos financieros
-        const canViewFinancial = permissions.hasPermission(
-          "special",
-          "canViewFinancialData"
-        );
-        const requestedFinancialData = includeFinancialData === "true";
-
-        if (requestedFinancialData && !canViewFinancial) {
-          return res.status(403).json({
-            success: false,
-            message: "No tiene permisos para ver datos financieros",
-          });
+        // Validar acceso a departamento si se especifica
+        if (departmentId && !permissions.hasGlobalAccess) {
+          if (departmentId !== permissions.departmentId) {
+            return res.status(403).json({
+              success: false,
+              message:
+                "No tiene acceso a las estadísticas del departamento especificado",
+              code: "DEPARTMENT_ACCESS_DENIED",
+            });
+          }
         }
 
-        // Configurar opciones de estadísticas
-        const statsOptions = {
-          dateFrom: dateFrom ? new Date(dateFrom) : null,
-          dateTo: dateTo ? new Date(dateTo) : null,
-          groupBy,
-          includeFinancialData: requestedFinancialData && canViewFinancial,
-          includeComparison: includeComparison === "true",
-          scope: permissions.hasPermission("contracts", "canViewAll")
-            ? "global"
-            : "department",
-          departmentId: permissions.hasPermission("contracts", "canViewAll")
-            ? null
-            : permissions.departmentId,
+        const statistics = await this.contractService.getContractsStatistics({
+          period,
+          departmentId:
+            departmentId ||
+            (permissions.hasGlobalAccess ? null : permissions.departmentId),
           userId: user.userId,
-        };
+        });
 
-        // Generar estadísticas usando el servicio
-        const statistics =
-          await this.contractService.getContractStatistics(statsOptions);
-
-        console.log(
-          `✅ Estadísticas generadas para ${statistics.metadata.totalContracts} contratos`
-        );
+        console.log(`✅ Estadísticas generadas exitosamente`);
 
         res.status(200).json({
           success: true,
-          data: {
-            statistics: statistics.data,
-            summary: statistics.summary,
-            trends: statistics.trends,
-            comparisons: statistics.comparisons,
-            charts: statistics.chartData,
-            metadata: statistics.metadata,
-          },
+          data: statistics,
           metadata: {
-            generatedBy: user.userId,
-            generatedAt: new Date(),
-            scope: statsOptions.scope,
-            includeFinancialData: statsOptions.includeFinancialData,
-            period: {
-              from: statsOptions.dateFrom,
-              to: statsOptions.dateTo,
-            },
+            requestedBy: user.userId,
+            requestedAt: new Date(),
+            period,
+            departmentId: departmentId || permissions.departmentId,
+            scope: permissions.hasGlobalAccess ? "global" : "department",
           },
         });
       } catch (error) {
@@ -1291,6 +808,87 @@ export class ContractController {
           success: false,
           message: error.message || "Error interno del servidor",
           code: error.code || "STATISTICS_ERROR",
+        });
+      }
+    },
+  ];
+
+  /**
+   * Exportar contratos
+   * GET /contracts/export
+   * Permisos: special.canExportData
+   */
+  exportContracts = [
+    auth,
+    verifyModuleAccess,
+    requirePermission({
+      category: "special",
+      permission: "canExportData",
+      errorMessage: "No tiene permisos para exportar datos",
+    }),
+    async (req, res) => {
+      try {
+        const { user, permissions } = req;
+        const { format = "xlsx", filters = "{}" } = req.query;
+
+        console.log(
+          `📤 Usuario ${user.userId} exportando contratos en formato: ${format}`
+        );
+
+        // Validar formato
+        const validFormats = ["xlsx", "csv", "pdf"];
+        if (!validFormats.includes(format)) {
+          return res.status(400).json({
+            success: false,
+            message: `Formato de exportación inválido. Formatos válidos: ${validFormats.join(", ")}`,
+            code: "INVALID_FORMAT",
+          });
+        }
+
+        // Parsear filtros
+        let parsedFilters = {};
+        try {
+          parsedFilters = JSON.parse(filters);
+        } catch (error) {
+          return res.status(400).json({
+            success: false,
+            message: "Filtros inválidos en formato JSON",
+            code: "INVALID_FILTERS",
+          });
+        }
+
+        // Aplicar restricciones de departamento si no tiene acceso global
+        if (!permissions.hasGlobalAccess) {
+          parsedFilters.requestingDepartment = permissions.departmentId;
+        }
+
+        const exportResult = await this.contractService.exportContracts(
+          format,
+          {
+            filters: parsedFilters,
+            userId: user.userId,
+            includeDeleted: false,
+          }
+        );
+
+        console.log(`✅ Exportación completada: ${exportResult.filename}`);
+
+        // Configurar headers para descarga
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${exportResult.filename}"`
+        );
+        res.setHeader("Content-Type", exportResult.contentType);
+
+        // Enviar archivo
+        res.status(200).send(exportResult.buffer);
+      } catch (error) {
+        console.error(`❌ Error exportando contratos: ${error.message}`);
+
+        res.status(error.statusCode || 500).json({
+          success: false,
+          message: error.message || "Error interno del servidor",
+          code: error.code || "EXPORT_ERROR",
         });
       }
     },
