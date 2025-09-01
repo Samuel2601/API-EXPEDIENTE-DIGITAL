@@ -64,6 +64,7 @@ export class BaseRepository {
       UserDepartmentAccess: "userdepartmentaccesses",
       PermissionTemplate: "permissiontemplates",
       PermissionHistory: "permissionhistories",
+      File: "files",
       Contract: "contracts",
       ContractHistory: "contracthistories",
       ContractType: "contracttypes",
