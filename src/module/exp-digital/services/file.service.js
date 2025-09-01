@@ -263,10 +263,7 @@ export class FileService {
       };
 
       // Ejecutar consulta
-      const result = await this.fileRepository.findWithPagination(
-        query,
-        queryOptions
-      );
+      const result = await this.fileRepository.findAll(query, queryOptions);
 
       // Enriquecer datos
       const enrichedFiles = await Promise.all(

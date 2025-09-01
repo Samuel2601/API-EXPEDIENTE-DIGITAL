@@ -143,7 +143,7 @@ export class DepartmentService {
       };
 
       // Ejecutar consulta
-      const result = await this.departmentRepository.findWithPagination(
+      const result = await this.departmentRepository.findAll(
         query,
         queryOptions
       );

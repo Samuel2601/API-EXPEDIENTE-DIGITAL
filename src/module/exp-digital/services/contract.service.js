@@ -219,7 +219,7 @@ export class ContractService {
       };
 
       // Ejecutar consulta usando el repositorio
-      const result = await this.contractRepository.findWithPagination(
+      const result = await this.contractRepository.findAll(
         mongoQuery,
         queryOptions
       );
