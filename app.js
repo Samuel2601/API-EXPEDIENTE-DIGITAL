@@ -27,7 +27,7 @@ import expDigitalRoutes from "./src/module/exp-digital/routes/index.routes.js";
 import { auth, verifyModuleAccess } from "./src/middlewares/auth.js";
 
 // Utilidades
-import { setupRouteMapper } from "./utils/routeMapper.js";
+import { mapRoutes, setupRouteMapper } from "./utils/routeMapper.js";
 import {
   getAutoBanSystem,
   smartNotFoundHandler,
@@ -86,7 +86,7 @@ const limiter = rateLimit({
 app.use("/api", limiter);
 
 // Sistema de auto-ban
-app.use(autoBanSystem);
+//app.use(autoBanSystem);
 
 // =============================================================================
 // CONFIGURACIÓN DE CORS
@@ -533,5 +533,7 @@ const server = app.listen(PORT, () => {
     setupRouteMapper(app);
   }
 });
+
+mapRoutes(app);
 
 export default app;

@@ -411,13 +411,6 @@ router.get("/configuration", controller.getContractsConfiguration);
 router.get("/statistics", controller.getContractsStatistics);
 
 /**
- * POST /contracts/configuration/initialize
- * Inicializar configuración del sistema
- * Permisos: special.canManagePermissions (solo administradores)
- */
-router.post("/configuration/initialize", controller.initializeConfiguration);
-
-/**
  * GET /contracts/dashboard
  * Obtener datos para dashboard del usuario
  * Permisos: Acceso básico al módulo

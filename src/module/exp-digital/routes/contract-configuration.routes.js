@@ -224,14 +224,14 @@ router.put("/types/:id/phases", controller.updatePhasesByContractType);
  * Query params: format (json, excel), includeInactive
  * Permisos: special.canExportData
  */
-router.get("/export", controller.exportConfiguration);
+//router.get("/export", controller.exportConfiguration);
 
 /**
  * POST /contract-configuration/import
  * Importar configuración desde archivo
  * Permisos: special.canManagePermissions
  */
-router.post("/import", controller.importConfiguration);
+//router.post("/import", controller.importConfiguration);
 
 // =============================================================================
 // ENDPOINTS DE VALIDACIÓN Y UTILIDADES
@@ -241,19 +241,19 @@ router.post("/import", controller.importConfiguration);
  * GET /contract-configuration/framework-info
  * Obtener información del marco legal (LOSNCP)
  */
-router.get("/framework-info", controller.getFrameworkInfo);
+//router.get("/framework-info", controller.getFrameworkInfo);
 
 /**
  * GET /contract-configuration/health
  * Verificar salud del sistema de configuración
  */
-router.get("/health", controller.getConfigurationHealth);
+//router.get("/health", controller.getConfigurationHealth);
 
 /**
  * POST /contract-configuration/reset
  * Resetear configuración a valores por defecto (PELIGROSO)
  * Permisos: special.canManagePermissions + confirmación adicional
  */
-router.post("/reset", controller.resetConfiguration);
+//router.post("/reset", controller.resetConfiguration);
 
 export default router;
