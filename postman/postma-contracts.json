@@ -1,0 +1,1149 @@
+{
+    "info": {
+        "_postman_id": "a1b2c3d4-5e6f-7890-1234-567890abcdef",
+        "name": "GADMCE - Expediente Digital - Contracts API",
+        "description": "Colección de endpoints para la gestión de contratos del módulo de Expediente Digital\n\n**GADM Cantón Esmeraldas - Sistema de Contratación Pública**\n\n## Funcionalidades incluidas:\n- ✅ CRUD de contratos\n- ✅ Gestión de fases y estados\n- ✅ Documentos del contrato\n- ✅ Operaciones masivas\n- ✅ Reportes y estadísticas\n- ✅ Dashboard y acciones pendientes\n- ✅ Archivado y duplicación\n\n## Variables necesarias:\n- `{{base_url}}`: URL base del API\n- `{{auth_token}}`: Token JWT de autenticación\n- `{{contract_id}}`: ID del contrato para operaciones específicas\n- `{{department_id}}`: ID del departamento\n\n## Tipos de contratación LOSNCP:\n- Procedimientos comunes: Subasta Inversa, Licitación, Cotización, Menor Cuantía\n- Procedimientos especiales: Emergencia, Régimen Especial, Catálogo Electrónico",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "📋 Gestión CRUD de Contratos",
+            "item": [
+                {
+                    "name": "➕ Crear nuevo contrato",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"contractualObject\": \"Adquisición de equipos informáticos para modernización administrativa\",\n    \"contractType\": \"COTIZACION\",\n    \"requestingDepartment\": \"{{department_id}}\",\n    \"budget\": {\n        \"amount\": 85000.00,\n        \"currency\": \"USD\",\n        \"budgetCode\": \"530801\",\n        \"budgetYear\": 2025,\n        \"hasPresupuestaryAvailability\": true\n    },\n    \"basicInfo\": {\n        \"processNumber\": \"GADMCE-COT-001-2025\",\n        \"processType\": \"BIENES\",\n        \"description\": \"Proceso de cotización para la adquisición de 50 computadoras de escritorio, 10 laptops y 5 impresoras multifuncionales para las diferentes dependencias del GADM Cantón Esmeraldas\",\n        \"technicalSpecifications\": \"Equipos con procesador Intel i5 o superior, 8GB RAM mínimo, disco SSD 256GB, Windows 11 Pro licenciado\",\n        \"deliveryLocation\": \"Instalaciones del GADM Cantón Esmeraldas - Malecón y 10 de Agosto\",\n        \"deliveryTerm\": \"30 días calendario\",\n        \"warranty\": \"24 meses\"\n    },\n    \"participants\": {\n        \"responsibleUser\": \"{{user_id}}\",\n        \"technicalTeam\": [\n            {\n                \"userId\": \"64f7e8b123456789abcdef04\",\n                \"role\": \"TECHNICAL_SUPERVISOR\",\n                \"name\": \"Ing. María Rodríguez\"\n            },\n            {\n                \"userId\": \"64f7e8b123456789abcdef05\",\n                \"role\": \"ADMINISTRATIVE_SUPERVISOR\",\n                \"name\": \"Dr. Carlos Mendoza\"\n            }\n        ]\n    },\n    \"timeline\": {\n        \"expectedStartDate\": \"2025-09-15T00:00:00.000Z\",\n        \"expectedEndDate\": \"2025-12-15T00:00:00.000Z\",\n        \"criticalMilestones\": [\n            {\n                \"phase\": \"PRECONTRACTUAL\",\n                \"description\": \"Publicación de pliegos\",\n                \"expectedDate\": \"2025-09-20T00:00:00.000Z\"\n            },\n            {\n                \"phase\": \"PRECONTRACTUAL\",\n                \"description\": \"Recepción de ofertas\",\n                \"expectedDate\": \"2025-10-05T00:00:00.000Z\"\n            }\n        ]\n    },\n    \"metadata\": {\n        \"priority\": \"MEDIUM\",\n        \"tags\": [\"equipos\", \"informatica\", \"modernizacion\", \"cotizacion\"],\n        \"customFields\": {\n            \"environmentalImpact\": \"BAJO\",\n            \"socialImpact\": \"MEDIO\",\n            \"strategicImportance\": \"ALTA\"\n        }\n    }\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts"
+                            ]
+                        },
+                        "description": "**Crear nuevo contrato**\n\n**Permisos requeridos:** `contracts.canCreate`\n\n**Validaciones automáticas:**\n- Disponibilidad presupuestaria (PAC)\n- Tipo de contratación según monto (LOSNCP)\n- Departamento autorizado\n- Datos obligatorios según tipo\n\n**Estado inicial:** `PREPARATORIA`\n**Fase inicial:** `PREPARATORIA`\n\n**Campos requeridos:**\n- `contractualObject`: Objeto contractual\n- `contractType`: Tipo según LOSNCP\n- `requestingDepartment`: Departamento solicitante\n- `budget.amount`: Monto presupuestado\n- `responsibleUser`: Usuario responsable"
+                    },
+                    "response": [
+                        {
+                            "name": "✅ Contrato creado exitosamente",
+                            "originalRequest": {
+                                "method": "POST",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"contractualObject\": \"Adquisición de equipos informáticos\",\n    \"contractType\": \"COTIZACION\"\n}"
+                                }
+                            },
+                            "status": "Created",
+                            "code": 201,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n    \"success\": true,\n    \"message\": \"Contrato creado exitosamente\",\n    \"data\": {\n        \"_id\": \"64f7e8b123456789abcdef99\",\n        \"processNumber\": \"GADMCE-COT-001-2025\",\n        \"contractualObject\": \"Adquisición de equipos informáticos para modernización administrativa\",\n        \"currentPhase\": \"PREPARATORIA\",\n        \"currentStatus\": \"DRAFT\",\n        \"createdAt\": \"2025-09-01T10:00:00.000Z\",\n        \"createdBy\": \"64f7e8b123456789abcdef02\",\n        \"budget\": {\n            \"amount\": 85000.00,\n            \"currency\": \"USD\"\n        }\n    }\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "📄 Listar contratos",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts?page=1&limit=20&phase=PREPARATORIA&status=ACTIVE&department={{department_id}}&sortBy=createdAt&sortOrder=desc",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts"
+                            ],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "1",
+                                    "description": "Página actual"
+                                },
+                                {
+                                    "key": "limit",
+                                    "value": "20",
+                                    "description": "Elementos por página"
+                                },
+                                {
+                                    "key": "phase",
+                                    "value": "PREPARATORIA",
+                                    "description": "Filtro por fase: PREPARATORIA, PRECONTRACTUAL, CONTRACTUAL, PAGO, RECEPCION"
+                                },
+                                {
+                                    "key": "status",
+                                    "value": "ACTIVE",
+                                    "description": "Filtro por estado: DRAFT, ACTIVE, SUSPENDED, COMPLETED, CANCELLED"
+                                },
+                                {
+                                    "key": "contractType",
+                                    "value": "COTIZACION",
+                                    "description": "Tipo de contratación",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "department",
+                                    "value": "{{department_id}}",
+                                    "description": "Departamento solicitante"
+                                },
+                                {
+                                    "key": "responsibleUser",
+                                    "value": "{{user_id}}",
+                                    "description": "Usuario responsable",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "budgetRange",
+                                    "value": "10000-100000",
+                                    "description": "Rango presupuestario",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "dateFrom",
+                                    "value": "2025-01-01",
+                                    "description": "Fecha desde (YYYY-MM-DD)",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "dateTo",
+                                    "value": "2025-12-31",
+                                    "description": "Fecha hasta (YYYY-MM-DD)",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "searchTerm",
+                                    "value": "equipos informáticos",
+                                    "description": "Búsqueda en objeto contractual",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "tags",
+                                    "value": "equipos,informatica",
+                                    "description": "Filtro por tags",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "sortBy",
+                                    "value": "createdAt",
+                                    "description": "Campo de ordenamiento"
+                                },
+                                {
+                                    "key": "sortOrder",
+                                    "value": "desc",
+                                    "description": "Orden: asc, desc"
+                                }
+                            ]
+                        },
+                        "description": "**Obtener lista de contratos con filtros**\n\n**Permisos requeridos:** `contracts.canViewOwn/canViewDepartment/canViewAll`\n\n**Control de acceso:**\n- Los usuarios ven solo sus contratos asignados\n- Supervisores ven contratos del departamento\n- Administradores ven todos los contratos\n\n**Filtros disponibles:**\n- `phase`: Fase actual del contrato\n- `status`: Estado del contrato\n- `contractType`: Tipo según LOSNCP\n- `department`: Departamento solicitante\n- `budgetRange`: Rango presupuestario\n- `dateFrom/dateTo`: Rango de fechas\n- `searchTerm`: Búsqueda en texto\n\n**Ordenamiento:**\n- `sortBy`: createdAt, budget, processNumber, phase\n- `sortOrder`: asc, desc"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🔍 Obtener contrato por ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/{{contract_id}}?includeDocuments=true&includeHistory=true&includeParticipants=true",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "{{contract_id}}"
+                            ],
+                            "query": [
+                                {
+                                    "key": "includeDocuments",
+                                    "value": "true",
+                                    "description": "Incluir documentos asociados"
+                                },
+                                {
+                                    "key": "includeHistory",
+                                    "value": "true",
+                                    "description": "Incluir historial de cambios"
+                                },
+                                {
+                                    "key": "includeParticipants",
+                                    "value": "true",
+                                    "description": "Incluir participantes y equipo técnico"
+                                },
+                                {
+                                    "key": "includeTimeline",
+                                    "value": "false",
+                                    "description": "Incluir cronograma detallado",
+                                    "disabled": true
+                                }
+                            ]
+                        },
+                        "description": "**Obtener contrato específico con detalles completos**\n\n**Permisos requeridos:** `contracts.canViewOwn/canViewDepartment/canViewAll` + acceso al contrato\n\n**Control de acceso:**\n- Validación de permisos por departamento\n- Verificación de propiedad del contrato\n- Logs de auditoría automáticos\n\n**Información incluida:**\n- Datos básicos del contrato\n- Estado y fase actual\n- Historial de transiciones\n- Documentos asociados por fase\n- Participantes y responsables\n- Cronograma y hitos\n- Presupuesto y pagos\n- Metadatos y campos personalizados"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "✏️ Actualizar contrato",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"contractualObject\": \"Adquisición de equipos informáticos y mobiliario para modernización administrativa\",\n    \"basicInfo\": {\n        \"description\": \"Proceso actualizado de cotización para la adquisición de 50 computadoras de escritorio, 10 laptops, 5 impresoras multifuncionales y mobiliario de oficina para las diferentes dependencias del GADM Cantón Esmeraldas\",\n        \"technicalSpecifications\": \"Equipos con procesador Intel i5 de 11va generación o superior, 16GB RAM, disco SSD 512GB, Windows 11 Pro licenciado. Mobiliario ergonómico con certificación ISO.\",\n        \"deliveryTerm\": \"45 días calendario\",\n        \"warranty\": \"36 meses para equipos, 12 meses para mobiliario\"\n    },\n    \"budget\": {\n        \"amount\": 95000.00,\n        \"currency\": \"USD\",\n        \"budgetCode\": \"530801\",\n        \"budgetYear\": 2025,\n        \"hasPresupuestaryAvailability\": true,\n        \"adjustmentReason\": \"Inclusión de mobiliario y mejora en especificaciones técnicas\"\n    },\n    \"participants\": {\n        \"technicalTeam\": [\n            {\n                \"userId\": \"64f7e8b123456789abcdef04\",\n                \"role\": \"TECHNICAL_SUPERVISOR\",\n                \"name\": \"Ing. María Rodríguez\"\n            },\n            {\n                \"userId\": \"64f7e8b123456789abcdef05\",\n                \"role\": \"ADMINISTRATIVE_SUPERVISOR\",\n                \"name\": \"Dr. Carlos Mendoza\"\n            },\n            {\n                \"userId\": \"64f7e8b123456789abcdef06\",\n                \"role\": \"LEGAL_ADVISOR\",\n                \"name\": \"Ab. Ana García\"\n            }\n        ]\n    },\n    \"timeline\": {\n        \"expectedStartDate\": \"2025-09-20T00:00:00.000Z\",\n        \"expectedEndDate\": \"2025-12-30T00:00:00.000Z\",\n        \"criticalMilestones\": [\n            {\n                \"phase\": \"PRECONTRACTUAL\",\n                \"description\": \"Publicación de pliegos actualizados\",\n                \"expectedDate\": \"2025-09-25T00:00:00.000Z\"\n            },\n            {\n                \"phase\": \"PRECONTRACTUAL\",\n                \"description\": \"Recepción de ofertas\",\n                \"expectedDate\": \"2025-10-10T00:00:00.000Z\"\n            },\n            {\n                \"phase\": \"PRECONTRACTUAL\",\n                \"description\": \"Evaluación y adjudicación\",\n                \"expectedDate\": \"2025-10-25T00:00:00.000Z\"\n            }\n        ]\n    },\n    \"metadata\": {\n        \"priority\": \"HIGH\",\n        \"tags\": [\"equipos\", \"informatica\", \"mobiliario\", \"modernizacion\", \"cotizacion\"],\n        \"customFields\": {\n            \"environmentalImpact\": \"MEDIO\",\n            \"socialImpact\": \"ALTO\",\n            \"strategicImportance\": \"ALTA\",\n            \"urgency\": \"MEDIUM\"\n        }\n    },\n    \"updateReason\": \"Ampliación del alcance del contrato para incluir mobiliario y mejoras en especificaciones técnicas según requerimientos actualizados de los departamentos usuario.\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/{{contract_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "{{contract_id}}"
+                            ]
+                        },
+                        "description": "**Actualizar contrato existente**\n\n**Permisos requeridos:** `contracts.canEdit` + propiedad del contrato\n\n**Validaciones:**\n- El contrato debe estar en fase que permita modificaciones\n- Validación de disponibilidad presupuestaria si cambia monto\n- Verificación de permisos del usuario\n- Registro automático de cambios en historial\n\n**Campos actualizables por fase:**\n- **PREPARATORIA**: Todos los campos\n- **PRECONTRACTUAL**: Limitado a correcciones\n- **CONTRACTUAL**: Solo campos administrativos\n- **PAGO/RECEPCION**: Solo metadatos\n\n**Registro de auditoría:**\n- Usuario que realizó el cambio\n- Fecha y hora de modificación\n- Campos modificados (diff)\n- Razón del cambio"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🗑️ Eliminar contrato",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"reason\": \"Contrato duplicado por error, se mantiene proceso GADMCE-COT-002-2025\",\n    \"deleteType\": \"SOFT\",\n    \"notifyParticipants\": true,\n    \"archiveDocuments\": true\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/{{contract_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "{{contract_id}}"
+                            ]
+                        },
+                        "description": "**Eliminar contrato (soft delete)**\n\n**Permisos requeridos:** `contracts.canDelete` + validaciones adicionales\n\n**Validaciones:**\n- El contrato debe estar en fase PREPARATORIA o DRAFT\n- No debe tener documentos críticos asociados\n- No debe tener compromisos presupuestarios ejecutados\n- Debe especificar razón de eliminación\n\n**Tipos de eliminación:**\n- **SOFT (default)**: Marca como eliminado, preserva datos\n- **HARD**: Eliminación física (solo administradores)\n\n**Proceso de eliminación:**\n1. Validación de permisos y estado\n2. Notificación a participantes\n3. Archivado de documentos asociados\n4. Registro en auditoría\n5. Liberación de presupuesto asignado\n\n**⚠️ PRECAUCIÓN:** Esta acción es irreversible para eliminación HARD"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "🔄 Gestión de Fases y Estados",
+            "item": [
+                {
+                    "name": "↗️ Cambiar fase del contrato",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"newPhase\": \"PRECONTRACTUAL\",\n    \"reason\": \"Completada la fase preparatoria con todos los documentos requeridos. Se procede a la fase precontractual para la publicación de pliegos.\",\n    \"validations\": {\n        \"checkRequiredDocuments\": true,\n        \"checkBudgetAvailability\": true,\n        \"checkTeamAssignment\": true,\n        \"checkApprovals\": true\n    },\n    \"documents\": [\n        {\n            \"fileId\": \"64f7e8b123456789abcdef01\",\n            \"documentType\": \"PAC\",\n            \"description\": \"Certificación presupuestaria aprobada\"\n        },\n        {\n            \"fileId\": \"64f7e8b123456789abcdef02\",\n            \"documentType\": \"TDR\",\n            \"description\": \"Términos de referencia finalizados\"\n        },\n        {\n            \"fileId\": \"64f7e8b123456789abcdef03\",\n            \"documentType\": \"RESOLUCION_INICIO\",\n            \"description\": \"Resolución de inicio del proceso\"\n        }\n    ],\n    \"nextPhaseSettings\": {\n        \"expectedDuration\": 30,\n        \"responsibleUser\": \"64f7e8b123456789abcdef05\",\n        \"priorityLevel\": \"HIGH\",\n        \"notifications\": {\n            \"emailReminders\": true,\n            \"deadlineAlerts\": true,\n            \"stakeholderUpdates\": true\n        }\n    },\n    \"approvals\": [\n        {\n            \"userId\": \"64f7e8b123456789abcdef04\",\n            \"role\": \"TECHNICAL_SUPERVISOR\",\n            \"approved\": true,\n            \"approvalDate\": \"2025-09-01T09:00:00.000Z\",\n            \"comments\": \"Especificaciones técnicas validadas\"\n        },\n        {\n            \"userId\": \"64f7e8b123456789abcdef05\",\n            \"role\": \"ADMINISTRATIVE_SUPERVISOR\",\n            \"approved\": true,\n            \"approvalDate\": \"2025-09-01T10:00:00.000Z\",\n            \"comments\": \"Documentación administrativa completa\"\n        }\n    ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/{{contract_id}}/phase",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "{{contract_id}}",
+                                "phase"
+                            ]
+                        },
+                        "description": "**Cambiar fase del contrato**\n\n**Permisos requeridos:** `contracts.canEdit` + validaciones específicas por fase\n\n**Fases del proceso LOSNCP:**\n1. **PREPARATORIA**: PAC, TDR, estudios, resoluciones\n2. **PRECONTRACTUAL**: Pliegos, ofertas, evaluación, adjudicación\n3. **CONTRACTUAL**: Ejecución, seguimiento, control\n4. **PAGO**: Facturación, validación, pagos\n5. **RECEPCIÓN**: Entrega, liquidación, cierre\n\n**Validaciones automáticas:**\n- Documentos requeridos para la fase\n- Aprobaciones necesarias\n- Disponibilidad presupuestaria\n- Asignación de equipo técnico\n- Cumplimiento de plazos\n\n**Proceso de transición:**\n1. Validación de prerrequisitos\n2. Verificación de documentos\n3. Confirmación de aprobaciones\n4. Actualización de estado\n5. Notificaciones automáticas\n6. Activación de siguiente fase"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🔄 Cambiar estado del contrato",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"newStatus\": \"ACTIVE\",\n    \"reason\": \"Activación del proceso tras completar la documentación preparatoria y obtener las aprobaciones requeridas.\",\n    \"effectiveDate\": \"2025-09-01T12:00:00.000Z\",\n    \"notifications\": {\n        \"notifyTeam\": true,\n        \"notifyDepartment\": true,\n        \"notifyStakeholders\": false,\n        \"customMessage\": \"El proceso GADMCE-COT-001-2025 ha sido activado y se encuentra en fase precontractual.\"\n    },\n    \"statusSettings\": {\n        \"allowModifications\": true,\n        \"requireApprovalForChanges\": true,\n        \"enableAutomaticReminders\": true,\n        \"escalationRules\": {\n            \"enabled\": true,\n            \"escalateAfterDays\": 5,\n            \"escalateTo\": \"64f7e8b123456789abcdef07\"\n        }\n    },\n    \"additionalData\": {\n        \"activationChecklist\": [\n            {\n                \"item\": \"Documentación completa\",\n                \"completed\": true,\n                \"completedBy\": \"64f7e8b123456789abcdef02\",\n                \"completedAt\": \"2025-09-01T11:30:00.000Z\"\n            },\n            {\n                \"item\": \"Aprobaciones obtenidas\",\n                \"completed\": true,\n                \"completedBy\": \"64f7e8b123456789abcdef04\",\n                \"completedAt\": \"2025-09-01T11:45:00.000Z\"\n            },\n            {\n                \"item\": \"Presupuesto validado\",\n                \"completed\": true,\n                \"completedBy\": \"64f7e8b123456789abcdef05\",\n                \"completedAt\": \"2025-09-01T11:50:00.000Z\"\n            }\n        ]\n    }\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/{{contract_id}}/status",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "{{contract_id}}",
+                                "status"
+                            ]
+                        },
+                        "description": "**Cambiar estado del contrato**\n\n**Permisos requeridos:** `contracts.canEdit` + validaciones específicas por estado\n\n**Estados disponibles:**\n- **DRAFT**: Borrador, en preparación\n- **ACTIVE**: Activo, en proceso\n- **SUSPENDED**: Suspendido temporalmente\n- **COMPLETED**: Completado exitosamente\n- **CANCELLED**: Cancelado o anulado\n- **ON_HOLD**: En espera por dependencias externas\n\n**Transiciones válidas:**\n- DRAFT → ACTIVE (activación)\n- ACTIVE → SUSPENDED (suspensión temporal)\n- SUSPENDED → ACTIVE (reactivación)\n- ACTIVE → COMPLETED (finalización exitosa)\n- ACTIVE → CANCELLED (cancelación)\n- DRAFT → CANCELLED (cancelación en borrador)\n\n**Validaciones por transición:**\n- Documentos requeridos\n- Permisos específicos\n- Estado de la fase actual\n- Dependencias del proceso"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "📋 Historial de fases",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/{{contract_id}}/phases?includeDocuments=true&includeApprovals=true",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "{{contract_id}}",
+                                "phases"
+                            ],
+                            "query": [
+                                {
+                                    "key": "includeDocuments",
+                                    "value": "true",
+                                    "description": "Incluir documentos asociados a cada fase"
+                                },
+                                {
+                                    "key": "includeApprovals",
+                                    "value": "true",
+                                    "description": "Incluir aprobaciones por fase"
+                                },
+                                {
+                                    "key": "includeTimestamps",
+                                    "value": "false",
+                                    "description": "Incluir timestamps detallados",
+                                    "disabled": true
+                                }
+                            ]
+                        },
+                        "description": "**Obtener historial completo de fases**\n\n**Permisos requeridos:** `contracts.canViewOwn/canViewDepartment/canViewAll` + acceso al contrato\n\n**Información incluida:**\n- Secuencia cronológica de fases\n- Fechas de transición\n- Usuario responsable de cada cambio\n- Documentos asociados por fase\n- Aprobaciones y validaciones\n- Tiempo transcurrido en cada fase\n- Observaciones y comentarios\n\n**Útil para:**\n- Auditoría del proceso\n- Seguimiento de cumplimiento\n- Identificación de cuellos de botella\n- Reportes de gestión\n- Análisis de eficiencia"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🔀 Transiciones disponibles",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/{{contract_id}}/transitions",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "{{contract_id}}",
+                                "transitions"
+                            ]
+                        },
+                        "description": "**Obtener transiciones de fase/estado disponibles**\n\n**Permisos requeridos:** `contracts.canViewOwn/canViewDepartment/canViewAll` + acceso al contrato\n\n**Información incluida:**\n- Fases siguientes permitidas\n- Estados siguientes permitidos\n- Prerrequisitos para cada transición\n- Documentos requeridos\n- Aprobaciones necesarias\n- Permisos específicos del usuario\n\n**Basado en:**\n- Fase actual del contrato\n- Estado actual del contrato\n- Tipo de contratación (LOSNCP)\n- Permisos del usuario\n- Completitud de documentación\n- Reglas de negocio específicas"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "📎 Gestión de Documentos",
+            "item": [
+                {
+                    "name": "📤 Subir documento al contrato",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "files",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "documentType",
+                                    "value": "PLIEGOS",
+                                    "type": "text",
+                                    "description": "Tipo de documento según fase"
+                                },
+                                {
+                                    "key": "phase",
+                                    "value": "PRECONTRACTUAL",
+                                    "type": "text",
+                                    "description": "Fase del contrato"
+                                },
+                                {
+                                    "key": "description",
+                                    "value": "Pliegos de condiciones para proceso de cotización",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "isRequired",
+                                    "value": "true",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "version",
+                                    "value": "1.0",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "tags",
+                                    "value": "pliegos,condiciones,cotizacion",
+                                    "type": "text"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/{{contract_id}}/documents",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "{{contract_id}}",
+                                "documents"
+                            ]
+                        },
+                        "description": "**Subir documento asociado al contrato**\n\n**Permisos requeridos:** `documents.canUpload` + acceso al contrato\n\n**Validaciones automáticas:**\n- Tipo de documento válido para la fase actual\n- Tamaño y formato permitido\n- No duplicación de documentos requeridos\n- Permisos sobre el contrato\n\n**Tipos por fase:**\n- **PREPARATORIA**: PAC, TDR, Estudios, Resoluciones\n- **PRECONTRACTUAL**: Pliegos, Ofertas, Informes evaluación\n- **CONTRACTUAL**: Contrato, Garantías, Cronogramas\n- **PAGO**: Facturas, Planillas, Comprobantes\n- **RECEPCIÓN**: Actas, Informes finales, Liquidación"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "📄 Documentos del contrato",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/{{contract_id}}/documents?phase=PRECONTRACTUAL&documentType=PLIEGOS&includeVersions=true",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "{{contract_id}}",
+                                "documents"
+                            ],
+                            "query": [
+                                {
+                                    "key": "phase",
+                                    "value": "PRECONTRACTUAL",
+                                    "description": "Filtrar por fase específica"
+                                },
+                                {
+                                    "key": "documentType",
+                                    "value": "PLIEGOS",
+                                    "description": "Filtrar por tipo de documento"
+                                },
+                                {
+                                    "key": "includeVersions",
+                                    "value": "true",
+                                    "description": "Incluir historial de versiones"
+                                },
+                                {
+                                    "key": "onlyRequired",
+                                    "value": "false",
+                                    "description": "Solo documentos requeridos",
+                                    "disabled": true
+                                }
+                            ]
+                        },
+                        "description": "**Obtener documentos asociados al contrato**\n\n**Permisos requeridos:** `contracts.canViewOwn/canViewDepartment/canViewAll` + acceso al contrato\n\n**Organización por fases:**\n- Agrupación automática por fase contractual\n- Estado de completitud por fase\n- Documentos requeridos vs opcionales\n- Versiones y revisiones\n\n**Información incluida:**\n- Metadatos del documento\n- Usuario que subió\n- Fecha de subida\n- Estado de validación\n- Enlaces de descarga\n- Historial de versiones"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🔄 Actualizar documento",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"description\": \"Pliegos de condiciones actualizados - Versión 1.1\",\n    \"version\": \"1.1\",\n    \"isRequired\": true,\n    \"tags\": [\"pliegos\", \"condiciones\", \"cotizacion\", \"actualizado\"],\n    \"updateReason\": \"Actualización por aclaraciones recibidas de potenciales oferentes\",\n    \"metadata\": {\n        \"reviewedBy\": \"Ab. Ana García\",\n        \"approvedBy\": \"Dr. Carlos Mendoza\",\n        \"legalReview\": true,\n        \"technicalReview\": true\n    },\n    \"versionNotes\": \"Se actualizaron las especificaciones técnicas en la sección 3.2 y se aclararon los requisitos de garantía en la sección 5.1\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/{{contract_id}}/documents/{{document_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "{{contract_id}}",
+                                "documents",
+                                "{{document_id}}"
+                            ]
+                        },
+                        "description": "**Actualizar metadatos del documento del contrato**\n\n**Permisos requeridos:** `documents.canEdit` + acceso al contrato\n\n**Campos actualizables:**\n- Descripción y metadata\n- Versión y notas de versión\n- Tags y clasificación\n- Estado de validación\n- Campos personalizados\n\n**Control de versiones:**\n- Historial automático de cambios\n- Preservación de versiones anteriores\n- Comparación entre versiones\n- Restauración de versiones previas"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "⚡ Operaciones Masivas",
+            "item": [
+                {
+                    "name": "🔄 Actualización masiva",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"contractIds\": [\n        \"64f7e8b123456789abcdef99\",\n        \"64f7e8b123456789abcdef98\",\n        \"64f7e8b123456789abcdef97\"\n    ],\n    \"updateData\": {\n        \"metadata\": {\n            \"priority\": \"HIGH\",\n            \"tags\": [\"urgente\", \"2025\", \"modernizacion\"]\n        },\n        \"participants\": {\n            \"technicalSupervisor\": \"64f7e8b123456789abcdef04\"\n        },\n        \"customFields\": {\n            \"fiscalYear\": \"2025\",\n            \"budgetSource\": \"RECURSOS_PROPIOS\",\n            \"strategicPlan\": \"MODERNIZACION_TECNOLOGICA\"\n        }\n    },\n    \"filters\": {\n        \"onlyIfPhase\": [\"PREPARATORIA\", \"PRECONTRACTUAL\"],\n        \"onlyIfStatus\": [\"DRAFT\", \"ACTIVE\"],\n        \"onlyIfDepartment\": \"{{department_id}}\"\n    },\n    \"options\": {\n        \"validateBeforeUpdate\": true,\n        \"createBackup\": true,\n        \"notifyParticipants\": true,\n        \"generateReport\": true,\n        \"continueOnError\": false\n    },\n    \"reason\": \"Actualización masiva de contratos para alineación con nueva estrategia institucional 2025\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/bulk-update",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "bulk-update"
+                            ]
+                        },
+                        "description": "**Actualización masiva de contratos**\n\n**Permisos requeridos:** `contracts.canEdit` + acceso a cada contrato individual\n\n**Validaciones:**\n- Permisos sobre cada contrato\n- Estado válido para modificación\n- Filtros de seguridad aplicados\n- Backup automático antes de cambios\n\n**Campos actualizables en lote:**\n- Metadatos y tags\n- Participantes y responsables\n- Configuraciones de notificación\n- Campos personalizados\n- Prioridades y clasificaciones\n\n**Opciones de seguridad:**\n- Validación previa a actualización\n- Backup automático\n- Continuación en caso de errores\n- Reporte detallado de resultados\n- Notificaciones a afectados"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🗑️ Eliminación masiva",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"contractIds\": [\n        \"64f7e8b123456789abcdef96\",\n        \"64f7e8b123456789abcdef95\"\n    ],\n    \"reason\": \"Contratos duplicados creados por error durante migración de datos\",\n    \"deleteType\": \"SOFT\",\n    \"filters\": {\n        \"onlyIfPhase\": [\"PREPARATORIA\"],\n        \"onlyIfStatus\": [\"DRAFT\"],\n        \"onlyIfNoBudgetCommitment\": true,\n        \"onlyIfNoActiveDocuments\": true\n    },\n    \"options\": {\n        \"validateBeforeDelete\": true,\n        \"archiveDocuments\": true,\n        \"notifyParticipants\": true,\n        \"createDeletionReport\": true,\n        \"requireAdditionalApproval\": false\n    },\n    \"safeguards\": {\n        \"confirmationCode\": \"DELETE_CONFIRMED\",\n        \"approvedBy\": \"64f7e8b123456789abcdef07\",\n        \"approvalDate\": \"2025-09-01T14:00:00.000Z\"\n    }\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/bulk-delete",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "bulk-delete"
+                            ]
+                        },
+                        "description": "**Eliminación masiva de contratos**\n\n**Permisos requeridos:** `contracts.canDelete` + validaciones estrictas\n\n**Validaciones obligatorias:**\n- Solo contratos en fase PREPARATORIA o DRAFT\n- Sin compromisos presupuestarios ejecutados\n- Sin documentos críticos asociados\n- Confirmación explícita del usuario\n- Razón detallada de eliminación\n\n**Filtros de seguridad:**\n- Estado y fase específicos\n- Sin compromisos presupuestarios\n- Sin documentos activos críticos\n- Límite máximo de contratos por operación\n\n**⚠️ PRECAUCIÓN EXTREMA:**\n- Esta operación puede afectar múltiples contratos\n- Requiere aprobación adicional para más de 5 contratos\n- Genera backup automático antes de proceder\n- Crea reporte detallado de eliminaciones"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "📊 Exportación masiva",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"contractIds\": [\n        \"64f7e8b123456789abcdef99\",\n        \"64f7e8b123456789abcdef98\",\n        \"64f7e8b123456789abcdef97\"\n    ],\n    \"exportFormat\": \"EXCEL\",\n    \"exportOptions\": {\n        \"includeDocuments\": true,\n        \"includeHistory\": true,\n        \"includeParticipants\": true,\n        \"includeFinancials\": true,\n        \"includeTechnicalSpecs\": true,\n        \"includeTimelines\": true\n    },\n    \"filters\": {\n        \"dateRange\": {\n            \"from\": \"2025-01-01\",\n            \"to\": \"2025-12-31\"\n        },\n        \"phases\": [\"PREPARATORIA\", \"PRECONTRACTUAL\", \"CONTRACTUAL\"],\n        \"departments\": [\"{{department_id}}\"],\n        \"contractTypes\": [\"COTIZACION\", \"MENOR_CUANTIA\"]\n    },\n    \"formatting\": {\n        \"locale\": \"es-EC\",\n        \"currency\": \"USD\",\n        \"dateFormat\": \"DD/MM/YYYY\",\n        \"includeHeaders\": true,\n        \"includeMetadata\": true\n    },\n    \"security\": {\n        \"watermark\": true,\n        \"accessControl\": true,\n        \"expirationHours\": 24,\n        \"downloadLimit\": 3\n    },\n    \"customFields\": [\n        \"processNumber\",\n        \"contractualObject\",\n        \"budget.amount\",\n        \"currentPhase\",\n        \"currentStatus\",\n        \"responsibleUser\",\n        \"createdAt\",\n        \"expectedEndDate\"\n    ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/bulk-export",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "bulk-export"
+                            ]
+                        },
+                        "description": "**Exportación masiva de contratos**\n\n**Permisos requeridos:** `special.canExportData` + acceso a contratos individuales\n\n**Formatos disponibles:**\n- **EXCEL**: Hoja de cálculo con múltiples pestañas\n- **CSV**: Archivo CSV con datos tabulares\n- **PDF**: Reporte consolidado en PDF\n- **JSON**: Exportación completa en JSON\n\n**Opciones de exportación:**\n- Datos básicos del contrato\n- Documentos asociados\n- Historial de cambios\n- Participantes y responsables\n- Información financiera\n- Cronogramas y plazos\n\n**Seguridad:**\n- Marca de agua en documentos\n- Control de acceso al archivo\n- Expiración automática\n- Límite de descargas\n- Registro de auditoría"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "📊 Reportes y Estadísticas",
+            "item": [
+                {
+                    "name": "📈 Dashboard de contratos",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/dashboard?period=current_month&department={{department_id}}&includeCharts=true",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "dashboard"
+                            ],
+                            "query": [
+                                {
+                                    "key": "period",
+                                    "value": "current_month",
+                                    "description": "Período: today, current_week, current_month, current_quarter, current_year"
+                                },
+                                {
+                                    "key": "department",
+                                    "value": "{{department_id}}",
+                                    "description": "Filtro por departamento específico"
+                                },
+                                {
+                                    "key": "includeCharts",
+                                    "value": "true",
+                                    "description": "Incluir datos para gráficos"
+                                }
+                            ]
+                        },
+                        "description": "**Dashboard personalizado de contratos**\n\n**Permisos requeridos:** Acceso básico al módulo + visibilidad según rol\n\n**Métricas principales:**\n- Total de contratos por estado\n- Distribución por fases\n- Presupuesto total y ejecutado\n- Contratos por tipo (LOSNCP)\n- Tendencias temporales\n- Indicadores de performance\n\n**Información por usuario:**\n- Contratos asignados\n- Tareas pendientes\n- Alertas y notificaciones\n- Próximos vencimientos\n- Acciones requeridas\n\n**Datos para gráficos:**\n- Distribución por fases (pie chart)\n- Evolución temporal (line chart)\n- Presupuesto por departamento (bar chart)\n- Estados de contratos (donut chart)"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "📋 Acciones pendientes",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/pending-actions?priority=HIGH&dueInDays=7&assignedToMe=true",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "pending-actions"
+                            ],
+                            "query": [
+                                {
+                                    "key": "priority",
+                                    "value": "HIGH",
+                                    "description": "Filtro por prioridad: LOW, MEDIUM, HIGH, CRITICAL"
+                                },
+                                {
+                                    "key": "dueInDays",
+                                    "value": "7",
+                                    "description": "Acciones que vencen en X días"
+                                },
+                                {
+                                    "key": "assignedToMe",
+                                    "value": "true",
+                                    "description": "Solo acciones asignadas al usuario actual"
+                                },
+                                {
+                                    "key": "actionType",
+                                    "value": "APPROVAL",
+                                    "description": "Tipo: APPROVAL, REVIEW, UPLOAD, VALIDATION",
+                                    "disabled": true
+                                }
+                            ]
+                        },
+                        "description": "**Obtener acciones pendientes del usuario**\n\n**Permisos requeridos:** `contracts.canViewOwn/canViewDepartment`\n\n**Tipos de acciones:**\n- **APPROVAL**: Aprobaciones requeridas\n- **REVIEW**: Revisiones pendientes\n- **UPLOAD**: Documentos por subir\n- **VALIDATION**: Validaciones técnicas\n- **PHASE_TRANSITION**: Cambios de fase\n- **DEADLINE_ALERT**: Alertas de vencimiento\n\n**Información incluida:**\n- Descripción de la acción\n- Contrato asociado\n- Fecha límite\n- Prioridad\n- Usuario asignado\n- Instrucciones específicas\n\n**Filtros disponibles:**\n- Prioridad de la acción\n- Días hasta vencimiento\n- Tipo de acción\n- Estado del contrato\n- Asignación personal/departamental"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "📊 Estadísticas generales",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/statistics?period=last_quarter&groupBy=department&includeComparisons=true",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "statistics"
+                            ],
+                            "query": [
+                                {
+                                    "key": "period",
+                                    "value": "last_quarter",
+                                    "description": "Período de análisis"
+                                },
+                                {
+                                    "key": "groupBy",
+                                    "value": "department",
+                                    "description": "Agrupar por: department, contractType, phase, status, user"
+                                },
+                                {
+                                    "key": "includeComparisons",
+                                    "value": "true",
+                                    "description": "Incluir comparaciones con períodos anteriores"
+                                }
+                            ]
+                        },
+                        "description": "**Estadísticas generales de contratación**\n\n**Permisos requeridos:** Acceso básico al módulo + visibilidad según rol\n\n**Métricas incluidas:**\n- Cantidad de contratos por período\n- Montos presupuestados vs ejecutados\n- Tiempo promedio por fase\n- Distribución por tipos LOSNCP\n- Eficiencia en cumplimiento\n- Indicadores de gestión\n\n**Agrupaciones disponibles:**\n- Por departamento solicitante\n- Por tipo de contratación\n- Por fase actual\n- Por estado del contrato\n- Por usuario responsable\n\n**Comparaciones temporales:**\n- Período actual vs anterior\n- Tendencias anuales\n- Variaciones estacionales\n- Indicadores de crecimiento"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "📋 Reporte de rendimiento",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/reports/performance?period=current_year&department={{department_id}}&format=JSON",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "reports",
+                                "performance"
+                            ],
+                            "query": [
+                                {
+                                    "key": "period",
+                                    "value": "current_year",
+                                    "description": "Período del reporte"
+                                },
+                                {
+                                    "key": "department",
+                                    "value": "{{department_id}}",
+                                    "description": "Departamento específico"
+                                },
+                                {
+                                    "key": "format",
+                                    "value": "JSON",
+                                    "description": "Formato: JSON, PDF, EXCEL"
+                                }
+                            ]
+                        },
+                        "description": "**Reporte de rendimiento de contratos**\n\n**Permisos requeridos:** `contracts.canViewDepartment/canViewAll` según alcance\n\n**Indicadores de rendimiento:**\n- KPIs de gestión contractual\n- Tiempo promedio por fase\n- Cumplimiento de plazos\n- Eficiencia presupuestaria\n- Calidad de documentación\n- Satisfacción de usuarios internos\n\n**Análisis incluido:**\n- Tendencias de mejora/deterioro\n- Comparaciones interdepartamentales\n- Identificación de cuellos de botella\n- Recomendaciones de optimización\n- Métricas de cumplimiento normativo\n\n**Formatos disponibles:**\n- JSON: Para integración sistemas\n- PDF: Reporte ejecutivo imprimible\n- EXCEL: Análisis detallado manipulable"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "🗃️ Operaciones Especiales",
+            "item": [
+                {
+                    "name": "📋 Duplicar contrato",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"newContractData\": {\n        \"contractualObject\": \"Adquisición de equipos informáticos - Fase II\",\n        \"processNumber\": \"GADMCE-COT-002-2025\",\n        \"requestingDepartment\": \"{{department_id}}\",\n        \"budget\": {\n            \"amount\": 75000.00,\n            \"currency\": \"USD\",\n            \"budgetCode\": \"530802\",\n            \"budgetYear\": 2025\n        },\n        \"basicInfo\": {\n            \"description\": \"Segunda fase del proceso de modernización tecnológica - equipos complementarios\",\n            \"deliveryTerm\": \"45 días calendario\"\n        }\n    },\n    \"duplicationOptions\": {\n        \"copyDocuments\": false,\n        \"copyParticipants\": true,\n        \"copyTimeline\": false,\n        \"copyCustomFields\": true,\n        \"copyMetadata\": false\n    },\n    \"initialSettings\": {\n        \"initialPhase\": \"PREPARATORIA\",\n        \"initialStatus\": \"DRAFT\",\n        \"responsibleUser\": \"{{user_id}}\",\n        \"priority\": \"MEDIUM\"\n    },\n    \"reason\": \"Creación de proceso complementario para completar el plan de modernización tecnológica institucional\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/{{contract_id}}/duplicate",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "{{contract_id}}",
+                                "duplicate"
+                            ]
+                        },
+                        "description": "**Duplicar contrato existente**\n\n**Permisos requeridos:** `contracts.canCreate` + acceso al contrato fuente\n\n**Utilidad:**\n- Procesos similares o recurrentes\n- Contrataciones por lotes\n- Procesos complementarios\n- Reutilización de plantillas\n\n**Opciones de duplicación:**\n- Copiar participantes y equipo técnico\n- Copiar cronogramas y plazos\n- Copiar campos personalizados\n- Copiar metadatos y configuraciones\n- **No copiar**: Documentos originales (por seguridad)\n\n**Validaciones automáticas:**\n- Número de proceso único\n- Disponibilidad presupuestaria\n- Permisos del departamento\n- Datos obligatorios completos\n\n**Estado del nuevo contrato:**\n- Siempre inicia en PREPARATORIA/DRAFT\n- Requiere validación manual\n- Documentos deben subirse nuevamente"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "📦 Archivar contrato",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"archiveReason\": \"Contrato completado exitosamente según cronograma establecido\",\n    \"archiveType\": \"COMPLETED\",\n    \"finalValidations\": {\n        \"allDocumentsReceived\": true,\n        \"allPaymentsProcessed\": true,\n        \"allGuaranteesReturned\": true,\n        \"finalActSigned\": true,\n        \"liquidationCompleted\": true\n    },\n    \"archiveSettings\": {\n        \"retentionPeriod\": \"7_YEARS\",\n        \"allowFutureAccess\": true,\n        \"createDigitalCopy\": true,\n        \"notifyStakeholders\": true,\n        \"generateFinalReport\": true\n    },\n    \"finalMetrics\": {\n        \"actualDuration\": 95,\n        \"budgetUtilization\": 98.5,\n        \"qualityScore\": 4.5,\n        \"stakeholderSatisfaction\": 4.8,\n        \"complianceScore\": 100\n    },\n    \"lessonsLearned\": [\n        {\n            \"category\": \"PROCESS\",\n            \"description\": \"La coordinación temprana con usuarios finales mejoró significativamente los tiempos de entrega\"\n        },\n        {\n            \"category\": \"TECHNICAL\",\n            \"description\": \"Las especificaciones detalladas redujeron las consultas post-adjudicación en 40%\"\n        }\n    ],\n    \"recommendations\": [\n        \"Mantener el modelo de coordinación temprana para futuros procesos similares\",\n        \"Considerar certificaciones adicionales de calidad para procesos de mayor envergadura\"\n    ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/{{contract_id}}/archive",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "{{contract_id}}",
+                                "archive"
+                            ]
+                        },
+                        "description": "**Archivar contrato completado**\n\n**Permisos requeridos:** `contracts.canEdit` + validaciones de estado\n\n**Requisitos para archivado:**\n- Contrato en fase RECEPCIÓN\n- Estado COMPLETED\n- Todos los documentos finales\n- Liquidación completada\n- Garantías devueltas\n\n**Tipos de archivado:**\n- **COMPLETED**: Completado exitosamente\n- **TERMINATED**: Terminado por mutuo acuerdo\n- **CANCELLED**: Cancelado por incumplimiento\n- **EXPIRED**: Vencido por plazos\n\n**Proceso de archivado:**\n1. Validaciones finales\n2. Generación de reporte final\n3. Copia de respaldo digital\n4. Notificación a stakeholders\n5. Actualización de índices\n6. Configuración de retención\n\n**Post-archivado:**\n- Solo lectura para consultas\n- Retención según normativa\n- Disponible para auditorías\n- Métricas para análisis futuros"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🔄 Restaurar contrato",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"restoreReason\": \"Necesidad de correcciones en la liquidación final por observaciones de auditoría interna\",\n    \"restoreToPhase\": \"RECEPCION\",\n    \"restoreToStatus\": \"ACTIVE\",\n    \"requiredActions\": [\n        {\n            \"action\": \"CORRECT_LIQUIDATION\",\n            \"description\": \"Corregir cálculos de liquidación según observaciones de auditoría\",\n            \"assignedTo\": \"64f7e8b123456789abcdef05\",\n            \"dueDate\": \"2025-09-15T00:00:00.000Z\"\n        },\n        {\n            \"action\": \"UPDATE_FINAL_REPORT\",\n            \"description\": \"Actualizar informe final con correcciones realizadas\",\n            \"assignedTo\": \"64f7e8b123456789abcdef04\",\n            \"dueDate\": \"2025-09-20T00:00:00.000Z\"\n        }\n    ],\n    \"approvals\": [\n        {\n            \"userId\": \"64f7e8b123456789abcdef07\",\n            \"role\": \"ADMINISTRATIVE_DIRECTOR\",\n            \"approved\": true,\n            \"approvalDate\": \"2025-09-01T15:00:00.000Z\",\n            \"comments\": \"Aprobada la restauración para correcciones de auditoría\"\n        }\n    ],\n    \"notifications\": {\n        \"notifyOriginalTeam\": true,\n        \"notifyCurrentSupervisors\": true,\n        \"notifyAuditTeam\": true,\n        \"customMessage\": \"El contrato ha sido restaurado para correcciones requeridas por auditoría interna\"\n    },\n    \"timeline\": {\n        \"expectedReArchiveDate\": \"2025-09-25T00:00:00.000Z\",\n        \"maxRestoreDuration\": 30\n    }\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/{{contract_id}}/restore",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "{{contract_id}}",
+                                "restore"
+                            ]
+                        },
+                        "description": "**Restaurar contrato archivado**\n\n**Permisos requeridos:** `contracts.canEdit` + `special.canRestoreArchived`\n\n**Casos válidos para restauración:**\n- Correcciones requeridas por auditoría\n- Errores en documentación final\n- Procesos legales pendientes\n- Garantías no devueltas correctamente\n- Liquidaciones con observaciones\n\n**Validaciones estrictas:**\n- Contrato previamente archivado\n- Justificación válida y documentada\n- Aprobación de nivel superior\n- No exceder período de retención activa\n\n**Proceso de restauración:**\n1. Validación de permisos y justificación\n2. Aprobación de autoridad competente\n3. Reactivación de accesos y permisos\n4. Notificación a equipo original\n5. Asignación de acciones correctivas\n6. Establecimiento de nuevo cronograma\n\n**⚠️ NOTA IMPORTANTE:**\n- Operación excepcional y auditada\n- Requiere justificación sólida\n- Plazo máximo de restauración definido\n- Re-archivado obligatorio al completar correcciones"
+                    },
+                    "response": []
+                }
+            ]
+        }
+    ],
+    "event": [
+        {
+            "listen": "prerequest",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "// Auto-generar IDs si no existen",
+                    "if (!pm.collectionVariables.get('contract_id')) {",
+                    "    pm.collectionVariables.set('contract_id', '64f7e8b123456789abcdef99');",
+                    "}",
+                    "",
+                    "if (!pm.collectionVariables.get('department_id')) {",
+                    "    pm.collectionVariables.set('department_id', '64f7e8b123456789abcdef03');",
+                    "}",
+                    "",
+                    "if (!pm.collectionVariables.get('user_id')) {",
+                    "    pm.collectionVariables.set('user_id', '64f7e8b123456789abcdef02');",
+                    "}",
+                    "",
+                    "// Validar token de autorización",
+                    "const authToken = pm.collectionVariables.get('auth_token') || pm.globals.get('auth_token');",
+                    "if (!authToken) {",
+                    "    console.log('⚠️ WARNING: No se encontró token de autorización');",
+                    "    console.log('Configura la variable auth_token en Collection o Global variables');",
+                    "}",
+                    "",
+                    "// Generar timestamp para requests que lo necesiten",
+                    "pm.collectionVariables.set('timestamp', new Date().toISOString());"
+                ]
+            }
+        },
+        {
+            "listen": "test",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "// Tests globales para todas las respuestas",
+                    "pm.test('Response time is reasonable', function () {",
+                    "    pm.expect(pm.response.responseTime).to.be.below(10000); // 10s para operaciones complejas",
+                    "});",
+                    "",
+                    "pm.test('Response has correct headers', function () {",
+                    "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+                    "});",
+                    "",
+                    "// Test de estructura de respuesta estándar",
+                    "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                    "    pm.test('Response has success structure', function () {",
+                    "        const responseJson = pm.response.json();",
+                    "        pm.expect(responseJson).to.have.property('success');",
+                    "        pm.expect(responseJson).to.have.property('data');",
+                    "    });",
+                    "}",
+                    "",
+                    "// Guardar datos útiles para siguientes requests",
+                    "if (pm.response.code === 200 || pm.response.code === 201) {",
+                    "    const responseJson = pm.response.json();",
+                    "    ",
+                    "    // Guardar contract_id si se crea un contrato",
+                    "    if (responseJson.data && responseJson.data._id) {",
+                    "        pm.collectionVariables.set('contract_id', responseJson.data._id);",
+                    "        console.log('✅ Guardado contract_id:', responseJson.data._id);",
+                    "    }",
+                    "    ",
+                    "    // Guardar processNumber si está disponible",
+                    "    if (responseJson.data && responseJson.data.processNumber) {",
+                    "        pm.collectionVariables.set('process_number', responseJson.data.processNumber);",
+                    "        console.log('✅ Guardado process_number:', responseJson.data.processNumber);",
+                    "    }",
+                    "    ",
+                    "    // Guardar document_id si se sube un documento",
+                    "    if (responseJson.data && responseJson.data.documents) {",
+                    "        const firstDoc = responseJson.data.documents[0];",
+                    "        if (firstDoc && firstDoc._id) {",
+                    "            pm.collectionVariables.set('document_id', firstDoc._id);",
+                    "            console.log('✅ Guardado document_id:', firstDoc._id);",
+                    "        }",
+                    "    }",
+                    "}"
+                ]
+            }
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:3000",
+            "type": "string",
+            "description": "URL base del API - Cambiar según entorno"
+        },
+        {
+            "key": "auth_token",
+            "value": "",
+            "type": "string",
+            "description": "Token JWT de autenticación - Obtener de /auth/login"
+        },
+        {
+            "key": "contract_id",
+            "value": "64f7e8b123456789abcdef99",
+            "type": "string",
+            "description": "ID del contrato para operaciones específicas - Se actualiza automáticamente"
+        },
+        {
+            "key": "department_id",
+            "value": "64f7e8b123456789abcdef03",
+            "type": "string",
+            "description": "ID del departamento - Configurar según necesidad"
+        },
+        {
+            "key": "user_id",
+            "value": "64f7e8b123456789abcdef02",
+            "type": "string",
+            "description": "ID del usuario actual - Para filtros y asignaciones"
+        },
+        {
+            "key": "process_number",
+            "value": "",
+            "type": "string",
+            "description": "Número del proceso contractual - Se actualiza automáticamente"
+        },
+        {
+            "key": "document_id",
+            "value": "",
+            "type": "string",
+            "description": "ID del documento asociado - Se actualiza automáticamente"
+        },
+        {
+            "key": "timestamp",
+            "value": "",
+            "type": "string",
+            "description": "Timestamp actual - Se genera automáticamente"
+        }
+    ]
+}

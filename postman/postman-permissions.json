@@ -8,7 +8,7 @@
   "variable": [
     {
       "key": "base_url",
-      "value": "http://127.0.0.1:3000/api",
+      "value": "http://127.0.0.1:3000/api/exp-digital",
       "type": "string"
     },
     {

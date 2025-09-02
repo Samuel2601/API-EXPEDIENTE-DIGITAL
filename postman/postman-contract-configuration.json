@@ -1,0 +1,858 @@
+{
+    "info": {
+        "_postman_id": "c9d8e7f6-4b3a-2109-8765-432109876543",
+        "name": "GADMCE - Expediente Digital - Contract Configuration API",
+        "description": "Colección de endpoints para la configuración de tipos y fases de contratación pública según LOSNCP\n\n**GADM Cantón Esmeraldas - Sistema de Contratación Pública**\n\n## Funcionalidades incluidas:\n- ✅ Gestión de tipos de contratación LOSNCP\n- ✅ Configuración de fases contractuales\n- ✅ Configuración completa del sistema\n- ✅ Validación y estadísticas\n- ✅ Inicialización del sistema\n- ✅ Determinación automática por monto\n\n## Marco Legal LOSNCP:\n- **Procedimientos comunes**: Subasta Inversa, Licitación, Cotización, Menor Cuantía, Consultoría, Lista Corta\n- **Procedimientos especiales**: Emergencia, Régimen Especial, Catálogo Electrónico, Convenio Marco, Ínfima Cuantía\n\n## Variables necesarias:\n- `{{base_url}}`: URL base del API\n- `{{auth_token}}`: Token JWT de autenticación (requiere permisos administrativos)\n- `{{config_id}}`: ID de configuración para operaciones específicas",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "🏗️ Gestión de Tipos de Contratación",
+            "item": [
+                {
+                    "name": "📋 Listar tipos de contratación",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/types?includeInactive=false&category=COMUNES&page=1&limit=50",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "types"
+                            ],
+                            "query": [
+                                {
+                                    "key": "includeInactive",
+                                    "value": "false",
+                                    "description": "Incluir tipos inactivos"
+                                },
+                                {
+                                    "key": "category",
+                                    "value": "COMUNES",
+                                    "description": "Filtrar por categoría: COMUNES, ESPECIALES, TODOS"
+                                },
+                                {
+                                    "key": "page",
+                                    "value": "1",
+                                    "description": "Página actual"
+                                },
+                                {
+                                    "key": "limit",
+                                    "value": "50",
+                                    "description": "Elementos por página"
+                                },
+                                {
+                                    "key": "sortBy",
+                                    "value": "name",
+                                    "description": "Ordenar por: name, code, minAmount, maxAmount",
+                                    "disabled": true
+                                }
+                            ]
+                        },
+                        "description": "**Obtener todos los tipos de contratación configurados**\n\n**Permisos requeridos:** Acceso básico al módulo\n\n**Tipos según LOSNCP:**\n\n**Procedimientos Comunes:**\n- Subasta Inversa Electrónica\n- Licitación (>$200,000 bienes/servicios, >$500,000 obras)\n- Cotización ($5,000-$200,000 bienes/servicios, $10,000-$500,000 obras)\n- Menor Cuantía (<$5,000 bienes/servicios, <$10,000 obras)\n- Consultoría\n- Lista Corta\n\n**Procedimientos Especiales:**\n- Emergencia\n- Régimen Especial\n- Catálogo Electrónico\n- Convenio Marco\n- Ínfima Cuantía\n\n**Información incluida:**\n- Código y nombre del tipo\n- Rangos de montos aplicables\n- Fases requeridas\n- Documentos obligatorios\n- Plazos estándar"
+                    },
+                    "response": [
+                        {
+                            "name": "✅ Lista de tipos exitosa",
+                            "originalRequest": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{base_url}}/api/exp-digital/contracts/configuration/types"
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n    \"success\": true,\n    \"data\": {\n        \"contractTypes\": [\n            {\n                \"_id\": \"64f7e8b123456789abcdef10\",\n                \"code\": \"COTIZACION\",\n                \"name\": \"Cotización\",\n                \"description\": \"Procedimiento para contratación de bienes, servicios y obras en rangos medios\",\n                \"category\": \"COMUNES\",\n                \"amountRanges\": {\n                    \"goods\": { \"min\": 5000, \"max\": 200000 },\n                    \"services\": { \"min\": 5000, \"max\": 200000 },\n                    \"works\": { \"min\": 10000, \"max\": 500000 }\n                },\n                \"requiredPhases\": [\"PREPARATORIA\", \"PRECONTRACTUAL\", \"CONTRACTUAL\", \"PAGO\", \"RECEPCION\"],\n                \"standardDuration\": 60,\n                \"isActive\": true\n            }\n        ],\n        \"totalCount\": 11,\n        \"currentPage\": 1,\n        \"totalPages\": 1\n    }\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "➕ Crear tipo de contratación",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"code\": \"SUBASTA_ESPECIAL\",\n    \"name\": \"Subasta Inversa Especial\",\n    \"description\": \"Procedimiento especial de subasta inversa para bienes y servicios de alta complejidad técnica\",\n    \"category\": \"ESPECIALES\",\n    \"legalFramework\": {\n        \"lawArticle\": \"Art. 47 LOSNCP\",\n        \"regulationArticles\": [\"Art. 105 RGLOSNCP\", \"Art. 106 RGLOSNCP\"],\n        \"applicableCases\": [\n            \"Bienes de alta complejidad técnica\",\n            \"Servicios especializados con múltiples proveedores\",\n            \"Contrataciones que requieren evaluación técnica previa\"\n        ]\n    },\n    \"amountRanges\": {\n        \"goods\": {\n            \"min\": 50000,\n            \"max\": 1000000,\n            \"currency\": \"USD\"\n        },\n        \"services\": {\n            \"min\": 50000,\n            \"max\": 1000000,\n            \"currency\": \"USD\"\n        },\n        \"works\": {\n            \"min\": 100000,\n            \"max\": 2000000,\n            \"currency\": \"USD\"\n        }\n    },\n    \"requiredPhases\": [\n        \"PREPARATORIA\",\n        \"PRECONTRACTUAL\",\n        \"CONTRACTUAL\",\n        \"PAGO\",\n        \"RECEPCION\"\n    ],\n    \"mandatoryDocuments\": [\n        {\n            \"phase\": \"PREPARATORIA\",\n            \"documents\": [\"PAC\", \"TDR_ESPECIALIZADOS\", \"ESTUDIO_MERCADO_AMPLIADO\", \"DESAGREGACION_TECNOLOGICA\"]\n        },\n        {\n            \"phase\": \"PRECONTRACTUAL\",\n            \"documents\": [\"PLIEGOS_ESPECIALES\", \"EVALUACION_TECNICA_PREVIA\", \"MATRIZ_CALIFICACION\"]\n        }\n    ],\n    \"timingConfiguration\": {\n        \"standardDuration\": 90,\n        \"phaseDurations\": {\n            \"PREPARATORIA\": 21,\n            \"PRECONTRACTUAL\": 35,\n            \"CONTRACTUAL\": 20,\n            \"PAGO\": 7,\n            \"RECEPCION\": 7\n        },\n        \"publicationPeriod\": 10,\n        \"bidSubmissionPeriod\": 15,\n        \"evaluationPeriod\": 10\n    },\n    \"validationRules\": {\n        \"requireTechnicalTeam\": true,\n        \"minimumProviders\": 3,\n        \"requireMarketStudy\": true,\n        \"requireBudgetAvailability\": true,\n        \"allowEmergencyUse\": false\n    },\n    \"metadata\": {\n        \"complexity\": \"HIGH\",\n        \"riskLevel\": \"MEDIUM\",\n        \"transparency\": \"HIGH\",\n        \"competitiveness\": \"HIGH\"\n    },\n    \"isActive\": true,\n    \"effectiveDate\": \"2025-10-01T00:00:00.000Z\",\n    \"notes\": \"Tipo de contratación especializado para procesos que requieren evaluación técnica rigurosa y alta competitividad.\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/types",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "types"
+                            ]
+                        },
+                        "description": "**Crear nuevo tipo de contratación personalizado**\n\n**Permisos requeridos:** `special.canManagePermissions` (solo administradores)\n\n**⚠️ PRECAUCIÓN**: Solo para casos excepcionales no cubiertos por LOSNCP estándar\n\n**Validaciones obligatorias:**\n- Código único en el sistema\n- Marco legal de respaldo\n- Rangos de montos válidos\n- Fases requeridas definidas\n- Documentos obligatorios por fase\n\n**Campos requeridos:**\n- `code`: Código único identificador\n- `name`: Nombre descriptivo\n- `category`: COMUNES o ESPECIALES\n- `amountRanges`: Rangos por tipo de objeto\n- `requiredPhases`: Fases obligatorias\n- `legalFramework`: Sustento legal\n\n**Recomendación:** Consultar con asesoría jurídica antes de crear tipos personalizados"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🔍 Obtener tipo específico",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/types/{{type_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "types",
+                                "{{type_id}}"
+                            ]
+                        },
+                        "description": "**Obtener configuración detallada de un tipo específico**\n\n**Permisos requeridos:** Acceso básico al módulo\n\n**Información detallada incluida:**\n- Configuración completa del tipo\n- Marco legal aplicable\n- Rangos de montos por categoría\n- Fases y documentos requeridos\n- Plazos estándar por fase\n- Reglas de validación\n- Historial de modificaciones\n- Estadísticas de uso\n\n**Útil para:**\n- Configuración de nuevos contratos\n- Validación de cumplimiento\n- Capacitación del personal\n- Auditorías de proceso"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "✏️ Actualizar tipo de contratación",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"description\": \"Procedimiento para contratación de bienes, servicios y obras en rangos medios - Actualizado según reformas 2025\",\n    \"amountRanges\": {\n        \"goods\": {\n            \"min\": 5000,\n            \"max\": 250000,\n            \"currency\": \"USD\"\n        },\n        \"services\": {\n            \"min\": 5000,\n            \"max\": 250000,\n            \"currency\": \"USD\"\n        },\n        \"works\": {\n            \"min\": 10000,\n            \"max\": 600000,\n            \"currency\": \"USD\"\n        }\n    },\n    \"timingConfiguration\": {\n        \"standardDuration\": 65,\n        \"phaseDurations\": {\n            \"PREPARATORIA\": 15,\n            \"PRECONTRACTUAL\": 25,\n            \"CONTRACTUAL\": 15,\n            \"PAGO\": 5,\n            \"RECEPCION\": 5\n        },\n        \"publicationPeriod\": 8,\n        \"bidSubmissionPeriod\": 12,\n        \"evaluationPeriod\": 5\n    },\n    \"legalFramework\": {\n        \"lawArticle\": \"Art. 48 LOSNCP\",\n        \"regulationArticles\": [\"Art. 98 RGLOSNCP\", \"Art. 99 RGLOSNCP\", \"Art. 100 RGLOSNCP\"],\n        \"lastUpdate\": \"2025-08-01\",\n        \"reformNotes\": \"Actualización de montos según inflación 2024-2025 y mejoras en plazos de evaluación\"\n    },\n    \"validationRules\": {\n        \"requireTechnicalTeam\": true,\n        \"minimumProviders\": 2,\n        \"requireMarketStudy\": true,\n        \"requireBudgetAvailability\": true,\n        \"allowEmergencyUse\": false,\n        \"requireEnvironmentalStudy\": false\n    },\n    \"updateReason\": \"Actualización de rangos de montos y plazos según reformas normativas 2025 y experiencia operativa del primer semestre\",\n    \"effectiveDate\": \"2025-10-01T00:00:00.000Z\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/types/{{type_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "types",
+                                "{{type_id}}"
+                            ]
+                        },
+                        "description": "**Actualizar configuración de tipo de contratación**\n\n**Permisos requeridos:** `special.canManagePermissions` (solo administradores)\n\n**⚠️ IMPACTO IMPORTANTE**: Los cambios afectan a todos los contratos futuros de este tipo\n\n**Campos actualizables:**\n- Descripción y marco legal\n- Rangos de montos (con fecha efectiva)\n- Plazos y duraciones estándar\n- Reglas de validación\n- Documentos requeridos\n- Configuraciones específicas\n\n**Validaciones automáticas:**\n- No afectar contratos en proceso\n- Rangos de montos lógicos\n- Fases requeridas válidas\n- Marco legal actualizado\n- Fecha efectiva futura\n\n**Registro de auditoría:**\n- Usuario que realiza el cambio\n- Fecha de modificación\n- Campos modificados (diff)\n- Razón del cambio\n- Fecha de vigencia"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🗑️ Desactivar tipo de contratación",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"reason\": \"Tipo de contratación descontinuado según nueva normativa SERCOP 2025\",\n    \"effectiveDate\": \"2025-12-31T23:59:59.000Z\",\n    \"migrationPlan\": {\n        \"newTypeCode\": \"COTIZACION\",\n        \"affectedContracts\": [\n            \"64f7e8b123456789abcdef99\",\n            \"64f7e8b123456789abcdef98\"\n        ],\n        \"migrationStrategy\": \"ALLOW_COMPLETION\",\n        \"notifyUsers\": true\n    },\n    \"approvals\": [\n        {\n            \"userId\": \"64f7e8b123456789abcdef07\",\n            \"role\": \"LEGAL_DIRECTOR\",\n            \"approved\": true,\n            \"approvalDate\": \"2025-09-01T16:00:00.000Z\",\n            \"comments\": \"Aprobada desactivación según circular SERCOP-2025-15\"\n        }\n    ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/types/{{type_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "types",
+                                "{{type_id}}"
+                            ]
+                        },
+                        "description": "**Desactivar tipo de contratación (soft delete)**\n\n**Permisos requeridos:** `special.canManagePermissions` + aprobación superior\n\n**⚠️ OPERACIÓN CRÍTICA**: Afecta disponibilidad para nuevos contratos\n\n**Validaciones obligatorias:**\n- No debe tener contratos activos en proceso\n- Debe especificar razón legal/normativa\n- Requiere aprobación de nivel directivo\n- Plan de migración para contratos existentes\n- Fecha efectiva de desactivación\n\n**Tipos de desactivación:**\n- **SOFT DELETE**: Marca como inactivo, preserva datos\n- **SCHEDULED**: Desactivación programada\n- **IMMEDIATE**: Desactivación inmediata (solo emergencias)\n\n**Estrategias de migración:**\n- **ALLOW_COMPLETION**: Permitir completar contratos en curso\n- **FORCE_MIGRATION**: Migrar contratos a nuevo tipo\n- **FREEZE**: Congelar nuevos contratos, mantener existentes\n\n**Proceso post-desactivación:**\n1. No disponible para nuevos contratos\n2. Contratos existentes pueden continuar\n3. Registro en auditoría permanente\n4. Posible reactivación futura"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🔢 Determinar tipo por monto",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/types/by-amount/75000?objectType=goods&includeAlternatives=true",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "types",
+                                "by-amount",
+                                "75000"
+                            ],
+                            "query": [
+                                {
+                                    "key": "objectType",
+                                    "value": "goods",
+                                    "description": "Tipo de objeto: goods, services, works, consulting"
+                                },
+                                {
+                                    "key": "includeAlternatives",
+                                    "value": "true",
+                                    "description": "Incluir tipos alternativos aplicables"
+                                },
+                                {
+                                    "key": "currency",
+                                    "value": "USD",
+                                    "description": "Moneda del monto",
+                                    "disabled": true
+                                }
+                            ]
+                        },
+                        "description": "**Determinar tipo de contratación automáticamente por monto**\n\n**Permisos requeridos:** Acceso básico al módulo\n\n**Funcionalidad clave:**\n- Determinación automática según rangos LOSNCP\n- Validación de montos por tipo de objeto\n- Sugerencia de tipos alternativos aplicables\n- Verificación de restricciones especiales\n\n**Tipos de objeto:**\n- **goods**: Bienes (equipos, suministros, materiales)\n- **services**: Servicios (consultoría, mantenimiento, capacitación)\n- **works**: Obras (construcción, remodelación, infraestructura)\n- **consulting**: Consultoría especializada\n\n**Rangos estándar LOSNCP:**\n- **Ínfima Cuantía**: <$5,000\n- **Menor Cuantía**: $5,000-$200,000 (bienes/servicios)\n- **Cotización**: $5,000-$200,000 (bienes/servicios), $10,000-$500,000 (obras)\n- **Licitación**: >$200,000 (bienes/servicios), >$500,000 (obras)\n\n**Respuesta incluye:**\n- Tipo recomendado principal\n- Tipos alternativos válidos\n- Justificación técnica\n- Restricciones aplicables\n- Marco legal de referencia"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "📅 Gestión de Fases Contractuales",
+            "item": [
+                {
+                    "name": "📋 Listar fases disponibles",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/phases?includeInactive=false&contractType=COTIZACION&page=1&limit=20",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "phases"
+                            ],
+                            "query": [
+                                {
+                                    "key": "includeInactive",
+                                    "value": "false",
+                                    "description": "Incluir fases inactivas"
+                                },
+                                {
+                                    "key": "contractType",
+                                    "value": "COTIZACION",
+                                    "description": "Filtrar por tipo de contrato específico"
+                                },
+                                {
+                                    "key": "page",
+                                    "value": "1",
+                                    "description": "Página actual"
+                                },
+                                {
+                                    "key": "limit",
+                                    "value": "20",
+                                    "description": "Elementos por página"
+                                }
+                            ]
+                        },
+                        "description": "**Obtener todas las fases contractuales configuradas**\n\n**Permisos requeridos:** Acceso básico al módulo\n\n**Fases estándar LOSNCP:**\n\n**1. PREPARATORIA**\n- Certificación presupuestaria (PAC)\n- Estudios de mercado\n- Términos de referencia/especificaciones técnicas\n- Resolución de inicio\n- Estudio de desagregación tecnológica (si aplica)\n\n**2. PRECONTRACTUAL**\n- Pliegos de condiciones\n- Publicación y convocatoria\n- Preguntas, respuestas y aclaraciones\n- Recepción de ofertas\n- Evaluación y calificación\n- Adjudicación o declaratoria desierta\n\n**3. CONTRACTUAL/EJECUCIÓN**\n- Suscripción del contrato\n- Entrega de garantías\n- Cronograma valorado\n- Seguimiento y control\n- Administración del contrato\n\n**4. PAGO**\n- Recepción de facturas\n- Validación y aprobación\n- Proceso de pago\n- Retenciones tributarias\n\n**5. RECEPCIÓN**\n- Acta de entrega-recepción definitiva\n- Liquidación del contrato\n- Devolución de garantías\n- Informe final"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "➕ Crear fase personalizada",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"code\": \"POST_CONTRACTUAL\",\n    \"name\": \"Post-Contractual\",\n    \"description\": \"Fase de seguimiento y evaluación posterior a la recepción definitiva\",\n    \"order\": 6,\n    \"applicableContractTypes\": [\n        \"LICITACION\",\n        \"COTIZACION\",\n        \"CONSULTORIA\"\n    ],\n    \"isOptional\": true,\n    \"duration\": {\n        \"standardDays\": 30,\n        \"minimumDays\": 15,\n        \"maximumDays\": 60\n    },\n    \"requiredDocuments\": [\n        {\n            \"code\": \"EVALUACION_POST_CONTRACTUAL\",\n            \"name\": \"Evaluación Post-Contractual\",\n            \"description\": \"Evaluación de cumplimiento y satisfacción post-recepción\",\n            \"isRequired\": true,\n            \"allowedFormats\": [\"PDF\", \"DOCX\"],\n            \"maxFileSize\": 5242880,\n            \"template\": {\n                \"available\": true,\n                \"templateId\": \"TPL_POST_EVAL_001\"\n            }\n        },\n        {\n            \"code\": \"INFORME_LECCIONES_APRENDIDAS\",\n            \"name\": \"Informe de Lecciones Aprendidas\",\n            \"description\": \"Documento con lecciones aprendidas y recomendaciones\",\n            \"isRequired\": false,\n            \"allowedFormats\": [\"PDF\", \"DOCX\"],\n            \"maxFileSize\": 3145728\n        }\n    ],\n    \"phaseActivities\": [\n        {\n            \"name\": \"Evaluación de cumplimiento técnico\",\n            \"description\": \"Verificar que los entregables cumplan con especificaciones técnicas a 30 días\",\n            \"estimatedDuration\": 7,\n            \"responsibleRole\": \"TECHNICAL_SUPERVISOR\",\n            \"isRequired\": true\n        },\n        {\n            \"name\": \"Encuesta de satisfacción\",\n            \"description\": \"Aplicar encuesta de satisfacción a usuarios finales\",\n            \"estimatedDuration\": 5,\n            \"responsibleRole\": \"ADMINISTRATIVE_SUPERVISOR\",\n            \"isRequired\": true\n        },\n        {\n            \"name\": \"Evaluación de proveedor\",\n            \"description\": \"Calificar desempeño del proveedor para futuros procesos\",\n            \"estimatedDuration\": 3,\n            \"responsibleRole\": \"PROCUREMENT_MANAGER\",\n            \"isRequired\": false\n        }\n    ],\n    \"transitionRules\": {\n        \"allowedPreviousPhases\": [\"RECEPCION\"],\n        \"allowedNextPhases\": [],\n        \"autoTransitionTriggers\": [\n            {\n                \"trigger\": \"DAYS_AFTER_RECEPTION\",\n                \"value\": 1,\n                \"condition\": \"CONTRACT_VALUE_GT_50000\"\n            }\n        ]\n    },\n    \"validationRules\": {\n        \"requireAllDocuments\": false,\n        \"requireSupervisorApproval\": true,\n        \"allowSkipIfMinorValue\": true,\n        \"minContractValueToApply\": 25000\n    },\n    \"notifications\": {\n        \"phaseStart\": {\n            \"enabled\": true,\n            \"recipients\": [\"RESPONSIBLE_USER\", \"TECHNICAL_TEAM\", \"DEPARTMENT_HEAD\"],\n            \"template\": \"POST_CONTRACTUAL_START\"\n        },\n        \"phaseDeadline\": {\n            \"enabled\": true,\n            \"daysBeforeDeadline\": [7, 3, 1],\n            \"recipients\": [\"RESPONSIBLE_USER\", \"TECHNICAL_SUPERVISOR\"]\n        }\n    },\n    \"metadata\": {\n        \"purpose\": \"QUALITY_CONTROL\",\n        \"criticality\": \"MEDIUM\",\n        \"compliance\": \"BEST_PRACTICE\",\n        \"category\": \"FOLLOW_UP\"\n    },\n    \"isActive\": true,\n    \"effectiveDate\": \"2025-10-01T00:00:00.000Z\",\n    \"creationReason\": \"Implementar seguimiento post-contractual para mejorar calidad de futuras contrataciones y mantener registro de satisfacción de usuarios finales\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/phases",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "phases"
+                            ]
+                        },
+                        "description": "**Crear nueva fase contractual personalizada**\n\n**Permisos requeridos:** `special.canManagePermissions` (solo administradores)\n\n**⚠️ NOTA**: Solo para casos especiales no cubiertos por fases estándar LOSNCP\n\n**Casos válidos para fases personalizadas:**\n- Seguimiento post-contractual\n- Fases de garantía extendida\n- Evaluación de satisfacción\n- Mantenimiento de garantías\n- Procesos de auditoría específicos\n\n**Validaciones obligatorias:**\n- Código único en el sistema\n- Orden lógico en secuencia\n- Tipos de contrato aplicables\n- Documentos requeridos definidos\n- Actividades y responsables\n- Reglas de transición válidas\n\n**Configuración incluida:**\n- Duración estándar y rangos\n- Documentos obligatorios y opcionales\n- Actividades y responsables\n- Reglas de validación\n- Notificaciones automáticas\n- Condiciones de aplicación"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🔍 Obtener fase específica",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/phases/{{phase_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "phases",
+                                "{{phase_id}}"
+                            ]
+                        },
+                        "description": "**Obtener configuración detallada de una fase específica**\n\n**Permisos requeridos:** Acceso básico al módulo\n\n**Información detallada incluida:**\n- Configuración completa de la fase\n- Documentos requeridos y opcionales\n- Actividades y cronograma estándar\n- Responsables y roles involucrados\n- Reglas de transición y validación\n- Notificaciones automáticas\n- Plantillas de documentos\n- Estadísticas de uso y eficiencia\n\n**Útil para:**\n- Planificación de cronogramas\n- Capacitación del personal\n- Configuración de nuevos procesos\n- Auditorías de cumplimiento\n- Optimización de tiempos"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "✏️ Actualizar configuración de fase",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"description\": \"Fase preparatoria actualizada con nuevos requerimientos según circular SERCOP-2025-08\",\n    \"duration\": {\n        \"standardDays\": 18,\n        \"minimumDays\": 10,\n        \"maximumDays\": 30\n    },\n    \"requiredDocuments\": [\n        {\n            \"code\": \"PAC\",\n            \"name\": \"Certificación Presupuestaria\",\n            \"description\": \"Certificación de disponibilidad presupuestaria actualizada\",\n            \"isRequired\": true,\n            \"allowedFormats\": [\"PDF\"],\n            \"maxFileSize\": 2097152,\n            \"validityDays\": 30\n        },\n        {\n            \"code\": \"TDR_ACTUALIZADOS\",\n            \"name\": \"Términos de Referencia 2025\",\n            \"description\": \"TDR con nuevos estándares de sostenibilidad ambiental\",\n            \"isRequired\": true,\n            \"allowedFormats\": [\"PDF\", \"DOCX\"],\n            \"maxFileSize\": 5242880,\n            \"template\": {\n                \"available\": true,\n                \"templateId\": \"TPL_TDR_2025_SUSTENTABLE\",\n                \"version\": \"2025.1\"\n            }\n        },\n        {\n            \"code\": \"ESTUDIO_IMPACTO_AMBIENTAL\",\n            \"name\": \"Estudio de Impacto Ambiental\",\n            \"description\": \"Obligatorio para contratos >$50,000 según nueva normativa\",\n            \"isRequired\": false,\n            \"conditionalRequirement\": {\n                \"condition\": \"CONTRACT_VALUE_GT_50000\",\n                \"applyWhen\": true\n            },\n            \"allowedFormats\": [\"PDF\"],\n            \"maxFileSize\": 10485760\n        }\n    ],\n    \"phaseActivities\": [\n        {\n            \"name\": \"Validación presupuestaria ampliada\",\n            \"description\": \"Incluye validación de impacto plurianual y sostenibilidad fiscal\",\n            \"estimatedDuration\": 5,\n            \"responsibleRole\": \"BUDGET_ANALYST\",\n            \"isRequired\": true,\n            \"newActivity\": true\n        }\n    ],\n    \"validationRules\": {\n        \"requireAllDocuments\": true,\n        \"requireSupervisorApproval\": true,\n        \"requireEnvironmentalReview\": true,\n        \"minContractValueForEnvironmentalReview\": 50000\n    },\n    \"updateReason\": \"Implementación de nuevos estándares de sostenibilidad y ampliación de validaciones presupuestarias según circular SERCOP-2025-08\",\n    \"effectiveDate\": \"2025-10-15T00:00:00.000Z\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/phases/{{phase_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "phases",
+                                "{{phase_id}}"
+                            ]
+                        },
+                        "description": "**Actualizar configuración de fase contractual**\n\n**Permisos requeridos:** `special.canManagePermissions` (solo administradores)\n\n**⚠️ IMPACTO**: Los cambios afectan a todos los contratos futuros que usen esta fase\n\n**Campos actualizables:**\n- Duración estándar y rangos\n- Documentos requeridos y opcionales\n- Actividades y responsables\n- Reglas de validación\n- Condiciones de aplicación\n- Notificaciones automáticas\n\n**Validaciones automáticas:**\n- No afectar contratos en proceso en esta fase\n- Documentos requeridos válidos\n- Duración lógica y factible\n- Roles de responsables existentes\n- Plantillas de documentos disponibles\n\n**Gestión de cambios:**\n- Fecha efectiva de cambios\n- Migración gradual de procesos\n- Notificación a usuarios afectados\n- Capacitación en nuevos requerimientos"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🗑️ Desactivar fase",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"reason\": \"Fase obsoleta según nueva normativa SERCOP que unifica etapas preparatorias\",\n    \"effectiveDate\": \"2025-12-31T23:59:59.000Z\",\n    \"migrationPlan\": {\n        \"targetPhaseCode\": \"PREPARATORIA\",\n        \"mergeActivities\": true,\n        \"preserveDocuments\": true,\n        \"migrationStrategy\": \"GRADUAL_TRANSITION\"\n    },\n    \"affectedContracts\": {\n        \"allowCurrentToComplete\": true,\n        \"blockNewContracts\": true,\n        \"notificationRequired\": true\n    },\n    \"approvals\": [\n        {\n            \"userId\": \"64f7e8b123456789abcdef07\",\n            \"role\": \"LEGAL_DIRECTOR\",\n            \"approved\": true,\n            \"approvalDate\": \"2025-09-01T17:00:00.000Z\",\n            \"comments\": \"Aprobada según directriz de simplificación de procesos SERCOP-2025\"\n        }\n    ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/phases/{{phase_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "phases",
+                                "{{phase_id}}"
+                            ]
+                        },
+                        "description": "**Desactivar fase contractual (soft delete)**\n\n**Permisos requeridos:** `special.canManagePermissions` + aprobación superior\n\n**⚠️ OPERACIÓN CRÍTICA**: Afecta todos los tipos de contrato que usan esta fase\n\n**⚠️ RESTRICCIÓN**: No se pueden desactivar fases estándar LOSNCP obligatorias\n\n**Validaciones obligatorias:**\n- Solo fases personalizadas/opcionales\n- No debe tener contratos activos en esta fase\n- Plan de migración para contratos en proceso\n- Aprobación de nivel directivo\n- Justificación normativa o técnica\n\n**Estrategias de migración:**\n- **GRADUAL_TRANSITION**: Transición gradual de procesos\n- **IMMEDIATE_MERGE**: Fusión inmediata con otra fase\n- **ALLOW_COMPLETION**: Permitir completar contratos actuales\n\n**Proceso de desactivación:**\n1. Validar que no es fase obligatoria LOSNCP\n2. Verificar ausencia de contratos activos\n3. Ejecutar plan de migración\n4. Notificar a usuarios afectados\n5. Actualizar tipos de contrato dependientes\n6. Archivar configuración para auditoría"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "⚙️ Configuración Completa del Sistema",
+            "item": [
+                {
+                    "name": "🏗️ Configuración completa",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/complete?includeInactive=false&format=STRUCTURED",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "complete"
+                            ],
+                            "query": [
+                                {
+                                    "key": "includeInactive",
+                                    "value": "false",
+                                    "description": "Incluir elementos desactivados"
+                                },
+                                {
+                                    "key": "format",
+                                    "value": "STRUCTURED",
+                                    "description": "Formato: STRUCTURED, FLAT, MINIMAL"
+                                }
+                            ]
+                        },
+                        "description": "**Obtener configuración completa del sistema (tipos + fases)**\n\n**Permisos requeridos:** Acceso básico al módulo\n\n**Información incluida:**\n- Todos los tipos de contratación activos\n- Todas las fases contractuales configuradas\n- Relaciones entre tipos y fases\n- Documentos requeridos por tipo/fase\n- Plazos y duraciones estándar\n- Reglas de validación globales\n- Configuraciones de notificación\n\n**Formatos disponibles:**\n- **STRUCTURED**: Estructura jerárquica organizada\n- **FLAT**: Lista plana para procesamiento\n- **MINIMAL**: Solo campos esenciales\n\n**Útil para:**\n- Inicialización de aplicaciones cliente\n- Sincronización de configuraciones\n- Exportación/importación de settings\n- Documentación del sistema\n- Capacitación y consulta"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🚀 Inicializar configuración",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"initializationMode\": \"FULL_LOSNCP\",\n    \"includeTestData\": false,\n    \"configuration\": {\n        \"enableAdvancedFeatures\": true,\n        \"defaultCurrency\": \"USD\",\n        \"defaultLocale\": \"es-EC\",\n        \"timeZone\": \"America/Guayaquil\",\n        \"fiscalYear\": 2025\n    },\n    \"customizations\": {\n        \"institutionName\": \"GADM Cantón Esmeraldas\",\n        \"institutionCode\": \"GADMCE\",\n        \"processNumberFormat\": \"GADMCE-{TYPE}-{SEQUENTIAL}-{YEAR}\",\n        \"enableEnvironmentalValidation\": true,\n        \"defaultBudgetSource\": \"RECURSOS_PROPIOS\"\n    },\n    \"features\": {\n        \"enableDigitalSignatures\": true,\n        \"enableAutomaticNotifications\": true,\n        \"enableAuditTrail\": true,\n        \"enableReporting\": true,\n        \"enableDashboards\": true,\n        \"enableMobileAccess\": false\n    },\n    \"validation\": {\n        \"strictBudgetValidation\": true,\n        \"requireLegalReview\": true,\n        \"enableAntiCorruptionChecks\": true,\n        \"validateProviderRegistry\": true\n    },\n    \"approvals\": [\n        {\n            \"userId\": \"64f7e8b123456789abcdef07\",\n            \"role\": \"SYSTEM_ADMINISTRATOR\",\n            \"approved\": true,\n            \"approvalDate\": \"2025-09-01T18:00:00.000Z\",\n            \"comments\": \"Aprobada inicialización completa del sistema según especificaciones técnicas\"\n        }\n    ],\n    \"backupExisting\": true,\n    \"confirmationCode\": \"INITIALIZE_CONFIRMED_2025\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/initialize",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "initialize"
+                            ]
+                        },
+                        "description": "**Inicializar configuración completa del sistema**\n\n**Permisos requeridos:** `special.canManagePermissions` + confirmación administrativa\n\n**⚠️ OPERACIÓN CRÍTICA**: Configura todo el sistema desde cero\n\n**Modos de inicialización:**\n- **FULL_LOSNCP**: Configuración completa según normativa ecuatoriana\n- **BASIC**: Configuración mínima funcional\n- **CUSTOM**: Configuración personalizada\n- **MIGRATION**: Migración desde sistema anterior\n\n**Elementos que se inicializan:**\n1. **Tipos de contratación LOSNCP estándar**\n   - Procedimientos comunes (11 tipos)\n   - Procedimientos especiales (5 tipos)\n   - Rangos de montos por tipo\n   - Marco legal por cada tipo\n\n2. **Fases contractuales estándar**\n   - 5 fases principales LOSNCP\n   - Documentos requeridos por fase\n   - Actividades y responsables\n   - Duraciones estándar\n\n3. **Configuraciones del sistema**\n   - Parámetros generales\n   - Notificaciones automáticas\n   - Validaciones de negocio\n   - Plantillas de documentos\n\n**Validaciones pre-inicialización:**\n- Sistema vacío o autorización de sobrescritura\n- Backup de configuración existente\n- Confirmación explícita del administrador\n- Permisos de nivel más alto\n\n**⚠️ PRECAUCIÓN**: Esta operación reemplaza toda la configuración existente"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "✅ Validar configuración",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/validate?level=COMPREHENSIVE&includeRecommendations=true",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "validate"
+                            ],
+                            "query": [
+                                {
+                                    "key": "level",
+                                    "value": "COMPREHENSIVE",
+                                    "description": "Nivel de validación: BASIC, STANDARD, COMPREHENSIVE"
+                                },
+                                {
+                                    "key": "includeRecommendations",
+                                    "value": "true",
+                                    "description": "Incluir recomendaciones de mejora"
+                                }
+                            ]
+                        },
+                        "description": "**Validar integridad de la configuración del sistema**\n\n**Permisos requeridos:** `contracts.canRead` o `special.canManagePermissions`\n\n**Niveles de validación:**\n\n**BASIC:**\n- Existencia de tipos y fases principales\n- Configuraciones mínimas requeridas\n- Integridad de referencias\n\n**STANDARD:**\n- Validaciones BASIC +\n- Rangos de montos lógicos\n- Documentos requeridos definidos\n- Duraciones de fases coherentes\n- Marco legal presente\n\n**COMPREHENSIVE:**\n- Validaciones STANDARD +\n- Consistencia entre tipos y fases\n- Validación de plantillas de documentos\n- Verificación de roles y permisos\n- Análisis de reglas de negocio\n- Compatibilidad con normativa LOSNCP\n\n**Validaciones específicas:**\n- ✅ Tipos de contratación LOSNCP completos\n- ✅ Fases obligatorias configuradas\n- ✅ Rangos de montos sin solapamientos\n- ✅ Documentos requeridos por fase definidos\n- ✅ Roles de responsables existentes\n- ✅ Plantillas de notificaciones activas\n- ✅ Reglas de transición válidas\n\n**Resultado incluye:**\n- Estado general de la configuración\n- Lista de problemas encontrados (errores/warnings)\n- Recomendaciones de mejora\n- Elementos faltantes o inconsistentes\n- Score de completitud y calidad"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "📊 Estadísticas y Reportes",
+            "item": [
+                {
+                    "name": "📈 Estadísticas de configuración",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/statistics?period=current_year&includeUsageStats=true",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "statistics"
+                            ],
+                            "query": [
+                                {
+                                    "key": "period",
+                                    "value": "current_year",
+                                    "description": "Período de análisis: current_month, current_quarter, current_year, all_time"
+                                },
+                                {
+                                    "key": "includeUsageStats",
+                                    "value": "true",
+                                    "description": "Incluir estadísticas de uso por tipo/fase"
+                                }
+                            ]
+                        },
+                        "description": "**Estadísticas de configuración y uso del sistema**\n\n**Permisos requeridos:** Acceso básico al módulo\n\n**Métricas de configuración:**\n- Total de tipos de contratación activos/inactivos\n- Distribución por categorías (comunes/especiales)\n- Fases configuradas por tipo\n- Documentos requeridos por fase\n- Completitud de configuraciones\n\n**Estadísticas de uso:**\n- Tipos más utilizados\n- Fases con mayor duración promedio\n- Documentos más frecuentemente subidos\n- Eficiencia por tipo de contratación\n- Distribución de montos por tipo\n\n**Análisis temporal:**\n- Evolución de uso por período\n- Tendencias en tipos de contratación\n- Variaciones en duración de fases\n- Adopción de nuevas configuraciones\n\n**Indicadores de calidad:**\n- Porcentaje de cumplimiento de documentación\n- Tiempo promedio de transición entre fases\n- Tasa de éxito por tipo de contratación\n- Satisfacción con configuraciones actuales"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🎯 Fases por tipo de contrato",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/types/{{type_id}}/phases",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "types",
+                                "{{type_id}}",
+                                "phases"
+                            ]
+                        },
+                        "description": "**Obtener fases requeridas para un tipo específico**\n\n**Permisos requeridos:** Acceso básico al módulo\n\n**Información incluida:**\n- Secuencia de fases obligatorias\n- Fases opcionales disponibles\n- Documentos requeridos por fase\n- Duración estándar de cada fase\n- Actividades principales por fase\n- Responsables por defecto\n- Criterios de validación\n- Puntos de control obligatorios\n\n**Utilidad:**\n- Planificación de cronogramas\n- Preparación de documentación\n- Asignación de responsabilidades\n- Estimación de tiempos\n- Capacitación de personal\n- Configuración de notificaciones"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "⚙️ Actualizar fases por tipo",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"requiredPhases\": [\n        \"PREPARATORIA\",\n        \"PRECONTRACTUAL\",\n        \"CONTRACTUAL\",\n        \"PAGO\",\n        \"RECEPCION\",\n        \"POST_CONTRACTUAL\"\n    ],\n    \"optionalPhases\": [\n        \"GARANTIA_AMPLIADA\"\n    ],\n    \"phaseConfiguration\": {\n        \"PREPARATORIA\": {\n            \"customDuration\": 20,\n            \"additionalDocuments\": [\n                \"ESTUDIO_IMPACTO_SOCIAL\"\n            ],\n            \"specialValidations\": [\n                \"ENVIRONMENTAL_IMPACT_CHECK\"\n            ]\n        },\n        \"POST_CONTRACTUAL\": {\n            \"applicableWhen\": {\n                \"condition\": \"CONTRACT_VALUE_GT_100000\",\n                \"contractTypes\": [\"LICITACION\", \"COTIZACION\"]\n            },\n            \"duration\": 30,\n            \"autoTrigger\": true,\n            \"triggerDelay\": 1\n        }\n    },\n    \"transitionRules\": {\n        \"allowSkipPhases\": [],\n        \"conditionalPhases\": [\n            {\n                \"phaseCode\": \"POST_CONTRACTUAL\",\n                \"condition\": \"CONTRACT_VALUE_GT_100000\",\n                \"required\": false\n            }\n        ]\n    },\n    \"updateReason\": \"Incorporación de fase post-contractual para contratos de alto valor y adición de validaciones ambientales en fase preparatoria\",\n    \"effectiveDate\": \"2025-11-01T00:00:00.000Z\",\n    \"migrationPlan\": {\n        \"affectExistingContracts\": false,\n        \"notifyUsers\": true,\n        \"trainingRequired\": true\n    }\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/contracts/configuration/types/{{type_id}}/phases",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "contracts",
+                                "configuration",
+                                "types",
+                                "{{type_id}}",
+                                "phases"
+                            ]
+                        },
+                        "description": "**Configurar/actualizar fases para un tipo específico**\n\n**Permisos requeridos:** `special.canManagePermissions` (solo administradores)\n\n**⚠️ IMPACTO**: Afecta todos los contratos futuros de este tipo\n\n**Configuraciones permitidas:**\n- Agregar fases opcionales\n- Modificar duraciones estándar\n- Agregar documentos adicionales\n- Configurar validaciones especiales\n- Establecer reglas de transición\n- Definir fases condicionales\n\n**⚠️ RESTRICCIONES**:\n- No se pueden eliminar fases LOSNCP obligatorias\n- Las fases deben mantener orden lógico\n- Duraciones deben ser realistas\n- Documentos adicionales deben ser válidos\n\n**Validaciones automáticas:**\n- Fases obligatorias LOSNCP presentes\n- Secuencia lógica de fases\n- Duración total razonable\n- Documentos requeridos disponibles\n- Roles responsables existentes\n\n**Proceso de actualización:**\n1. Validar cambios propuestos\n2. Verificar impacto en contratos activos\n3. Crear plan de migración\n4. Notificar a usuarios afectados\n5. Aplicar cambios con fecha efectiva\n6. Capacitar en nuevos procedimientos"
+                    },
+                    "response": []
+                }
+            ]
+        }
+    ],
+    "event": [
+        {
+            "listen": "prerequest",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "// Auto-generar IDs si no existen",
+                    "if (!pm.collectionVariables.get('type_id')) {",
+                    "    pm.collectionVariables.set('type_id', '64f7e8b123456789abcdef10');",
+                    "}",
+                    "",
+                    "if (!pm.collectionVariables.get('phase_id')) {",
+                    "    pm.collectionVariables.set('phase_id', '64f7e8b123456789abcdef20');",
+                    "}",
+                    "",
+                    "if (!pm.collectionVariables.get('config_id')) {",
+                    "    pm.collectionVariables.set('config_id', '64f7e8b123456789abcdef30');",
+                    "}",
+                    "",
+                    "// Validar token de autorización",
+                    "const authToken = pm.collectionVariables.get('auth_token') || pm.globals.get('auth_token');",
+                    "if (!authToken) {",
+                    "    console.log('⚠️ WARNING: No se encontró token de autorización');",
+                    "    console.log('Configura la variable auth_token en Collection o Global variables');",
+                    "    console.log('💡 NOTA: Muchos endpoints requieren permisos administrativos');",
+                    "}",
+                    "",
+                    "// Generar código de confirmación para operaciones críticas",
+                    "if (pm.request.method === 'POST' && pm.request.url.path.includes('initialize')) {",
+                    "    const confirmationCode = 'INITIALIZE_CONFIRMED_' + new Date().getFullYear();",
+                    "    pm.collectionVariables.set('confirmation_code', confirmationCode);",
+                    "}"
+                ]
+            }
+        },
+        {
+            "listen": "test",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "// Tests globales para todas las respuestas",
+                    "pm.test('Response time is reasonable', function () {",
+                    "    // Operaciones de configuración pueden tardar más",
+                    "    pm.expect(pm.response.responseTime).to.be.below(15000);",
+                    "});",
+                    "",
+                    "pm.test('Response has correct headers', function () {",
+                    "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+                    "});",
+                    "",
+                    "// Test de estructura de respuesta estándar",
+                    "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                    "    pm.test('Response has success structure', function () {",
+                    "        const responseJson = pm.response.json();",
+                    "        pm.expect(responseJson).to.have.property('success');",
+                    "        pm.expect(responseJson).to.have.property('data');",
+                    "    });",
+                    "    ",
+                    "    // Test específico para respuestas de configuración",
+                    "    if (pm.response.json().data) {",
+                    "        const data = pm.response.json().data;",
+                    "        ",
+                    "        // Para listas de tipos de contratación",
+                    "        if (data.contractTypes && Array.isArray(data.contractTypes)) {",
+                    "            pm.test('Contract types have required fields', function () {",
+                    "                data.contractTypes.forEach(type => {",
+                    "                    pm.expect(type).to.have.property('code');",
+                    "                    pm.expect(type).to.have.property('name');",
+                    "                    pm.expect(type).to.have.property('category');",
+                    "                });",
+                    "            });",
+                    "        }",
+                    "        ",
+                    "        // Para listas de fases",
+                    "        if (data.phases && Array.isArray(data.phases)) {",
+                    "            pm.test('Phases have required fields', function () {",
+                    "                data.phases.forEach(phase => {",
+                    "                    pm.expect(phase).to.have.property('code');",
+                    "                    pm.expect(phase).to.have.property('name');",
+                    "                    pm.expect(phase).to.have.property('order');",
+                    "                });",
+                    "            });",
+                    "        }",
+                    "    }",
+                    "}",
+                    "",
+                    "// Guardar IDs útiles para siguientes requests",
+                    "if (pm.response.code === 200 || pm.response.code === 201) {",
+                    "    const responseJson = pm.response.json();",
+                    "    ",
+                    "    // Guardar type_id si se crea o obtiene un tipo",
+                    "    if (responseJson.data && responseJson.data._id) {",
+                    "        pm.collectionVariables.set('type_id', responseJson.data._id);",
+                    "        console.log('✅ Guardado type_id:', responseJson.data._id);",
+                    "    }",
+                    "    ",
+                    "    // Guardar phase_id si se crea o obtiene una fase",
+                    "    if (responseJson.data && responseJson.data.code && responseJson.data.order !== undefined) {",
+                    "        pm.collectionVariables.set('phase_id', responseJson.data._id);",
+                    "        console.log('✅ Guardado phase_id:', responseJson.data._id);",
+                    "    }",
+                    "    ",
+                    "    // Para respuestas de determinación automática por monto",
+                    "    if (responseJson.data && responseJson.data.recommendedType) {",
+                    "        console.log('💡 Tipo recomendado:', responseJson.data.recommendedType.name);",
+                    "        pm.collectionVariables.set('recommended_type', responseJson.data.recommendedType.code);",
+                    "    }",
+                    "}"
+                ]
+            }
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:3000",
+            "type": "string",
+            "description": "URL base del API - Cambiar según entorno"
+        },
+        {
+            "key": "auth_token",
+            "value": "",
+            "type": "string",
+            "description": "Token JWT de autenticación - Requiere permisos administrativos para la mayoría de endpoints"
+        },
+        {
+            "key": "type_id",
+            "value": "64f7e8b123456789abcdef10",
+            "type": "string",
+            "description": "ID del tipo de contratación - Se actualiza automáticamente"
+        },
+        {
+            "key": "phase_id",
+            "value": "64f7e8b123456789abcdef20",
+            "type": "string",
+            "description": "ID de la fase contractual - Se actualiza automáticamente"
+        },
+        {
+            "key": "config_id",
+            "value": "64f7e8b123456789abcdef30",
+            "type": "string",
+            "description": "ID de configuración general - Para operaciones específicas"
+        },
+        {
+            "key": "recommended_type",
+            "value": "",
+            "type": "string",
+            "description": "Tipo recomendado por el sistema - Se actualiza automáticamente"
+        },
+        {
+            "key": "confirmation_code",
+            "value": "",
+            "type": "string",
+            "description": "Código de confirmación para operaciones críticas - Se genera automáticamente"
+        }
+    ]
+}

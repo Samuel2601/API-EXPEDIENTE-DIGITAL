@@ -1,0 +1,709 @@
+{
+    "info": {
+        "_postman_id": "f4e8b7d3-9a2c-4567-8901-234567890abc",
+        "name": "GADMCE - Expediente Digital - Files API",
+        "description": "Colección de endpoints para la gestión de archivos del módulo de Expediente Digital\n\n**GADM Cantón Esmeraldas - Sistema de Contratación Pública**\n\n## Funcionalidades incluidas:\n- ✅ Upload de archivos\n- ✅ CRUD de archivos\n- ✅ Descarga y previsualización\n- ✅ Búsqueda avanzada\n- ✅ Estadísticas y reportes\n- ✅ Validación de archivos\n- ✅ Limpieza de archivos huérfanos\n\n## Variables necesarias:\n- `{{base_url}}`: URL base del API\n- `{{auth_token}}`: Token JWT de autenticación\n- `{{file_id}}`: ID del archivo para operaciones específicas",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "📁 Gestión de Archivos",
+            "item": [
+                {
+                    "name": "📤 Subir archivos",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "files",
+                                    "type": "file",
+                                    "src": []
+                                },
+                                {
+                                    "key": "contractId",
+                                    "value": "{{contract_id}}",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "documentType",
+                                    "value": "TDR",
+                                    "type": "text",
+                                    "description": "Tipo de documento según fase contractual"
+                                },
+                                {
+                                    "key": "phase",
+                                    "value": "PREPARATORIA",
+                                    "type": "text",
+                                    "description": "Fase: PREPARATORIA, PRECONTRACTUAL, CONTRACTUAL, PAGO, RECEPCION"
+                                },
+                                {
+                                    "key": "description",
+                                    "value": "Términos de referencia del proceso",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "isRequired",
+                                    "value": "true",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "tags",
+                                    "value": "terminos,referencia,preparatoria",
+                                    "type": "text",
+                                    "description": "Tags separados por coma"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/files/upload",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "files",
+                                "upload"
+                            ]
+                        },
+                        "description": "**Subir archivos al sistema**\n\n**Permisos requeridos:** `documents.canUpload`\n\n**Archivos soportados:**\n- PDF, DOC, DOCX, XLS, XLSX\n- JPG, PNG, GIF (imágenes)\n- Tamaño máximo: 10MB por archivo\n\n**Validaciones:**\n- Tipos de archivo permitidos\n- Tamaño máximo\n- Virus scan (integración con sistema antivirus)\n- Validación de metadatos"
+                    },
+                    "response": [
+                        {
+                            "name": "✅ Upload exitoso",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{auth_token}}"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "formdata",
+                                    "formdata": [
+                                        {
+                                            "key": "files",
+                                            "type": "file"
+                                        }
+                                    ]
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/exp-digital/files/upload"
+                                }
+                            },
+                            "status": "Created",
+                            "code": 201,
+                            "_postman_previewlanguage": "json",
+                            "header": [],
+                            "cookie": [],
+                            "body": "{\n    \"success\": true,\n    \"message\": \"Archivos subidos correctamente\",\n    \"data\": {\n        \"uploadedFiles\": [\n            {\n                \"_id\": \"64f7e8b123456789abcdef01\",\n                \"originalName\": \"TDR-Proceso-001.pdf\",\n                \"fileName\": \"uploads/2025/01/64f7e8b123456789abcdef01.pdf\",\n                \"fileSize\": 2048576,\n                \"mimeType\": \"application/pdf\",\n                \"documentType\": \"TDR\",\n                \"phase\": \"PREPARATORIA\",\n                \"uploadedBy\": \"64f7e8b123456789abcdef02\",\n                \"uploadedAt\": \"2025-09-01T10:30:00.000Z\",\n                \"fileHash\": \"sha256:1234567890abcdef...\",\n                \"isProcessed\": true\n            }\n        ],\n        \"totalUploaded\": 1,\n        \"totalSize\": \"2.0 MB\"\n    }\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "📋 Listar todos los archivos",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/files?page=1&limit=20&documentType=TDR&phase=PREPARATORIA&sortBy=uploadedAt&sortOrder=desc",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "files"
+                            ],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "1",
+                                    "description": "Página actual"
+                                },
+                                {
+                                    "key": "limit",
+                                    "value": "20",
+                                    "description": "Elementos por página"
+                                },
+                                {
+                                    "key": "documentType",
+                                    "value": "TDR",
+                                    "description": "Filtro por tipo de documento"
+                                },
+                                {
+                                    "key": "phase",
+                                    "value": "PREPARATORIA",
+                                    "description": "Filtro por fase"
+                                },
+                                {
+                                    "key": "contractId",
+                                    "value": "{{contract_id}}",
+                                    "description": "Filtro por contrato",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "uploadedBy",
+                                    "value": "{{user_id}}",
+                                    "description": "Filtro por usuario que subió",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "dateFrom",
+                                    "value": "2025-01-01",
+                                    "description": "Fecha desde (YYYY-MM-DD)",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "dateTo",
+                                    "value": "2025-12-31",
+                                    "description": "Fecha hasta (YYYY-MM-DD)",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "tags",
+                                    "value": "terminos,referencia",
+                                    "description": "Filtro por tags",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "sortBy",
+                                    "value": "uploadedAt",
+                                    "description": "Campo de ordenamiento"
+                                },
+                                {
+                                    "key": "sortOrder",
+                                    "value": "desc",
+                                    "description": "Orden: asc, desc"
+                                }
+                            ]
+                        },
+                        "description": "**Obtener todos los archivos con filtros**\n\n**Permisos requeridos:** `documents.canView`\n\n**Filtros disponibles:**\n- `documentType`: Tipo de documento\n- `phase`: Fase contractual\n- `contractId`: ID del contrato\n- `uploadedBy`: Usuario que subió\n- `dateFrom/dateTo`: Rango de fechas\n- `tags`: Tags del documento\n- `isProcessed`: Si fue procesado\n- `fileSize`: Tamaño del archivo\n\n**Ordenamiento:**\n- `sortBy`: uploadedAt, fileName, fileSize, documentType\n- `sortOrder`: asc, desc"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🔍 Obtener archivo por ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/files/{{file_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "files",
+                                "{{file_id}}"
+                            ]
+                        },
+                        "description": "**Obtener información detallada de un archivo**\n\n**Permisos requeridos:** `documents.canView` + acceso al archivo\n\n**Incluye:**\n- Metadatos completos\n- Historial de modificaciones\n- Información de seguridad\n- Enlaces de descarga temporal\n- Versiones del archivo"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "✏️ Actualizar metadatos",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"description\": \"Términos de referencia actualizados - Proceso 001\",\n    \"documentType\": \"TDR_ACTUALIZADO\",\n    \"tags\": [\"terminos\", \"referencia\", \"actualizado\", \"proceso-001\"],\n    \"isRequired\": true,\n    \"metadata\": {\n        \"version\": \"1.1\",\n        \"author\": \"Departamento de Compras\",\n        \"reviewedBy\": \"Jefe de Adquisiciones\",\n        \"approvalDate\": \"2025-09-01\"\n    },\n    \"customFields\": {\n        \"processNumber\": \"GADMCE-001-2025\",\n        \"budgetCode\": \"530101\",\n        \"priority\": \"HIGH\"\n    }\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/files/{{file_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "files",
+                                "{{file_id}}"
+                            ]
+                        },
+                        "description": "**Actualizar metadatos del archivo**\n\n**Permisos requeridos:** `documents.canEdit` + propiedad del archivo\n\n**Campos actualizables:**\n- `description`: Descripción del archivo\n- `documentType`: Tipo de documento\n- `tags`: Array de etiquetas\n- `isRequired`: Si es requerido\n- `metadata`: Metadatos personalizados\n- `customFields`: Campos adicionales\n\n**Nota:** No se puede cambiar el archivo físico, solo sus metadatos"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🗑️ Eliminar archivo",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/files/{{file_id}}?reason=Archivo obsoleto&forceDelete=false",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "files",
+                                "{{file_id}}"
+                            ],
+                            "query": [
+                                {
+                                    "key": "reason",
+                                    "value": "Archivo obsoleto",
+                                    "description": "Razón de eliminación"
+                                },
+                                {
+                                    "key": "forceDelete",
+                                    "value": "false",
+                                    "description": "Eliminación física (solo admin)"
+                                }
+                            ]
+                        },
+                        "description": "**Eliminar archivo (soft delete)**\n\n**Permisos requeridos:** `documents.canDelete` + propiedad del archivo\n\n**Tipos de eliminación:**\n- **Soft Delete (default)**: Marca como eliminado, preserva archivo\n- **Force Delete**: Eliminación física (solo administradores)\n\n**Validaciones:**\n- El archivo no debe estar siendo usado en procesos activos\n- Debe especificar razón de eliminación\n- Backup automático antes de eliminación física"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "⬇️ Descarga y Previsualización",
+            "item": [
+                {
+                    "name": "📥 Descargar archivo",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/files/{{file_id}}/download?inline=false&watermark=true",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "files",
+                                "{{file_id}}",
+                                "download"
+                            ],
+                            "query": [
+                                {
+                                    "key": "inline",
+                                    "value": "false",
+                                    "description": "Ver en navegador vs descargar"
+                                },
+                                {
+                                    "key": "watermark",
+                                    "value": "true",
+                                    "description": "Agregar marca de agua"
+                                },
+                                {
+                                    "key": "version",
+                                    "value": "latest",
+                                    "description": "Versión específica",
+                                    "disabled": true
+                                }
+                            ]
+                        },
+                        "description": "**Descargar archivo**\n\n**Permisos requeridos:** `documents.canDownload` + acceso al archivo\n\n**Opciones:**\n- `inline`: true = ver en navegador, false = descarga\n- `watermark`: Agregar marca de agua con info del usuario\n- `version`: Descargar versión específica\n\n**Seguridad:**\n- URL de descarga temporal (expires en 1 hora)\n- Registro de auditoría de descargas\n- Control de acceso por departamento/rol"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "👁️ Previsualizar archivo",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/files/{{file_id}}/preview?page=1&quality=medium&size=800x600",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "files",
+                                "{{file_id}}",
+                                "preview"
+                            ],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "1",
+                                    "description": "Página del PDF (si aplica)"
+                                },
+                                {
+                                    "key": "quality",
+                                    "value": "medium",
+                                    "description": "Calidad: low, medium, high"
+                                },
+                                {
+                                    "key": "size",
+                                    "value": "800x600",
+                                    "description": "Tamaño de preview"
+                                }
+                            ]
+                        },
+                        "description": "**Previsualizar archivo (imágenes y PDFs)**\n\n**Permisos requeridos:** `documents.canView` + acceso al archivo\n\n**Soportado para:**\n- PDFs (primera página o página específica)\n- Imágenes (JPG, PNG, GIF)\n- Documentos de Office (convertidos a imagen)\n\n**Parámetros:**\n- `page`: Página específica para PDFs\n- `quality`: Calidad de la imagen generada\n- `size`: Dimensiones del preview"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "🔍 Búsqueda y Filtros",
+            "item": [
+                {
+                    "name": "🔍 Búsqueda avanzada",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"searchTerm\": \"términos referencia\",\n    \"filters\": {\n        \"documentTypes\": [\"TDR\", \"PLIEGOS\", \"CONTRATO\"],\n        \"phases\": [\"PREPARATORIA\", \"PRECONTRACTUAL\"],\n        \"dateRange\": {\n            \"from\": \"2025-01-01\",\n            \"to\": \"2025-12-31\"\n        },\n        \"fileSizeRange\": {\n            \"min\": 1048576,\n            \"max\": 10485760\n        },\n        \"tags\": [\"proceso\", \"adquisiciones\"],\n        \"uploadedBy\": [\"64f7e8b123456789abcdef02\"],\n        \"departments\": [\"{{department_id}}\"],\n        \"isRequired\": true,\n        \"hasContract\": true\n    },\n    \"searchOptions\": {\n        \"includeContent\": true,\n        \"fuzzyMatch\": true,\n        \"highlightResults\": true,\n        \"includeDeleted\": false\n    },\n    \"sortBy\": \"relevance\",\n    \"sortOrder\": \"desc\",\n    \"page\": 1,\n    \"limit\": 20\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/files/search",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "files",
+                                "search"
+                            ]
+                        },
+                        "description": "**Búsqueda avanzada de archivos**\n\n**Permisos requeridos:** `documents.canView`\n\n**Capacidades de búsqueda:**\n- Texto completo en metadatos y contenido\n- Búsqueda fuzzy (tolerante a errores)\n- Filtros múltiples combinados\n- Destacado de resultados\n- Búsqueda en contenido de PDFs (OCR)\n\n**Filtros avanzados:**\n- Rangos de fechas y tamaños\n- Múltiples tipos de documento\n- Tags y metadatos personalizados\n- Estado y departamento\n- Usuario que subió"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "📊 Estadísticas de archivos",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/files/statistics?period=last30days&groupBy=documentType&includeDepartments=true",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "files",
+                                "statistics"
+                            ],
+                            "query": [
+                                {
+                                    "key": "period",
+                                    "value": "last30days",
+                                    "description": "Período: today, last7days, last30days, lastYear, custom"
+                                },
+                                {
+                                    "key": "groupBy",
+                                    "value": "documentType",
+                                    "description": "Agrupar por: documentType, phase, department, user, date"
+                                },
+                                {
+                                    "key": "includeDepartments",
+                                    "value": "true",
+                                    "description": "Incluir estadísticas por departamento"
+                                },
+                                {
+                                    "key": "dateFrom",
+                                    "value": "2025-08-01",
+                                    "description": "Para período custom",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "dateTo",
+                                    "value": "2025-09-01",
+                                    "description": "Para período custom",
+                                    "disabled": true
+                                }
+                            ]
+                        },
+                        "description": "**Obtener estadísticas de archivos**\n\n**Permisos requeridos:** `documents.canView`\n\n**Estadísticas incluidas:**\n- Total de archivos por tipo\n- Distribución por fases\n- Archivos por departamento\n- Tendencias temporales\n- Tamaño total usado\n- Archivos más descargados\n- Usuarios más activos\n\n**Agrupaciones:**\n- Por tipo de documento\n- Por fase contractual\n- Por departamento\n- Por usuario\n- Por fecha"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "🛠️ Utilidades y Configuración",
+            "item": [
+                {
+                    "name": "📝 Tipos de documentos",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/files/document-types?phase=PREPARATORIA&includeDescriptions=true",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "files",
+                                "document-types"
+                            ],
+                            "query": [
+                                {
+                                    "key": "phase",
+                                    "value": "PREPARATORIA",
+                                    "description": "Filtrar por fase específica"
+                                },
+                                {
+                                    "key": "includeDescriptions",
+                                    "value": "true",
+                                    "description": "Incluir descripciones detalladas"
+                                }
+                            ]
+                        },
+                        "description": "**Obtener tipos de documentos disponibles**\n\n**Permisos requeridos:** Acceso básico al módulo\n\n**Por fase:**\n- **PREPARATORIA**: PAC, TDR, Estudios de mercado, Resoluciones\n- **PRECONTRACTUAL**: Pliegos, Ofertas, Informes de evaluación\n- **CONTRACTUAL**: Contrato, Garantías, Cronogramas, Actas\n- **PAGO**: Facturas, Planillas, Comprobantes\n- **RECEPCION**: Acta definitiva, Informes finales\n\n**Incluye:**\n- Código del tipo\n- Nombre descriptivo\n- Fase asociada\n- Si es requerido\n- Formatos aceptados"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "✅ Validar archivos",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"files\": [\n        {\n            \"fileName\": \"TDR-Proceso-001.pdf\",\n            \"fileSize\": 2048576,\n            \"mimeType\": \"application/pdf\",\n            \"documentType\": \"TDR\",\n            \"phase\": \"PREPARATORIA\",\n            \"checksum\": \"sha256:1234567890abcdef...\"\n        },\n        {\n            \"fileName\": \"Pliego-Condiciones.docx\",\n            \"fileSize\": 1536000,\n            \"mimeType\": \"application/vnd.openxmlformats-officedocument.wordprocessingml.document\",\n            \"documentType\": \"PLIEGOS\",\n            \"phase\": \"PRECONTRACTUAL\",\n            \"checksum\": \"sha256:abcdef1234567890...\"\n        }\n    ],\n    \"contractId\": \"{{contract_id}}\",\n    \"validationLevel\": \"strict\",\n    \"options\": {\n        \"checkDuplicates\": true,\n        \"validateContent\": true,\n        \"scanVirus\": true,\n        \"checkMetadata\": true\n    }\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/files/validate",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "files",
+                                "validate"
+                            ]
+                        },
+                        "description": "**Validar archivos antes de subir**\n\n**Permisos requeridos:** `documents.canUpload`\n\n**Validaciones realizadas:**\n- Tipo de archivo permitido\n- Tamaño máximo\n- Estructura del documento\n- Duplicados por checksum\n- Escaneo de virus\n- Metadatos requeridos\n- Compatibilidad con fase\n\n**Niveles de validación:**\n- `basic`: Validaciones mínimas\n- `standard`: Validaciones estándar\n- `strict`: Todas las validaciones\n\n**Respuesta incluye:**\n- Estado de cada validación\n- Errores y advertencias\n- Sugerencias de corrección"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "🧹 Limpiar archivos huérfanos",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{auth_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"dryRun\": true,\n    \"olderThanDays\": 30,\n    \"filters\": {\n        \"excludeRecentlyAccessed\": true,\n        \"excludeSystemFiles\": true,\n        \"minFileSize\": 1048576,\n        \"documentTypes\": [\"TEMP\", \"DRAFT\"]\n    },\n    \"options\": {\n        \"createBackup\": true,\n        \"sendNotification\": true,\n        \"generateReport\": true\n    }\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/exp-digital/files/cleanup",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "exp-digital",
+                                "files",
+                                "cleanup"
+                            ]
+                        },
+                        "description": "**Limpiar archivos huérfanos (sin referencias)**\n\n**Permisos requeridos:** `special.canManageFiles` (solo administradores)\n\n**Tipos de limpieza:**\n- Archivos sin referencias en contratos\n- Archivos temporales antiguos\n- Duplicados exactos\n- Archivos de prueba\n\n**Opciones de seguridad:**\n- `dryRun`: Solo mostrar qué se eliminaría\n- `createBackup`: Crear respaldo antes de eliminar\n- `olderThanDays`: Solo archivos más antiguos\n\n**Filtros:**\n- Excluir archivos accedidos recientemente\n- Excluir archivos del sistema\n- Tamaño mínimo de archivo\n- Tipos específicos de documento\n\n**⚠️ PRECAUCIÓN:** Esta operación es irreversible si no se usa dryRun"
+                    },
+                    "response": []
+                }
+            ]
+        }
+    ],
+    "event": [
+        {
+            "listen": "prerequest",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "// Auto-generar IDs si no existen",
+                    "if (!pm.collectionVariables.get('file_id')) {",
+                    "    pm.collectionVariables.set('file_id', '64f7e8b123456789abcdef01');",
+                    "}",
+                    "",
+                    "if (!pm.collectionVariables.get('contract_id')) {",
+                    "    pm.collectionVariables.set('contract_id', '64f7e8b123456789abcdef99');",
+                    "}",
+                    "",
+                    "// Validar token de autorización",
+                    "const authToken = pm.collectionVariables.get('auth_token') || pm.globals.get('auth_token');",
+                    "if (!authToken) {",
+                    "    console.log('⚠️ WARNING: No se encontró token de autorización');",
+                    "    console.log('Configura la variable auth_token en Collection o Global variables');",
+                    "}"
+                ]
+            }
+        },
+        {
+            "listen": "test",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "// Tests globales para todas las respuestas",
+                    "pm.test('Response time is reasonable', function () {",
+                    "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+                    "});",
+                    "",
+                    "pm.test('Response has correct headers', function () {",
+                    "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+                    "});",
+                    "",
+                    "// Guardar datos útiles para siguientes requests",
+                    "if (pm.response.code === 200 || pm.response.code === 201) {",
+                    "    const responseJson = pm.response.json();",
+                    "    ",
+                    "    // Guardar file_id si se crea un archivo",
+                    "    if (responseJson.data && responseJson.data.uploadedFiles) {",
+                    "        const firstFile = responseJson.data.uploadedFiles[0];",
+                    "        if (firstFile && firstFile._id) {",
+                    "            pm.collectionVariables.set('file_id', firstFile._id);",
+                    "            console.log('✅ Guardado file_id:', firstFile._id);",
+                    "        }",
+                    "    }",
+                    "    ",
+                    "    // Guardar file_id si se obtiene un archivo individual",
+                    "    if (responseJson.data && responseJson.data._id) {",
+                    "        pm.collectionVariables.set('file_id', responseJson.data._id);",
+                    "    }",
+                    "}"
+                ]
+            }
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:3000",
+            "type": "string",
+            "description": "URL base del API - Cambiar según entorno"
+        },
+        {
+            "key": "auth_token",
+            "value": "",
+            "type": "string",
+            "description": "Token JWT de autenticación - Obtener de /auth/login"
+        },
+        {
+            "key": "file_id",
+            "value": "64f7e8b123456789abcdef01",
+            "type": "string",
+            "description": "ID del archivo para pruebas - Se actualiza automáticamente"
+        },
+        {
+            "key": "contract_id",
+            "value": "64f7e8b123456789abcdef99",
+            "type": "string",
+            "description": "ID del contrato asociado - Configurar según necesidad"
+        },
+        {
+            "key": "user_id",
+            "value": "64f7e8b123456789abcdef02",
+            "type": "string",
+            "description": "ID del usuario para filtros - Opcional"
+        },
+        {
+            "key": "department_id",
+            "value": "64f7e8b123456789abcdef03",
+            "type": "string",
+            "description": "ID del departamento para filtros - Opcional"
+        }
+    ]
+}
