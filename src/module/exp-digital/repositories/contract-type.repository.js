@@ -49,7 +49,12 @@ export class ContractTypeRepository extends BaseRepository {
    */
   async findByCategory(category, options = {}) {
     try {
-      const { page = 1, limit = 10, includeInactive = false } = options;
+      const {
+        page = 1,
+        limit = 10,
+        includeInactive = false,
+        lean = true,
+      } = options;
 
       // ✅ Usar query helper del esquema
       let query = this.model.find().byCategory(category);
@@ -60,7 +65,7 @@ export class ContractTypeRepository extends BaseRepository {
 
       query = query.sort({ displayOrder: 1, name: 1 });
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit, lean });
     } catch (error) {
       throw new Error(`Error buscando tipos por categoría: ${error.message}`);
     }
@@ -81,7 +86,7 @@ export class ContractTypeRepository extends BaseRepository {
         .where({ isActive: true })
         .sort({ displayOrder: 1, name: 1 });
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(
         `Error buscando tipos que requieren publicación: ${error.message}`
@@ -313,7 +318,7 @@ export class ContractTypeRepository extends BaseRepository {
       // Aplicar ordenamiento
       query = query.sort(sort);
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error en búsqueda avanzada: ${error.message}`);
     }

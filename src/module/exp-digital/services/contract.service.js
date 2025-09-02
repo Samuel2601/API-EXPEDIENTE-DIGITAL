@@ -1015,7 +1015,7 @@ export class ContractService {
    */
   async _getInitialPhase(contractTypeId) {
     // Obtener todas las fases aplicables al tipo de contrato, ordenadas por order
-    const phases = await this.contractPhaseRepository.find(
+    const phases = await this.contractPhaseRepository.findAll(
       {
         isActive: true,
         $or: [
@@ -1045,7 +1045,7 @@ export class ContractService {
     if (!currentPhase) return null;
 
     // Buscar la siguiente fase por orden
-    const nextPhases = await this.contractPhaseRepository.find(
+    const nextPhases = await this.contractPhaseRepository.findAll(
       {
         isActive: true,
         order: { $gt: currentPhase.order },
@@ -1224,7 +1224,7 @@ export class ContractService {
     if (!contract.phases || contract.phases.length === 0) return [];
 
     const phaseIds = contract.phases.map((p) => p.phase);
-    const phaseDetails = await this.contractPhaseRepository.find({
+    const phaseDetails = await this.contractPhaseRepository.findAll({
       _id: { $in: phaseIds },
     });
 
@@ -1654,7 +1654,9 @@ export class ContractService {
           await AuditRepository.saveDeleteBackup({
             schema: "Contract",
             documentId: contractId,
-            documentToDelete: contract.toObject(),
+            documentToDelete: contract.toObject
+              ? contract.toObject()
+              : contract,
             userData: {
               userId: options.userId,
             },
@@ -1989,7 +1991,7 @@ export class ContractService {
       }
 
       // Obtener fases disponibles según el tipo de contrato
-      const availablePhases = await this.contractPhaseRepository.find({
+      const availablePhases = await this.contractPhaseRepository.findAll({
         contractTypes: contract.contractType._id,
         isActive: true,
       });

@@ -92,7 +92,7 @@ export class ContractPhaseRepository extends BaseRepository {
         query = query.where({ isActive: true });
       }
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error buscando fases por categoría: ${error.message}`);
     }
@@ -128,7 +128,7 @@ export class ContractPhaseRepository extends BaseRepository {
         ]);
       }
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(
         `Error buscando fases por tipo de contratación: ${error.message}`
@@ -208,7 +208,7 @@ export class ContractPhaseRepository extends BaseRepository {
       // ✅ Usar método estático del esquema
       const query = this.model.findWithDocumentCode(documentCode);
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error buscando fases con documento: ${error.message}`);
     }
@@ -544,7 +544,7 @@ export class ContractPhaseRepository extends BaseRepository {
       // Aplicar ordenamiento
       query = query.sort(sort);
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error en búsqueda avanzada: ${error.message}`);
     }

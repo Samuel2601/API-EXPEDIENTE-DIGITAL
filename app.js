@@ -533,6 +533,6 @@ const server = app.listen(PORT, () => {
   }
 });
 
-mapRoutes(app);
+//mapRoutes(app);
 
 export default app;

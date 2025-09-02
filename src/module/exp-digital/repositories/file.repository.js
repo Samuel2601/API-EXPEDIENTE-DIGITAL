@@ -159,7 +159,7 @@ export class FileRepository extends BaseRepository {
         ])
         .sort({ "rsyncInfo.priority": -1, createdAt: 1 });
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error buscando archivos rsync: ${error.message}`);
     }
@@ -233,7 +233,7 @@ export class FileRepository extends BaseRepository {
         ])
         .sort({ "rsyncInfo.lastSyncAttempt": -1 });
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error buscando archivos fallidos: ${error.message}`);
     }
@@ -397,7 +397,7 @@ export class FileRepository extends BaseRepository {
       // Enriquecer con información de sincronización usando métodos del esquema
       const enrichedFiles = await Promise.all(
         files.map(async (file) => {
-          const fileObj = file.toObject();
+          const fileObj = file.toObject ? file.toObject() : file;
 
           if (file.storage.storageProvider === "RSYNC") {
             // ✅ Usar métodos del esquema
@@ -706,7 +706,7 @@ export class FileRepository extends BaseRepository {
       // Aplicar ordenamiento
       query = query.sort(sort);
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error en búsqueda avanzada rsync: ${error.message}`);
     }

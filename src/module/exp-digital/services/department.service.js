@@ -141,17 +141,17 @@ export class DepartmentService {
           },
         ],
       };
-
+      console.log("query", query, "queryOptions", queryOptions);
       // Ejecutar consulta
       const result = await this.departmentRepository.findAll(
         query,
         queryOptions
       );
-
+      console.log("result", result);
       // Enriquecer datos
       const enrichedDepartments = await Promise.all(
         result.docs.map(async (dept) => {
-          const enriched = dept.toObject();
+          const enriched = dept.toObject ? dept.toObject() : dept;
 
           // Agregar estadísticas básicas
           enriched.stats = await this._calculateDepartmentStats(dept._id);

@@ -86,7 +86,7 @@ export class DepartmentRepository extends BaseRepository {
       // ✅ MEJORA: Usar query helper del esquema
       const query = this.model.find().withApprovalCapability();
 
-      const result = await this.paginate(query, { page, limit });
+      const result = await this.model.paginate(query, { page, limit });
       return result;
     } catch (error) {
       throw new Error(
@@ -109,7 +109,7 @@ export class DepartmentRepository extends BaseRepository {
         query = query.where({ isActive: true });
       }
 
-      const result = await this.paginate(query, { page, limit });
+      const result = await this.model.paginate(query, { page, limit });
       return result;
     } catch (error) {
       throw new Error(
@@ -134,7 +134,7 @@ export class DepartmentRepository extends BaseRepository {
 
       query = query.sort({ displayOrder: 1, name: 1 });
 
-      const result = await this.paginate(query, { page, limit });
+      const result = await this.model.paginate(query, { page, limit });
       return result;
     } catch (error) {
       throw new Error(`Error buscando departamentos hijos: ${error.message}`);
@@ -518,7 +518,7 @@ export class DepartmentRepository extends BaseRepository {
         })
         .sort({ level: 1, "budgetConfig.maxApprovalAmount": 1 });
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(
         `Error buscando departamentos con capacidad de aprobación: ${error.message}`
@@ -540,7 +540,7 @@ export class DepartmentRepository extends BaseRepository {
         })
         .sort({ name: 1 });
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(
         `Error buscando departamentos por tags: ${error.message}`

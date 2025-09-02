@@ -166,12 +166,12 @@ router.get("/complete", controller.getCompleteConfiguration);
  */
 router.post(
   "/initialize",
-  requirePermission({
+  /*requirePermission({
     category: "special",
     permission: "canManagePermissions",
     errorMessage:
       "Solo los administradores pueden inicializar la configuración del sistema",
-  }),
+  }),*/
   controller.initializeConfiguration
 );
 

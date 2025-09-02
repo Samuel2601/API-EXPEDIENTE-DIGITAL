@@ -135,7 +135,7 @@ export class ContractHistoryRepository extends BaseRepository {
         ])
         .sort({ eventDate: -1 });
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error buscando por tipo de evento: ${error.message}`);
     }
@@ -178,7 +178,7 @@ export class ContractHistoryRepository extends BaseRepository {
         ])
         .sort({ eventDate: -1 });
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error buscando eventos recientes: ${error.message}`);
     }
@@ -215,7 +215,7 @@ export class ContractHistoryRepository extends BaseRepository {
         ])
         .sort({ eventDate: -1 });
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error buscando eventos críticos: ${error.message}`);
     }
@@ -264,7 +264,7 @@ export class ContractHistoryRepository extends BaseRepository {
         ])
         .sort({ eventDate: -1 });
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error buscando eventos por usuario: ${error.message}`);
     }
@@ -298,7 +298,7 @@ export class ContractHistoryRepository extends BaseRepository {
         ])
         .sort({ eventDate: -1 });
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error buscando eventos del sistema: ${error.message}`);
     }
@@ -418,7 +418,7 @@ export class ContractHistoryRepository extends BaseRepository {
 
       // ✅ Usar métodos del esquema para enriquecer datos
       const enrichedEvents = events.map((event) => {
-        const eventObj = event.toObject();
+        const eventObj = event.toObject ? event.toObject() : event;
         return {
           ...eventObj,
           // ✅ Usar métodos del esquema
@@ -743,7 +743,7 @@ export class ContractHistoryRepository extends BaseRepository {
       // Aplicar ordenamiento
       query = query.sort(sort);
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error en búsqueda avanzada: ${error.message}`);
     }

@@ -597,7 +597,7 @@ ContractHistorySchema.statics.findByContract = function (
     if (dateTo) query.eventDate.$lte = new Date(dateTo);
   }
 
-  return this.paginate(query, {
+  return this.model.paginate(query, {
     page,
     limit,
     sort: { eventDate: -1 },

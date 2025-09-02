@@ -90,7 +90,7 @@ export class ContractRepository extends BaseRepository {
         ]);
       }
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error buscando contratos por estado: ${error.message}`);
     }
@@ -117,7 +117,7 @@ export class ContractRepository extends BaseRepository {
         ])
         .sort({ createdAt: -1 });
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(
         `Error buscando contratos por departamento: ${error.message}`
@@ -146,7 +146,7 @@ export class ContractRepository extends BaseRepository {
         ])
         .sort({ createdAt: -1 });
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error buscando contratos por tipo: ${error.message}`);
     }
@@ -169,7 +169,7 @@ export class ContractRepository extends BaseRepository {
         ])
         .sort({ "timeline.executionEndDate": 1 });
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error buscando contratos vencidos: ${error.message}`);
     }
@@ -193,7 +193,7 @@ export class ContractRepository extends BaseRepository {
         ])
         .sort({ createdAt: -1 });
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error buscando contratos en progreso: ${error.message}`);
     }
@@ -218,7 +218,7 @@ export class ContractRepository extends BaseRepository {
         ])
         .sort({ "budget.estimatedValue": -1 });
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(
         `Error buscando contratos por rango de valor: ${error.message}`
@@ -455,7 +455,7 @@ export class ContractRepository extends BaseRepository {
       // Aplicar ordenamiento
       query = query.sort(sort);
 
-      return await this.paginate(query, { page, limit });
+      return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error en búsqueda avanzada: ${error.message}`);
     }

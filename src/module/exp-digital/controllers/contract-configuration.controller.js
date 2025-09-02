@@ -678,7 +678,7 @@ export class ContractConfigurationController {
       );
 
       const initResult =
-        await this.configService.initializeSystemConfiguration();
+        await this.configService.initializeSystemConfiguration(user);
 
       console.log(
         `✅ Configuración inicializada: ${initResult.summary.completedOperations}/${initResult.summary.totalOperations} operaciones exitosas`

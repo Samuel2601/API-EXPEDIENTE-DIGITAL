@@ -268,7 +268,7 @@ export class FileService {
       // Enriquecer datos
       const enrichedFiles = await Promise.all(
         result.docs.map(async (file) => {
-          const enriched = file.toObject();
+          const enriched = file.toObject?.() ? file.toObject() : file;
 
           // Agregar estadísticas y estado
           enriched.status = this._getFileStatus(file);

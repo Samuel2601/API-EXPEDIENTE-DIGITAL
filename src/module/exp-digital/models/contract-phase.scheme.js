@@ -16,7 +16,7 @@ const RequiredDocumentJSON = {
     required: true,
     uppercase: true,
     trim: true,
-    maxlength: 20,
+    maxlength: 150,
     meta: {
       validation: {
         isString: true,
@@ -126,7 +126,13 @@ const RequiredDocumentJSON = {
   },
 
   applicableTypes: {
-    type: [String],
+    type: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "ContractType",
+        required: true,
+      },
+    ],
     default: [],
     validate: {
       validator: function (v) {
@@ -135,9 +141,14 @@ const RequiredDocumentJSON = {
       message: "No se pueden especificar más de 20 tipos aplicables",
     },
     meta: {
-      validation: { isArray: true, optional: true },
+      validation: {
+        isArray: true,
+        optional: true,
+        eachValidator: { isMongoId: true },
+      },
       messages: {
         isArray: "Los tipos aplicables deben ser una lista",
+        isMongoId: "Cada tipo debe ser un ID válido de MongoDB",
       },
     },
   },
@@ -286,6 +297,8 @@ export const ContractPhaseJSON = {
         "CONTRACTUAL",
         "EXECUTION",
         "CLOSURE",
+        "PAYMENT",
+        "RECEIPT",
       ],
       message: "Categoría no válida",
     },
@@ -299,6 +312,8 @@ export const ContractPhaseJSON = {
           "CONTRACTUAL",
           "EXECUTION",
           "CLOSURE",
+          "PAYMENT",
+          "RECEIPT",
         ],
         required: true,
       },

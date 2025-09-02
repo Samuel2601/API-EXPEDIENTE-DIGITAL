@@ -326,6 +326,17 @@ export const DepartmentJSON = {
       },
     },
   },
+  isActive: {
+    type: Boolean,
+    default: true,
+    index: true,
+    meta: {
+      validation: { isBoolean: true, optional: true },
+      messages: {
+        isBoolean: "El estado activo debe ser verdadero o falso",
+      },
+    },
+  },
 };
 
 // === CONFIGURACIÓN DEL ESQUEMA ===
