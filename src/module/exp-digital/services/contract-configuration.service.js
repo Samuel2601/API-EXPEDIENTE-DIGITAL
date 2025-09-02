@@ -1561,165 +1561,335 @@ export class ContractConfigurationService {
 
   _getDefaultTypes() {
     return [
-      // TIPOS COMUNES
+      // ========== RÉGIMEN COMÚN ==========
       {
-        code: "SIE",
-        name: "Subasta Inversa Electrónica",
-        category: "COMMON",
+        code: "INFIMA_CUANTIA",
+        name: "Ínfima Cuantía",
+        category: "CONTRATACION_DIRECTA",
+        regime: "COMUN",
         description:
-          "Procedimiento común para adquisición de bienes y servicios normalizados",
-        displayOrder: 1,
-        requiresPublication: true,
-        estimatedDuration: 25, // Reducido: proceso más ágil
-        legalReference: "Art. 44-51 LOSNCP",
-        applicableObjects: ["bienes", "servicios"],
-        thresholds: { min: 0, max: null }, // Sin límite superior
-        requiresInsurance: true,
-        insurancePercentage: 5,
-      },
-      {
-        code: "LIC",
-        name: "Licitación",
-        category: "COMMON",
-        description:
-          "Procedimiento para contratación de bienes, servicios y obras de mayor cuantía",
-        displayOrder: 2,
-        requiresPublication: true,
-        estimatedDuration: 45,
-        legalReference: "Art. 32 LOSNCP",
+          "Contrataciones hasta $7.212,60 USD (0,02% PIE 2025). No requiere publicación ni garantías.",
         applicableObjects: ["bienes", "servicios", "obras"],
-        thresholds: { min: 0, max: null },
-        requiresInsurance: true,
-        insurancePercentage: 5,
+        amountLimits: [
+          { objectType: "bienes", min: 0, max: 7212.6 },
+          { objectType: "servicios", min: 0, max: 7212.6 },
+          { objectType: "obras", min: 0, max: 7212.6 },
+        ],
+        procedureConfig: {
+          requiresPublication: false,
+          evaluationDays: 5,
+          requiresInsurance: false,
+        },
       },
       {
-        code: "COT",
-        name: "Cotización",
-        category: "COMMON",
-        description: "Procedimiento para contratación de cuantía media",
-        displayOrder: 3,
-        requiresPublication: true,
-        estimatedDuration: 20,
-        legalReference: "Art. 33 LOSNCP",
-        applicableObjects: ["bienes", "servicios", "obras"],
-        thresholds: { min: 0, max: null },
-        requiresInsurance: true,
-        insurancePercentage: 5,
-      },
-      {
-        code: "MC",
+        code: "MENOR_CUANTIA",
         name: "Menor Cuantía",
-        category: "COMMON",
-        description: "Procedimiento para contratación de cuantía menor",
-        displayOrder: 4,
-        requiresPublication: true,
-        estimatedDuration: 15,
-        legalReference: "Art. 34 LOSNCP",
-        applicableObjects: ["bienes", "servicios", "obras"],
-        thresholds: { min: 0, max: null },
-        requiresInsurance: true,
-        insurancePercentage: 5,
-      },
-      {
-        code: "CON",
-        name: "Consultoría",
-        category: "COMMON",
+        category: "COTIZACION",
+        regime: "COMUN",
         description:
-          "Procedimiento para contratación de servicios de consultoría",
-        displayOrder: 5,
-        requiresPublication: true,
-        estimatedDuration: 40, // Aumentado: procesos más complejos
-        legalReference: "Art. 36-40 LOSNCP",
-        applicableObjects: ["consultorias"],
-        thresholds: { min: 0, max: null },
-        requiresInsurance: true,
-        insurancePercentage: 5,
+          "Contrataciones entre $7.212,61 y $72.126,03 USD (0,02%-0,2% PIE). Requiere publicación y garantías.",
+        applicableObjects: ["bienes", "servicios", "obras"],
+        amountLimits: [
+          { objectType: "bienes", min: 7212.61, max: 72126.03 },
+          { objectType: "servicios", min: 7212.61, max: 72126.03 },
+          { objectType: "obras", min: 7212.61, max: 252441.12 },
+        ],
+        procedureConfig: {
+          requiresPublication: true,
+          publicationDays: 5,
+          evaluationDays: 10,
+          requiresInsurance: true,
+          insurancePercentage: 5,
+        },
       },
       {
-        code: "LC",
-        name: "Lista Corta",
-        category: "COMMON",
-        description: "Procedimiento para consultoría mediante lista corta",
-        displayOrder: 6,
-        requiresPublication: false, // CORRECTO: Lista corta no publica
-        estimatedDuration: 30, // Aumentado: evaluación técnica compleja
-        legalReference: "Art. 41-43 LOSNCP",
+        code: "SUBASTA_INVERSA_NORMALIZADA",
+        name: "Subasta Inversa Electrónica - Bienes/Servicios Normalizados",
+        category: "LICITACION",
+        regime: "COMUN",
+        description:
+          "Para bienes y servicios normalizados entre $7.212,61 y $540.945,26 USD.",
+        applicableObjects: ["bienes_normalizados", "servicios_normalizados"],
+        amountLimits: [
+          { objectType: "bienes_normalizados", min: 7212.61, max: 540945.26 },
+          {
+            objectType: "servicios_normalizados",
+            min: 7212.61,
+            max: 540945.26,
+          },
+        ],
+        procedureConfig: {
+          requiresPublication: true,
+          publicationDays: 8,
+          evaluationDays: 15,
+          requiresInsurance: true,
+          insurancePercentage: 5,
+        },
+      },
+      {
+        code: "SUBASTA_INVERSA_NO_NORMALIZADA",
+        name: "Subasta Inversa Electrónica - Bienes/Servicios No Normalizados",
+        category: "LICITACION",
+        regime: "COMUN",
+        description:
+          "Para bienes y servicios no normalizados entre $7.212,61 y $250.000 USD.",
+        applicableObjects: [
+          "bienes_no_normalizados",
+          "servicios_no_normalizados",
+        ],
+        amountLimits: [
+          { objectType: "bienes_no_normalizados", min: 7212.61, max: 250000 },
+          {
+            objectType: "servicios_no_normalizados",
+            min: 7212.61,
+            max: 250000,
+          },
+        ],
+        procedureConfig: {
+          requiresPublication: true,
+          publicationDays: 8,
+          evaluationDays: 15,
+          requiresInsurance: true,
+          insurancePercentage: 5,
+        },
+      },
+      {
+        code: "LICITACION_PUBLICA",
+        name: "Licitación Pública",
+        category: "LICITACION",
+        regime: "COMUN",
+        description:
+          "Contrataciones superiores a $540.945,26 USD para bienes/servicios normalizados, o superiores a $250.000 para no normalizados.",
+        applicableObjects: ["bienes", "servicios"],
+        amountLimits: [
+          { objectType: "bienes_normalizados", min: 540945.27, max: null },
+          { objectType: "servicios_normalizados", min: 540945.27, max: null },
+          { objectType: "bienes_no_normalizados", min: 250000.01, max: null },
+          {
+            objectType: "servicios_no_normalizados",
+            min: 250000.01,
+            max: null,
+          },
+        ],
+        procedureConfig: {
+          requiresPublication: true,
+          publicationDays: 15,
+          evaluationDays: 20,
+          requiresInsurance: true,
+          insurancePercentage: 10,
+        },
+      },
+      {
+        code: "OBRAS_COTIZACION",
+        name: "Obras - Cotización",
+        category: "COTIZACION",
+        regime: "COMUN",
+        description: "Obras entre $252.441,12 y $1.081.890,51 USD.",
+        applicableObjects: ["obras"],
+        amountLimits: [
+          { objectType: "obras", min: 252441.12, max: 1081890.51 },
+        ],
+        procedureConfig: {
+          requiresPublication: true,
+          publicationDays: 10,
+          evaluationDays: 15,
+          requiresInsurance: true,
+          insurancePercentage: 5,
+        },
+      },
+      {
+        code: "OBRAS_LICITACION",
+        name: "Obras - Licitación",
+        category: "LICITACION",
+        regime: "COMUN",
+        description: "Obras superiores a $1.081.890,51 USD.",
+        applicableObjects: ["obras"],
+        amountLimits: [{ objectType: "obras", min: 1081890.52, max: null }],
+        procedureConfig: {
+          requiresPublication: true,
+          publicationDays: 15,
+          evaluationDays: 20,
+          requiresInsurance: true,
+          insurancePercentage: 10,
+        },
+      },
+      {
+        code: "CONSULTORIA_DIRECTA",
+        name: "Consultoría - Contratación Directa",
+        category: "CONTRATACION_DIRECTA",
+        regime: "COMUN",
+        description: "Servicios de consultoría hasta $72.126,03 USD.",
         applicableObjects: ["consultorias"],
-        thresholds: { min: 0, max: null },
-        requiresInsurance: true,
-        insurancePercentage: 5,
+        amountLimits: [{ objectType: "consultorias", min: 0, max: 72126.03 }],
+        procedureConfig: {
+          requiresPublication: false,
+          evaluationDays: 10,
+          requiresInsurance: true,
+          insurancePercentage: 5,
+        },
+      },
+      {
+        code: "CONSULTORIA_LISTA_CORTA",
+        name: "Consultoría - Lista Corta",
+        category: "CONSULTORIA",
+        regime: "COMUN",
+        description:
+          "Servicios de consultoría entre $72.126,03 y $540.945,26 USD (o $200.000 con financiamiento).",
+        applicableObjects: ["consultorias"],
+        amountLimits: [
+          { objectType: "consultorias", min: 72126.03, max: 540945.26 },
+          {
+            objectType: "consultorias_financiamiento",
+            min: 72126.03,
+            max: 200000,
+          },
+        ],
+        procedureConfig: {
+          requiresPublication: true,
+          publicationDays: 10,
+          evaluationDays: 20,
+          requiresInsurance: true,
+          insurancePercentage: 5,
+        },
+      },
+      {
+        code: "CONCURSO_PUBLICO_CONSULTORIA",
+        name: "Consultoría - Concurso Público",
+        category: "CONCURSO",
+        regime: "COMUN",
+        description: "Servicios de consultoría superiores a $540.945,26 USD.",
+        applicableObjects: ["consultorias"],
+        amountLimits: [
+          { objectType: "consultorias", min: 540945.27, max: null },
+        ],
+        procedureConfig: {
+          requiresPublication: true,
+          publicationDays: 15,
+          evaluationDays: 25,
+          requiresInsurance: true,
+          insurancePercentage: 10,
+        },
+      },
+      {
+        code: "CATALOGO_ELECTRONICO",
+        name: "Catálogo Electrónico",
+        category: "CATALOGO_ELECTRONICO",
+        regime: "COMUN",
+        description: "Compra por catálogo electrónico - sin límite de monto.",
+        applicableObjects: ["bienes_catalogo", "servicios_catalogo"],
+        amountLimits: [
+          { objectType: "bienes_catalogo", min: 0, max: null },
+          { objectType: "servicios_catalogo", min: 0, max: null },
+        ],
+        procedureConfig: {
+          requiresPublication: false,
+          evaluationDays: 3,
+          requiresInsurance: false,
+        },
       },
 
-      // TIPOS ESPECIALES
+      // ========== RÉGIMEN ESPECIAL ==========
       {
-        code: "EME",
-        name: "Emergencia",
-        category: "SPECIAL",
-        description: "Contratación de emergencia por situaciones imprevistas",
-        displayOrder: 1,
-        requiresPublication: false, // CORRECTO
-        estimatedDuration: 3,
-        legalReference: "Art. 57 LOSNCP",
+        code: "CONTRATACION_DIRECTA_ESP",
+        name: "Contratación Directa Especial",
+        category: "CONTRATACION_DIRECTA",
+        regime: "ESPECIAL",
+        description:
+          "Para casos de emergencia, urgencia, o cuando exista un único proveedor.",
         applicableObjects: ["bienes", "servicios", "obras"],
-        thresholds: { min: 0, max: null },
-        requiresInsurance: false, // CORRECCIÓN: Emergencia puede no requerir seguro
-        insurancePercentage: 0,
+        amountLimits: [
+          { objectType: "bienes", min: 0, max: null },
+          { objectType: "servicios", min: 0, max: null },
+          { objectType: "obras", min: 0, max: null },
+        ],
+        procedureConfig: {
+          requiresPublication: false,
+          evaluationDays: 3,
+          requiresInsurance: false,
+          specialConditions: ["Emergencia", "Urgencia", "Proveedor Único"],
+        },
       },
       {
-        code: "RE",
-        name: "Régimen Especial",
-        category: "SPECIAL",
-        description: "Contratación bajo régimen especial",
-        displayOrder: 2,
-        requiresPublication: false, // CORRECTO
-        estimatedDuration: 15,
-        legalReference: "Art. 62-77 LOSNCP",
-        applicableObjects: ["bienes", "servicios", "obras"],
-        thresholds: { min: 0, max: null },
-        requiresInsurance: true,
-        insurancePercentage: 5,
+        code: "ENCARGO_CONFIANZA_ESP",
+        name: "Encargo de Confianza",
+        category: "ENCARGO_DE_CONFIANZA",
+        regime: "ESPECIAL",
+        description:
+          "Para servicios personales de alta especialización o confianza.",
+        applicableObjects: ["servicios_personales"],
+        amountLimits: [
+          { objectType: "servicios_personales", min: 0, max: null },
+        ],
+        procedureConfig: {
+          requiresPublication: false,
+          evaluationDays: 5,
+          requiresInsurance: false,
+          specialConditions: ["Alta especialización", "Relación de confianza"],
+        },
       },
       {
-        code: "CE",
-        name: "Catálogo Electrónico",
-        category: "SPECIAL",
-        description: "Contratación a través de catálogo electrónico",
-        displayOrder: 3,
-        requiresPublication: false, // CORRECTO
-        estimatedDuration: 5, // CORRECCIÓN: Proceso muy ágil
-        legalReference: "Art. 77-80 LOSNCP",
+        code: "OBRAS_ARTISTICAS_ESP",
+        name: "Obras Artísticas y Culturales",
+        category: "CONCURSO",
+        regime: "ESPECIAL",
+        description:
+          "Para adquisición de obras de arte, derechos de autor y actividades culturales.",
+        applicableObjects: ["obras_artisticas", "derechos_autor"],
+        amountLimits: [
+          { objectType: "obras_artisticas", min: 0, max: null },
+          { objectType: "derechos_autor", min: 0, max: null },
+        ],
+        procedureConfig: {
+          requiresPublication: true,
+          publicationDays: 8,
+          evaluationDays: 12,
+          requiresInsurance: false,
+          specialConditions: ["Concurso de Méritos Artísticos"],
+        },
+      },
+      {
+        code: "INVESTIGACION_CIENTIFICA_ESP",
+        name: "Investigación Científica",
+        category: "CONTRATACION_DIRECTA",
+        regime: "ESPECIAL",
+        description:
+          "Para proyectos de investigación científica y desarrollo tecnológico.",
+        applicableObjects: ["investigacion", "desarrollo_tecnologico"],
+        amountLimits: [
+          { objectType: "investigacion", min: 0, max: null },
+          { objectType: "desarrollo_tecnologico", min: 0, max: null },
+        ],
+        procedureConfig: {
+          requiresPublication: true,
+          publicationDays: 10,
+          evaluationDays: 20,
+          requiresInsurance: false,
+          specialConditions: ["Evaluación por Pares Académicos"],
+        },
+      },
+      {
+        code: "FERIAS_INCLUSIVAS",
+        name: "Ferias Inclusivas",
+        category: "CONTRATACION_DIRECTA",
+        regime: "ESPECIAL",
+        description:
+          "Procedimiento especial para fomento de la participación inclusiva.",
         applicableObjects: ["bienes", "servicios"],
-        thresholds: { min: 0, max: null },
-        requiresInsurance: false, // CORRECCIÓN: Catálogo no requiere seguro
-        insurancePercentage: 0,
-      },
-      {
-        code: "CM",
-        name: "Convenio Marco",
-        category: "SPECIAL",
-        description: "Contratación a través de convenios marco establecidos",
-        displayOrder: 4,
-        requiresPublication: false, // CORRECTO
-        estimatedDuration: 10,
-        legalReference: "Art. 81-84 LOSNCP",
-        applicableObjects: ["bienes", "servicios", "obras"],
-        thresholds: { min: 0, max: null },
-        requiresInsurance: false, // CORRECCIÓN: Convenio marco simplificado
-        insurancePercentage: 0,
-      },
-      {
-        code: "IC",
-        name: "Ínfima Cuantía",
-        category: "SPECIAL",
-        description: "Contratación de ínfima cuantía para montos muy pequeños",
-        displayOrder: 5,
-        requiresPublication: false, // CORRECTO
-        estimatedDuration: 3, // CORRECCIÓN: Proceso muy rápido
-        legalReference: "Art. 85 LOSNCP",
-        applicableObjects: ["bienes", "servicios"],
-        thresholds: { min: 0, max: null }, // Debería tener tope pero varía por entidad
-        requiresInsurance: false, // CORRECCIÓN: Ínfima cuantía no requiere seguro
-        insurancePercentage: 0,
+        amountLimits: [
+          { objectType: "bienes", min: 0, max: 200000 },
+          { objectType: "servicios", min: 0, max: 200000 },
+        ],
+        procedureConfig: {
+          requiresPublication: true,
+          publicationDays: 8,
+          evaluationDays: 10,
+          requiresInsurance: true,
+          insurancePercentage: 5,
+          specialConditions: [
+            "Participación Inclusiva",
+            "Economía Popular y Solidaria",
+          ],
+        },
       },
     ];
   }

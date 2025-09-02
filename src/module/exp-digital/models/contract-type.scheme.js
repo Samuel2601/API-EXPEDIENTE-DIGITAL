@@ -129,6 +129,16 @@ export const ContractTypeJSON = {
     uppercase: true,
   },
 
+  regime: {
+    type: String,
+    enum: {
+      values: ["COMUN", "ESPECIAL"],
+      message: "Régimen de contratación no válido",
+    },
+    required: true,
+    uppercase: true,
+  },
+
   description: {
     type: String,
     trim: true,
