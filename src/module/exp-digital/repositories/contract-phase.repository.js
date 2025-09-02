@@ -18,7 +18,6 @@ export class ContractPhaseRepository extends BaseRepository {
    */
   setupContractPhaseLookups() {
     this.contractPhaseLookups = {
-      // Lookup para dependencias de fases
       dependencies: {
         from: "contractphases",
         localField: "dependencies.requiredPhases.phase",
@@ -26,51 +25,16 @@ export class ContractPhaseRepository extends BaseRepository {
         as: "dependencyDetails",
         pipeline: [
           {
-            $project: {
-              code: 1,
-              name: 1,
-              shortName: 1,
-              order: 1,
-              category: 1,
-            },
+            $project: { code: 1, name: 1, shortName: 1, order: 1, category: 1 },
           },
         ],
       },
-
-      // Lookup para fases bloqueantes
-      blockedBy: {
-        from: "contractphases",
-        localField: "dependencies.blockedBy",
+      contractTypes: {
+        from: "contracttypes",
+        localField: "applicableToTypes",
         foreignField: "_id",
-        as: "blockingPhases",
-        pipeline: [
-          {
-            $project: {
-              code: 1,
-              name: 1,
-              shortName: 1,
-              order: 1,
-            },
-          },
-        ],
-      },
-
-      // Lookup para estadísticas de uso en contratos
-      usageStats: {
-        from: "contracts",
-        localField: "_id",
-        foreignField: "phases.phase",
-        as: "contractUsage",
-        pipeline: [
-          { $match: { isActive: true } },
-          {
-            $group: {
-              _id: null,
-              totalContracts: { $sum: 1 },
-              avgDuration: { $avg: "$phases.duration" },
-            },
-          },
-        ],
+        as: "applicableTypes",
+        pipeline: [{ $project: { code: 1, name: 1, category: 1 } }],
       },
     };
   }
@@ -102,16 +66,14 @@ export class ContractPhaseRepository extends BaseRepository {
    * Buscar fases aplicables a tipo de contratación - USA QUERY HELPER
    * ✅ MEJORA: Utiliza el query helper del esquema
    */
-  async findForContractType(contractTypeCode, options = {}) {
+  async findForContractType(contractTypeId, options = {}) {
     try {
-      const { page = 1, limit = 10, populateDependencies = true } = options;
+      const { page = 1, limit = 50, populateDependencies = true } = options;
 
-      // ✅ Usar query helper del esquema
-      let query = this.model
-        .find()
-        .forContractType(contractTypeCode)
-        .sequential()
-        .where({ isActive: true });
+      let query = this.model.find({
+        "typeSpecificConfig.contractType": contractTypeId,
+        isActive: true,
+      });
 
       if (populateDependencies) {
         query = query.populate([
@@ -121,18 +83,258 @@ export class ContractPhaseRepository extends BaseRepository {
             match: { isActive: true },
           },
           {
-            path: "dependencies.blockedBy",
-            select: "code name shortName order",
-            match: { isActive: true },
+            path: "typeSpecificConfig.contractType",
+            select: "code name category",
           },
         ]);
       }
 
-      return await this.model.paginate(query, { page, limit });
+      query = query.sort({ order: 1 });
+
+      if (page && limit) {
+        return await this.model.paginate(query, { page, limit });
+      }
+
+      return await query;
     } catch (error) {
       throw new Error(
         `Error buscando fases por tipo de contratación: ${error.message}`
       );
+    }
+  }
+
+  /**
+   * Obtener documentos efectivos para un tipo de contrato específico
+   */
+  async getEffectiveDocuments(phaseId, contractTypeId, options = {}) {
+    try {
+      const phase = await this.findById(phaseId, { lean: false });
+      if (!phase) {
+        throw new Error("Fase no encontrada");
+      }
+
+      const effectiveDocuments = phase.getEffectiveDocuments(contractTypeId);
+
+      const { mandatoryOnly = false, optionalOnly = false } = options;
+
+      if (mandatoryOnly) {
+        return effectiveDocuments.filter((doc) => doc.isMandatory);
+      }
+
+      if (optionalOnly) {
+        return effectiveDocuments.filter((doc) => !doc.isMandatory);
+      }
+
+      return effectiveDocuments;
+    } catch (error) {
+      throw new Error(
+        `Error obteniendo documentos efectivos: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Obtener duración efectiva para un tipo de contrato específico
+   */
+  async getEffectiveDuration(phaseId, contractTypeId) {
+    try {
+      const phase = await this.findById(phaseId, { lean: false });
+      if (!phase) {
+        throw new Error("Fase no encontrada");
+      }
+
+      const effectiveDuration = phase.getEffectiveDuration(contractTypeId);
+
+      return {
+        phaseCode: phase.code,
+        contractTypeId: contractTypeId?.toString(),
+        effectiveDuration,
+        baseDuration: phase.phaseConfig.estimatedDays,
+        hasSpecificDuration:
+          effectiveDuration !== phase.phaseConfig.estimatedDays,
+      };
+    } catch (error) {
+      throw new Error(`Error obteniendo duración efectiva: ${error.message}`);
+    }
+  }
+
+  /**
+   * Agregar o actualizar configuración específica para tipo de contrato
+   */
+  async upsertTypeSpecificConfig(phaseId, configData, userData) {
+    try {
+      const phase = await this.findById(phaseId, { lean: false });
+      if (!phase) {
+        throw new Error("Fase no encontrada");
+      }
+
+      const existingIndex = phase.typeSpecificConfig.findIndex(
+        (config) =>
+          config.contractType.toString() === configData.contractType.toString()
+      );
+
+      if (existingIndex >= 0) {
+        // Actualizar configuración existente
+        phase.typeSpecificConfig[existingIndex] = {
+          ...phase.typeSpecificConfig[existingIndex],
+          ...configData,
+        };
+      } else {
+        // Agregar nueva configuración
+        phase.typeSpecificConfig.push(configData);
+      }
+
+      await phase.save();
+      return await this.findById(phaseId);
+    } catch (error) {
+      throw new Error(
+        `Error actualizando configuración específica: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Obtener configuración específica para un tipo de contrato
+   */
+  async getTypeSpecificConfig(phaseId, contractTypeId) {
+    try {
+      const phase = await this.findById(phaseId);
+      if (!phase) {
+        throw new Error("Fase no encontrada");
+      }
+
+      const config = phase.typeSpecificConfig.find(
+        (config) => config.contractType.toString() === contractTypeId.toString()
+      );
+
+      return config || null;
+    } catch (error) {
+      throw new Error(
+        `Error obteniendo configuración específica: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Agregar excepciones de documentos para un tipo de contrato
+   */
+  async addDocumentExceptions(
+    phaseId,
+    contractTypeId,
+    documentCodes,
+    userData
+  ) {
+    try {
+      const phase = await this.findById(phaseId, { lean: false });
+      if (!phase) {
+        throw new Error("Fase no encontrada");
+      }
+
+      // ✅ Usar método del esquema
+      await phase.addDocumentException(contractTypeId, documentCodes);
+
+      // Auditoría manual ya que es operación en Map
+      try {
+        await this.auditMapOperation(phaseId, "documentsExceptions", {
+          operation: "ADD_EXCEPTIONS",
+          contractTypeId: contractTypeId.toString(),
+          documentCodes,
+          userData,
+        });
+      } catch (auditError) {
+        console.warn("Error en auditoría:", auditError.message);
+      }
+
+      return await this.findById(phaseId);
+    } catch (error) {
+      throw new Error(`Error agregando excepciones: ${error.message}`);
+    }
+  }
+
+  /**
+   * Configurar duración específica para un tipo de contrato
+   */
+  async setDurationForType(phaseId, contractTypeId, duration, userData) {
+    try {
+      if (duration < 1 || duration > 365) {
+        throw new Error("La duración debe estar entre 1 y 365 días");
+      }
+
+      const phase = await this.findById(phaseId, { lean: false });
+      if (!phase) {
+        throw new Error("Fase no encontrada");
+      }
+
+      // ✅ Usar método del esquema
+      await phase.setDurationForType(contractTypeId, duration);
+
+      // Auditoría manual
+      try {
+        await this.auditMapOperation(phaseId, "durationByType", {
+          operation: "SET_DURATION",
+          contractTypeId: contractTypeId.toString(),
+          duration,
+          userData,
+        });
+      } catch (auditError) {
+        console.warn("Error en auditoría:", auditError.message);
+      }
+
+      return await this.findById(phaseId);
+    } catch (error) {
+      throw new Error(`Error configurando duración: ${error.message}`);
+    }
+  }
+
+  /**
+   * Obtener configuración completa de excepciones y duraciones
+   */
+  async getPhaseConfiguration(phaseId, contractTypeId = null) {
+    try {
+      const phase = await this.findById(phaseId, {
+        populate: "typeSpecificConfig.contractType",
+        lean: false,
+      });
+      if (!phase) {
+        throw new Error("Fase no encontrada");
+      }
+
+      const config = {
+        phase: {
+          code: phase.code,
+          name: phase.name,
+          category: phase.category,
+          order: phase.order,
+        },
+        baseConfiguration: {
+          estimatedDays: phase.phaseConfig.estimatedDays,
+          isOptional: phase.phaseConfig.isOptional,
+          allowParallel: phase.phaseConfig.allowParallel,
+          requiresApproval: phase.phaseConfig.requiresApproval,
+          totalDocuments: phase.requiredDocuments.length,
+          mandatoryDocuments: phase.requiredDocuments.filter(
+            (d) => d.isMandatory
+          ).length,
+        },
+        typeSpecificConfigs: phase.typeSpecificConfig,
+      };
+
+      // Si se especifica un tipo de contrato, incluir configuración efectiva
+      if (contractTypeId) {
+        config.effectiveForType = {
+          contractTypeId: contractTypeId.toString(),
+          effectiveDocuments: phase.getEffectiveDocuments(contractTypeId),
+          effectiveDuration: phase.getEffectiveDuration(contractTypeId),
+          hasSpecificConfig: phase.typeSpecificConfig.some(
+            (config) =>
+              config.contractType.toString() === contractTypeId.toString()
+          ),
+        };
+      }
+
+      return config;
+    } catch (error) {
+      throw new Error(`Error obteniendo configuración: ${error.message}`);
     }
   }
 
@@ -235,6 +437,10 @@ export class ContractPhaseRepository extends BaseRepository {
             path: "dependencies.blockedBy",
             select: "code name shortName order",
           },
+          {
+            path: "typeSpecificConfig.contractType",
+            select: "code name category",
+          },
         ]);
 
       return phase;
@@ -270,15 +476,14 @@ export class ContractPhaseRepository extends BaseRepository {
    * Validar aplicabilidad a tipo de contratación usando método del esquema
    * ✅ MEJORA: Utiliza el método del esquema para validaciones
    */
-  async validateApplicabilityToContractType(phaseId, contractTypeCode) {
+  async validateApplicabilityToContractType(phaseId, contractTypeId) {
     try {
       const phase = await this.findById(phaseId);
       if (!phase) {
         throw new Error("Fase no encontrada");
       }
 
-      // ✅ Usar método del esquema
-      const isApplicable = phase.isApplicableToContractType(contractTypeCode);
+      const isApplicable = phase.isApplicableToContractType(contractTypeId);
 
       return {
         isApplicable,
@@ -287,7 +492,7 @@ export class ContractPhaseRepository extends BaseRepository {
           name: phase.name,
           category: phase.category,
         },
-        applicableToTypes: phase.applicableToTypes,
+        typeSpecificConfigs: phase.typeSpecificConfig,
       };
     } catch (error) {
       throw new Error(`Error validando aplicabilidad: ${error.message}`);
@@ -362,21 +567,21 @@ export class ContractPhaseRepository extends BaseRepository {
    * Obtener documentos obligatorios de una fase
    * ✅ MEJORA: Utiliza el método del esquema
    */
-  async getMandatoryDocuments(phaseId) {
+  async getMandatoryDocuments(phaseId, contractTypeId = null) {
     try {
       const phase = await this.findById(phaseId);
       if (!phase) {
         throw new Error("Fase no encontrada");
       }
 
-      // ✅ Usar método del esquema
-      const mandatoryDocs = phase.getMandatoryDocuments();
+      const mandatoryDocs = phase.getMandatoryDocuments(contractTypeId);
 
       return {
         phaseCode: phase.code,
         phaseName: phase.name,
         documents: mandatoryDocs,
         totalMandatory: mandatoryDocs.length,
+        contractTypeSpecific: contractTypeId !== null,
       };
     } catch (error) {
       throw new Error(
@@ -389,21 +594,21 @@ export class ContractPhaseRepository extends BaseRepository {
    * Obtener documentos opcionales de una fase
    * ✅ MEJORA: Utiliza el método del esquema
    */
-  async getOptionalDocuments(phaseId) {
+  async getOptionalDocuments(phaseId, contractTypeId = null) {
     try {
       const phase = await this.findById(phaseId);
       if (!phase) {
         throw new Error("Fase no encontrada");
       }
 
-      // ✅ Usar método del esquema
-      const optionalDocs = phase.getOptionalDocuments();
+      const optionalDocs = phase.getOptionalDocuments(contractTypeId);
 
       return {
         phaseCode: phase.code,
         phaseName: phase.name,
         documents: optionalDocs,
         totalOptional: optionalDocs.length,
+        contractTypeSpecific: contractTypeId !== null,
       };
     } catch (error) {
       throw new Error(
@@ -468,8 +673,6 @@ export class ContractPhaseRepository extends BaseRepository {
         category,
         contractType,
         order,
-        userRole,
-        documentCode,
         isOptional,
         allowParallel,
         searchText,
@@ -481,29 +684,19 @@ export class ContractPhaseRepository extends BaseRepository {
       // Construir query base
       let query = this.model.find();
 
-      // Aplicar filtros usando query helpers cuando sea apropiado
+      // Aplicar filtros
       if (category) query = query.byCategory(category);
-      if (contractType) query = query.forContractType(contractType);
-      if (order !== undefined) query = query.withOrder(order);
+      if (contractType) {
+        query = query.where({
+          "typeSpecificConfig.contractType": contractType,
+        });
+      }
+      if (order !== undefined) {
+        query = query.where({ order });
+      }
 
-      // Filtros adicionales
       if (isActive !== undefined) {
         query = query.where({ isActive });
-      }
-
-      if (userRole) {
-        query = query.where({
-          $or: [
-            { allowedRoles: { $size: 0 } }, // Sin restricción de roles
-            { allowedRoles: userRole },
-          ],
-        });
-      }
-
-      if (documentCode) {
-        query = query.where({
-          "requiredDocuments.code": documentCode.toUpperCase(),
-        });
       }
 
       if (isOptional !== undefined) {
@@ -523,7 +716,11 @@ export class ContractPhaseRepository extends BaseRepository {
 
       if (searchText) {
         query = query.where({
-          $text: { $search: searchText },
+          $or: [
+            { name: { $regex: searchText, $options: "i" } },
+            { code: { $regex: searchText, $options: "i" } },
+            { description: { $regex: searchText, $options: "i" } },
+          ],
         });
       }
 
@@ -535,8 +732,8 @@ export class ContractPhaseRepository extends BaseRepository {
             select: "code name shortName order",
           },
           {
-            path: "dependencies.blockedBy",
-            select: "code name shortName order",
+            path: "typeSpecificConfig.contractType",
+            select: "code name category",
           },
         ]);
       }
@@ -547,6 +744,30 @@ export class ContractPhaseRepository extends BaseRepository {
       return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error en búsqueda avanzada: ${error.message}`);
+    }
+  }
+
+  // ===== MÉTODOS DE AUDITORÍA PARA OPERACIONES EN MAP =====
+
+  async auditMapOperation(phaseId, mapField, operationData) {
+    try {
+      // Crear entrada de auditoría personalizada para operaciones en Map
+      const auditEntry = {
+        documentId: phaseId,
+        collection: "contractphases",
+        operation: "MAP_UPDATE",
+        field: mapField,
+        details: operationData,
+        timestamp: new Date(),
+        userId: operationData.userData?.userId || "system",
+      };
+
+      // Aquí se podría integrar con el sistema de auditoría
+      console.log("Auditoría Map Operation:", auditEntry);
+
+      return auditEntry;
+    } catch (error) {
+      throw new Error(`Error en auditoría de Map: ${error.message}`);
     }
   }
 
@@ -581,6 +802,11 @@ export class ContractPhaseRepository extends BaseRepository {
             parallelPhasesCount: {
               $sum: { $cond: ["$phaseConfig.allowParallel", 1, 0] },
             },
+            phasesWithTypeConfig: {
+              $sum: {
+                $cond: [{ $gt: [{ $size: "$typeSpecificConfig" }, 0] }, 1, 0],
+              },
+            },
           },
         },
         {
@@ -606,6 +832,17 @@ export class ContractPhaseRepository extends BaseRepository {
                 {
                   $multiply: [
                     { $divide: ["$parallelPhasesCount", "$totalPhases"] },
+                    100,
+                  ],
+                },
+                1,
+              ],
+            },
+            typeConfigPercentage: {
+              $round: [
+                {
+                  $multiply: [
+                    { $divide: ["$phasesWithTypeConfig", "$totalPhases"] },
                     100,
                   ],
                 },
@@ -702,7 +939,7 @@ export class ContractPhaseRepository extends BaseRepository {
   async validateBeforeCreate(data) {
     const errors = [];
 
-    // Validar unicidad de código
+    // Validaciones existentes
     if (data.code) {
       const isAvailable = await this.isCodeAvailable(data.code);
       if (!isAvailable) {
@@ -710,7 +947,6 @@ export class ContractPhaseRepository extends BaseRepository {
       }
     }
 
-    // Validar orden único por categoría
     if (data.order !== undefined && data.category) {
       const existingPhase = await this.model.findOne({
         order: data.order,
@@ -725,7 +961,20 @@ export class ContractPhaseRepository extends BaseRepository {
       }
     }
 
-    // Validar códigos únicos en documentos requeridos
+    // Validar typeSpecificConfig
+    if (data.typeSpecificConfig && data.typeSpecificConfig.length > 0) {
+      const contractTypeIds = data.typeSpecificConfig.map((config) =>
+        config.contractType?.toString()
+      );
+      const uniqueIds = [...new Set(contractTypeIds)];
+
+      if (contractTypeIds.length !== uniqueIds.length) {
+        errors.push(
+          "No puede haber configuraciones duplicadas para el mismo tipo de contrato"
+        );
+      }
+    }
+
     if (data.requiredDocuments && data.requiredDocuments.length > 0) {
       const codes = data.requiredDocuments.map((doc) =>
         doc.code?.toUpperCase()

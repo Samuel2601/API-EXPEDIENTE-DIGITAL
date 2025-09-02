@@ -22,6 +22,176 @@ export class ContractConfigurationService {
     this.contractPhaseRepository = new ContractPhaseRepository();
   }
 
+  /**
+   * Obtener configuración efectiva para un tipo de contrato específico
+   */
+  async getEffectiveConfiguration(contractTypeId, options = {}) {
+    try {
+      validateObjectId(contractTypeId, "ID del tipo de contratación");
+
+      console.log(
+        `⚙️ Obteniendo configuración efectiva para tipo: ${contractTypeId}`
+      );
+
+      const [contractType, phases] = await Promise.all([
+        this.contractTypeRepository.getCompleteConfiguration(contractTypeId),
+        this.contractPhaseRepository.findForContractType(contractTypeId, {
+          populateDependencies: true,
+          limit: 100,
+        }),
+      ]);
+
+      if (!contractType) {
+        throw createError(
+          ERROR_CODES.NOT_FOUND,
+          "Tipo de contratación no encontrado",
+          404
+        );
+      }
+
+      // ✅ Calcular configuración efectiva por fase
+      const effectivePhases = await Promise.all(
+        (phases.docs || phases).map(async (phase) => {
+          const phaseConfig =
+            await this.contractPhaseRepository.getPhaseConfiguration(
+              phase._id,
+              contractTypeId
+            );
+
+          return {
+            ...(phase.toJSON ? phase.toJSON() : phase),
+            effectiveConfiguration: phaseConfig.effectiveForType,
+          };
+        })
+      );
+
+      return {
+        contractType,
+        phases: effectivePhases,
+        summary: {
+          totalPhases: effectivePhases.length,
+          totalEstimatedDays: effectivePhases.reduce(
+            (sum, p) =>
+              sum +
+              (p.effectiveConfiguration?.effectiveDuration ||
+                p.phaseConfig?.estimatedDays ||
+                0),
+            0
+          ),
+          phasesWithExceptions: effectivePhases.filter(
+            (p) => p.effectiveConfiguration?.hasExceptions
+          ).length,
+          phasesWithCustomDuration: effectivePhases.filter(
+            (p) => p.effectiveConfiguration?.hasCustomDuration
+          ).length,
+        },
+        metadata: {
+          generatedAt: new Date().toISOString(),
+          contractTypeId: contractTypeId.toString(),
+        },
+      };
+    } catch (error) {
+      throw createError(
+        ERROR_CODES.CONFIG_ERROR,
+        `Error obteniendo configuración efectiva: ${error.message}`,
+        500
+      );
+    }
+  }
+
+  /**
+   * Configurar excepciones de documentos para un tipo específico
+   */
+  async configureDocumentExceptions(
+    phaseId,
+    contractTypeId,
+    documentCodes,
+    userData
+  ) {
+    try {
+      validateObjectId(phaseId, "ID de la fase");
+      validateObjectId(contractTypeId, "ID del tipo de contrato");
+
+      if (!Array.isArray(documentCodes) || documentCodes.length === 0) {
+        throw createValidationError(
+          "Debe especificar al menos un código de documento"
+        );
+      }
+
+      console.log(
+        `📋 Configurando excepciones para fase ${phaseId}, tipo ${contractTypeId}`
+      );
+
+      const updatedPhase =
+        await this.contractPhaseRepository.addDocumentExceptions(
+          phaseId,
+          contractTypeId,
+          documentCodes,
+          userData
+        );
+
+      return {
+        success: true,
+        phase: updatedPhase,
+        configured: {
+          phaseCode: updatedPhase.code,
+          contractTypeId: contractTypeId.toString(),
+          exceptedDocuments: documentCodes,
+        },
+      };
+    } catch (error) {
+      throw createError(
+        ERROR_CODES.UPDATE_ERROR,
+        `Error configurando excepciones: ${error.message}`,
+        400
+      );
+    }
+  }
+
+  /**
+   * Configurar duración específica para un tipo
+   */
+  async configureCustomDuration(phaseId, contractTypeId, duration, userData) {
+    try {
+      validateObjectId(phaseId, "ID de la fase");
+      validateObjectId(contractTypeId, "ID del tipo de contrato");
+
+      if (!Number.isInteger(duration) || duration < 1 || duration > 365) {
+        throw createValidationError(
+          "La duración debe ser un número entero entre 1 y 365"
+        );
+      }
+
+      console.log(
+        `⏱️ Configurando duración ${duration} días para fase ${phaseId}, tipo ${contractTypeId}`
+      );
+
+      const updatedPhase =
+        await this.contractPhaseRepository.setDurationForType(
+          phaseId,
+          contractTypeId,
+          duration,
+          userData
+        );
+
+      return {
+        success: true,
+        phase: updatedPhase,
+        configured: {
+          phaseCode: updatedPhase.code,
+          contractTypeId: contractTypeId.toString(),
+          customDuration: duration,
+        },
+      };
+    } catch (error) {
+      throw createError(
+        ERROR_CODES.UPDATE_ERROR,
+        `Error configurando duración: ${error.message}`,
+        400
+      );
+    }
+  }
+
   async initializeSystemConfiguration(userData = {}) {
     try {
       console.log("🚀 Service: Inicializando configuración del sistema");
@@ -283,13 +453,9 @@ export class ContractConfigurationService {
         limit = 50,
       } = options;
 
-      console.log(
-        `📋 Service: Obteniendo tipos de contratación con opciones:`,
-        options
-      );
+      console.log(`📋 Obteniendo tipos de contratación:`, options);
 
       if (category) {
-        // Si se especifica una categoría, obtener solo esa
         const types = await this.contractTypeRepository.findByCategory(
           category,
           {
@@ -315,7 +481,6 @@ export class ContractConfigurationService {
         };
       }
 
-      // Obtener tipos comunes y especiales por separado
       const [commonTypes, specialTypes] = await Promise.all([
         this.contractTypeRepository.findByCategory("COMMON", {
           includeInactive,
@@ -349,24 +514,67 @@ export class ContractConfigurationService {
     } catch (error) {
       throw createError(
         ERROR_CODES.QUERY_ERROR,
-        `Error obteniendo tipos de contratación: ${error.message}`,
+        `Error obteniendo tipos: ${error.message}`,
         500
       );
     }
   }
 
-  async getContractTypeByAmount(amount) {
+  async getContractTypeByAmount(amount, contractObject = "bienes") {
     try {
-      console.log("🔍 Service: Obteniendo tipo de contratación por monto");
+      console.log(
+        `💰 Buscando tipos aplicables para monto: ${amount}, objeto: ${contractObject}`
+      );
 
-      const contractType =
-        await this.contractTypeRepository.findForAmount(amount);
+      const contractTypes = await this.contractTypeRepository.findForAmount(
+        amount,
+        contractObject
+      );
 
-      return contractType;
+      if (!contractTypes || contractTypes.length === 0) {
+        return {
+          applicableTypes: [],
+          recommendations: await this._getAlternativeTypes(
+            amount,
+            contractObject
+          ),
+        };
+      }
+
+      // ✅ Enriquecer con cálculos usando métodos del esquema
+      const enrichedTypes = await Promise.all(
+        contractTypes.map(async (type) => {
+          const validation =
+            await this.contractTypeRepository.validateApplicability(
+              type._id,
+              amount,
+              contractObject
+            );
+
+          return {
+            ...(type.toJSON ? type.toJSON() : type),
+            calculatedInsurance: validation.requiredInsurance,
+            estimatedDuration: validation.estimatedDuration,
+            applicabilityCheck: validation,
+          };
+        })
+      );
+
+      return {
+        amount,
+        contractObject,
+        applicableTypes: enrichedTypes,
+        recommendations: {
+          mostSuitable: enrichedTypes[0],
+          fastest: enrichedTypes.reduce((prev, curr) =>
+            curr.estimatedDuration < prev.estimatedDuration ? curr : prev
+          ),
+        },
+      };
     } catch (error) {
       throw createError(
         ERROR_CODES.QUERY_ERROR,
-        `Error obteniendo tipo de contratación: ${error.message}`,
+        `Error por monto: ${error.message}`,
         500
       );
     }
@@ -374,9 +582,8 @@ export class ContractConfigurationService {
 
   async getPhasesByContractType(contractTypeId) {
     try {
-      console.log("🔍 Service: Obteniendo fases por tipo de contratación");
+      console.log(`📄 Obteniendo fases para tipo: ${contractTypeId}`);
 
-      // Primero obtener el tipo para tener su código
       const contractType =
         await this.contractTypeRepository.findById(contractTypeId);
       if (!contractType) {
@@ -387,17 +594,65 @@ export class ContractConfigurationService {
         );
       }
 
-      // Buscar fases aplicables a este tipo
-      const contractPhases =
-        await this.contractPhaseRepository.findForContractType(
-          contractType._id // O contractTypeId si cambiaste a ObjectId
-        );
+      const phases = await this.contractPhaseRepository.findForContractType(
+        contractTypeId,
+        {
+          populateDependencies: true,
+          limit: 100,
+        }
+      );
 
-      return contractPhases;
+      // ✅ Enriquecer fases con configuración efectiva
+      const enrichedPhases = await Promise.all(
+        (phases.docs || phases).map(async (phase) => {
+          const effectiveDocuments =
+            await this.contractPhaseRepository.getEffectiveDocuments(
+              phase._id,
+              contractTypeId
+            );
+          const effectiveDuration =
+            await this.contractPhaseRepository.getEffectiveDuration(
+              phase._id,
+              contractTypeId
+            );
+
+          return {
+            ...(phase.toJSON ? phase.toJSON() : phase),
+            effectiveDocuments,
+            effectiveDuration: effectiveDuration.effectiveDuration,
+            hasExceptions:
+              effectiveDuration.hasSpecificDuration ||
+              effectiveDocuments.length <
+                (phase.requiredDocuments?.length || 0),
+          };
+        })
+      );
+
+      return {
+        contractType: {
+          code: contractType.code,
+          name: contractType.name,
+          category: contractType.category,
+        },
+        phases: enrichedPhases,
+        summary: {
+          totalPhases: enrichedPhases.length,
+          totalDuration: enrichedPhases.reduce(
+            (sum, p) => sum + p.effectiveDuration,
+            0
+          ),
+          totalDocuments: enrichedPhases.reduce(
+            (sum, p) => sum + p.effectiveDocuments.length,
+            0
+          ),
+          phasesWithExceptions: enrichedPhases.filter((p) => p.hasExceptions)
+            .length,
+        },
+      };
     } catch (error) {
       throw createError(
         ERROR_CODES.QUERY_ERROR,
-        `Error obteniendo fases de contratación: ${error.message}`,
+        `Error obteniendo fases: ${error.message}`,
         500
       );
     }
@@ -440,75 +695,27 @@ export class ContractConfigurationService {
    */
   async createContractType(typeData, options = {}, userData = {}) {
     try {
-      console.log(
-        `📝 Service: Creando nuevo tipo de contratación: ${typeData.code}`
-      );
-
-      // Validar datos requeridos
       const requiredFields = ["code", "name", "category", "description"];
       const missingFields = requiredFields.filter((field) => !typeData[field]);
 
       if (missingFields.length > 0) {
         throw createValidationError(
-          `Campos requeridos faltantes: ${missingFields.join(", ")}`
+          `Campos requeridos: ${missingFields.join(", ")}`
         );
       }
 
-      // Validar categoría
-      const validCategories = ["COMMON", "SPECIAL"];
-      if (!validCategories.includes(typeData.category)) {
-        throw createValidationError(
-          `Categoría inválida. Debe ser: ${validCategories.join(" o ")}`
-        );
-      }
-
-      // Verificar que el código no exista
       const existingType = await this.contractTypeRepository.findByCode(
         typeData.code
       );
       if (existingType) {
-        throw createValidationError(
-          `Ya existe un tipo de contratación con el código: ${typeData.code}`
-        );
+        throw createValidationError(`Código ya existe: ${typeData.code}`);
       }
 
-      // Preparar datos con valores por defecto
-      const contractTypeToCreate = {
-        code: typeData.code.toUpperCase(),
-        name: typeData.name,
-        category: typeData.category,
-        description: typeData.description,
-        displayOrder: typeData.displayOrder || 99,
-        requiresPublication: typeData.requiresPublication ?? true,
-        estimatedDuration: typeData.estimatedDuration || 30,
-        legalReference: typeData.legalReference || "",
-        applicableObjects: typeData.applicableObjects || [
-          "bienes",
-          "servicios",
-        ],
-        monetaryLimits: typeData.monetaryLimits || {},
-        isActive: typeData.isActive ?? true,
-        audit: {
-          createdBy: options.userId || "system",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      };
-
-      const createdType = await this.contractTypeRepository.create(
-        contractTypeToCreate,
-        userData
-      );
-
-      console.log(
-        `✅ Service: Tipo de contratación creado exitosamente: ${createdType.code}`
-      );
-
-      return createdType;
+      return await this.contractTypeRepository.create(typeData, userData);
     } catch (error) {
       throw createError(
         ERROR_CODES.CREATION_ERROR,
-        `Error creando tipo de contratación: ${error.message}`,
+        `Error creando tipo: ${error.message}`,
         400
       );
     }
@@ -778,83 +985,27 @@ export class ContractConfigurationService {
    */
   async createContractPhase(phaseData, options = {}, userData = {}) {
     try {
-      console.log(
-        `📝 Service: Creando nueva fase de contratación: ${phaseData.code}`
-      );
-
-      // Validar datos requeridos
       const requiredFields = ["code", "name", "category", "order"];
       const missingFields = requiredFields.filter((field) => !phaseData[field]);
 
       if (missingFields.length > 0) {
         throw createValidationError(
-          `Campos requeridos faltantes: ${missingFields.join(", ")}`
+          `Campos requeridos: ${missingFields.join(", ")}`
         );
       }
 
-      // Validar categoría
-      const validCategories = [
-        "PREPARATORY",
-        "PRECONTRACTUAL",
-        "CONTRACTUAL",
-        "EXECUTION",
-        "CLOSURE",
-        "PAYMENT",
-        "RECEIPT",
-      ];
-      if (!validCategories.includes(phaseData.category)) {
-        throw createValidationError(
-          `Categoría inválida. Debe ser: ${validCategories.join(", ")}`
-        );
-      }
-
-      // Verificar que el código no exista
       const existingPhase = await this.contractPhaseRepository.findByCode(
         phaseData.code
       );
       if (existingPhase) {
-        throw createValidationError(
-          `Ya existe una fase de contratación con el código: ${phaseData.code}`
-        );
+        throw createValidationError(`Código ya existe: ${phaseData.code}`);
       }
 
-      // Preparar datos con valores por defecto
-      const contractPhaseToCreate = {
-        code: phaseData.code.toUpperCase(),
-        name: phaseData.name,
-        shortName: phaseData.shortName || phaseData.name.substring(0, 20),
-        category: phaseData.category,
-        order: phaseData.order,
-        description: phaseData.description || "",
-        isRequired: phaseData.isRequired ?? true,
-        canBeSkipped: phaseData.canBeSkipped ?? false,
-        estimatedDuration: phaseData.estimatedDuration || 5,
-        requiredDocuments: phaseData.requiredDocuments || [],
-        applicableContractTypes: phaseData.applicableContractTypes || [],
-        dependencies: phaseData.dependencies || {},
-        isActive: phaseData.isActive ?? true,
-        /*audit: {
-          createdBy: options.userId || "system",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },*/
-      };
-
-      const createdPhase = await this.contractPhaseRepository.create(
-        contractPhaseToCreate,
-        userData,
-        { returnDocument: "after" }
-      );
-
-      console.log(
-        `✅ Service: Fase de contratación creada exitosamente: ${createdPhase.code}`
-      );
-
-      return createdPhase;
+      return await this.contractPhaseRepository.create(phaseData, userData);
     } catch (error) {
       throw createError(
-        ERROR_CODES.CREATION_ERROR,
-        `Error creando fase de contratación: ${error.message}`,
+        ERROR_CODES.CREATE_ERROR,
+        `Error creando fase: ${error.message}`,
         400
       );
     }
@@ -1197,208 +1348,25 @@ export class ContractConfigurationService {
    */
   async initializeContractTypes(userData = {}) {
     try {
-      console.log(
-        "📋 Service: Inicializando tipos de contratación por defecto..."
-      );
+      console.log("📋 Inicializando tipos de contratación...");
 
-      const defaultTypes = [
-        // TIPOS COMUNES
-        {
-          code: "SIE",
-          name: "Subasta Inversa Electrónica",
-          category: "COMMON",
-          description:
-            "Procedimiento común para adquisición de bienes y servicios normalizados",
-          displayOrder: 1,
-          requiresPublication: true,
-          estimatedDuration: 25, // Reducido: proceso más ágil
-          legalReference: "Art. 44-51 LOSNCP",
-          applicableObjects: ["bienes", "servicios"],
-          thresholds: { min: 0, max: null }, // Sin límite superior
-          requiresInsurance: true,
-          insurancePercentage: 5,
-        },
-        {
-          code: "LIC",
-          name: "Licitación",
-          category: "COMMON",
-          description:
-            "Procedimiento para contratación de bienes, servicios y obras de mayor cuantía",
-          displayOrder: 2,
-          requiresPublication: true,
-          estimatedDuration: 45,
-          legalReference: "Art. 32 LOSNCP",
-          applicableObjects: ["bienes", "servicios", "obras"],
-          thresholds: { min: 0, max: null },
-          requiresInsurance: true,
-          insurancePercentage: 5,
-        },
-        {
-          code: "COT",
-          name: "Cotización",
-          category: "COMMON",
-          description: "Procedimiento para contratación de cuantía media",
-          displayOrder: 3,
-          requiresPublication: true,
-          estimatedDuration: 20,
-          legalReference: "Art. 33 LOSNCP",
-          applicableObjects: ["bienes", "servicios", "obras"],
-          thresholds: { min: 0, max: null },
-          requiresInsurance: true,
-          insurancePercentage: 5,
-        },
-        {
-          code: "MC",
-          name: "Menor Cuantía",
-          category: "COMMON",
-          description: "Procedimiento para contratación de cuantía menor",
-          displayOrder: 4,
-          requiresPublication: true,
-          estimatedDuration: 15,
-          legalReference: "Art. 34 LOSNCP",
-          applicableObjects: ["bienes", "servicios", "obras"],
-          thresholds: { min: 0, max: null },
-          requiresInsurance: true,
-          insurancePercentage: 5,
-        },
-        {
-          code: "CON",
-          name: "Consultoría",
-          category: "COMMON",
-          description:
-            "Procedimiento para contratación de servicios de consultoría",
-          displayOrder: 5,
-          requiresPublication: true,
-          estimatedDuration: 40, // Aumentado: procesos más complejos
-          legalReference: "Art. 36-40 LOSNCP",
-          applicableObjects: ["consultorias"],
-          thresholds: { min: 0, max: null },
-          requiresInsurance: true,
-          insurancePercentage: 5,
-        },
-        {
-          code: "LC",
-          name: "Lista Corta",
-          category: "COMMON",
-          description: "Procedimiento para consultoría mediante lista corta",
-          displayOrder: 6,
-          requiresPublication: false, // CORRECTO: Lista corta no publica
-          estimatedDuration: 30, // Aumentado: evaluación técnica compleja
-          legalReference: "Art. 41-43 LOSNCP",
-          applicableObjects: ["consultorias"],
-          thresholds: { min: 0, max: null },
-          requiresInsurance: true,
-          insurancePercentage: 5,
-        },
-
-        // TIPOS ESPECIALES
-        {
-          code: "EME",
-          name: "Emergencia",
-          category: "SPECIAL",
-          description: "Contratación de emergencia por situaciones imprevistas",
-          displayOrder: 1,
-          requiresPublication: false, // CORRECTO
-          estimatedDuration: 3,
-          legalReference: "Art. 57 LOSNCP",
-          applicableObjects: ["bienes", "servicios", "obras"],
-          thresholds: { min: 0, max: null },
-          requiresInsurance: false, // CORRECCIÓN: Emergencia puede no requerir seguro
-          insurancePercentage: 0,
-        },
-        {
-          code: "RE",
-          name: "Régimen Especial",
-          category: "SPECIAL",
-          description: "Contratación bajo régimen especial",
-          displayOrder: 2,
-          requiresPublication: false, // CORRECTO
-          estimatedDuration: 15,
-          legalReference: "Art. 62-77 LOSNCP",
-          applicableObjects: ["bienes", "servicios", "obras"],
-          thresholds: { min: 0, max: null },
-          requiresInsurance: true,
-          insurancePercentage: 5,
-        },
-        {
-          code: "CE",
-          name: "Catálogo Electrónico",
-          category: "SPECIAL",
-          description: "Contratación a través de catálogo electrónico",
-          displayOrder: 3,
-          requiresPublication: false, // CORRECTO
-          estimatedDuration: 5, // CORRECCIÓN: Proceso muy ágil
-          legalReference: "Art. 77-80 LOSNCP",
-          applicableObjects: ["bienes", "servicios"],
-          thresholds: { min: 0, max: null },
-          requiresInsurance: false, // CORRECCIÓN: Catálogo no requiere seguro
-          insurancePercentage: 0,
-        },
-        {
-          code: "CM",
-          name: "Convenio Marco",
-          category: "SPECIAL",
-          description: "Contratación a través de convenios marco establecidos",
-          displayOrder: 4,
-          requiresPublication: false, // CORRECTO
-          estimatedDuration: 10,
-          legalReference: "Art. 81-84 LOSNCP",
-          applicableObjects: ["bienes", "servicios", "obras"],
-          thresholds: { min: 0, max: null },
-          requiresInsurance: false, // CORRECCIÓN: Convenio marco simplificado
-          insurancePercentage: 0,
-        },
-        {
-          code: "IC",
-          name: "Ínfima Cuantía",
-          category: "SPECIAL",
-          description:
-            "Contratación de ínfima cuantía para montos muy pequeños",
-          displayOrder: 5,
-          requiresPublication: false, // CORRECTO
-          estimatedDuration: 3, // CORRECCIÓN: Proceso muy rápido
-          legalReference: "Art. 85 LOSNCP",
-          applicableObjects: ["bienes", "servicios"],
-          thresholds: { min: 0, max: null }, // Debería tener tope pero varía por entidad
-          requiresInsurance: false, // CORRECCIÓN: Ínfima cuantía no requiere seguro
-          insurancePercentage: 0,
-        },
-      ];
-
-      const results = {
-        created: [],
-        skipped: [],
-        errors: [],
-      };
+      const defaultTypes = this._getDefaultTypes();
+      const results = { created: [], skipped: [], errors: [] };
 
       for (const typeData of defaultTypes) {
         try {
-          // Verificar si ya existe
           const existing = await this.contractTypeRepository.findByCode(
             typeData.code
           );
           if (existing) {
-            results.skipped.push({
-              code: typeData.code,
-              reason: "Ya existe",
-            });
+            results.skipped.push({ code: typeData.code, reason: "Ya existe" });
             continue;
           }
 
-          // Crear el tipo
-          const created = await this.createContractType(
-            typeData,
-            {},
-            {
-              userId: userData.userId,
-            }
-          );
+          const created = await this.createContractType(typeData, {}, userData);
           results.created.push(created);
         } catch (error) {
-          results.errors.push({
-            code: typeData.code,
-            error: error.message,
-          });
+          results.errors.push({ code: typeData.code, error: error.message });
         }
       }
 
@@ -1427,240 +1395,29 @@ export class ContractConfigurationService {
    */
   async initializeContractPhases(userData = {}) {
     try {
-      console.log(
-        "📝 Service: Inicializando fases de contratación por defecto..."
-      );
+      console.log("📄 Inicializando fases de contratación...");
 
-      const slugify = (text) =>
-        text
-          .toString()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "") // quitar acentos
-          .toUpperCase()
-          .replace(/[^A-Z0-9]+/g, "_")
-          .replace(/^_|_$/g, "");
-
-      const defaultPhases = [
-        // FASE PREPARATORIA
-        {
-          code: "PREP",
-          name: "Fase Preparatoria",
-          shortName: "Preparatoria",
-          category: "PREPARATORY",
-          order: 1,
-          description:
-            "Definición de necesidades, estudios, certificación presupuestaria",
-          isRequired: true,
-          estimatedDuration: 10,
-          requiredDocuments: [
-            "Certificación Presupuestaria (PAC)",
-            "Estudios de Mercado",
-            "Términos de Referencia/Especificaciones Técnicas",
-            "Resolución de Inicio de Proceso",
-            "Informe de Necesidad/Justificación",
-          ].map((doc) => ({
-            code: `PREP_${slugify(doc)}`,
-            name: doc,
-          })),
-          // CORRECCIÓN: Aplicabilidad específica por tipo
-          applicableContractTypes: [], // Vacio = aplica a todos
-          // EXCEPCIÓN: Procedimientos especiales simplifican documentos
-          documentsExceptions: {
-            EME: ["PREP_ESTUDIOS_DE_MERCADO"], // Emergencia no requiere estudios previos
-            IC: ["PREP_ESTUDIOS_DE_MERCADO"], // Ínfima cuantía simplificada
-            CE: [
-              "PREP_ESTUDIOS_DE_MERCADO",
-              "PREP_TERMINOS_DE_REFERENCIA_ESPECIFICACIONES_TECNICAS",
-            ],
-            CM: ["PREP_ESTUDIOS_DE_MERCADO"],
-          },
-        },
-
-        // FASE PRECONTRACTUAL
-        {
-          code: "PRECONT",
-          name: "Fase Precontractual",
-          shortName: "Precontractual",
-          category: "PRECONTRACTUAL",
-          order: 2,
-          description: "Convocatoria, evaluación de ofertas, adjudicación",
-          isRequired: true,
-          estimatedDuration: 20,
-          requiredDocuments: [
-            "Pliegos (Documento convocatoria)",
-            "Preguntas y Respuestas/Aclaraciones",
-            "Ofertas/Propuestas de proveedores",
-            "Informe de Evaluación",
-            "Adjudicación/Declaratoria Desierto",
-          ].map((doc) => ({
-            code: `PRECONT_${slugify(doc)}`,
-            name: doc,
-          })),
-          applicableContractTypes: ["SIE", "LIC", "COT", "MC", "CON", "LC"], // CORRECCIÓN: No aplica a especiales
-          // Duraciones variables por tipo
-          durationByType: {
-            SIE: 25,
-            LIC: 35,
-            COT: 20,
-            MC: 15,
-            CON: 30,
-            LC: 25,
-          },
-        },
-
-        // FASE CONTRACTUAL
-        {
-          code: "CONT",
-          name: "Fase Contractual de Ejecución",
-          shortName: "Contractual",
-          category: "CONTRACTUAL",
-          order: 3,
-          description: "Ejecución del contrato, seguimiento y control",
-          isRequired: true,
-          estimatedDuration: 90, // Promedio para obras/servicios largos
-          requiredDocuments: [
-            "Contrato firmado",
-            "Garantías (Fiel cumplimiento, Técnica, etc.)",
-            "Cronograma valorado de trabajos",
-            "Informes de fiscalización/administración",
-          ].map((doc) => ({
-            code: `CONT_${slugify(doc)}`,
-            name: doc,
-          })),
-          applicableContractTypes: [], // Aplica a todos
-          // CORRECCIÓN: Documentos específicos por tipo
-          documentsExceptions: {
-            EME: ["CONT_CRONOGRAMA_VALORADO_DE_TRABAJOS"], // Emergencia sin cronograma
-            IC: [
-              "CONT_GARANTIAS_FIEL_CUMPLIMIENTO_TECNICA_ETC",
-              "CONT_CRONOGRAMA_VALORADO_DE_TRABAJOS",
-            ],
-            CE: ["CONT_CRONOGRAMA_VALORADO_DE_TRABAJOS"],
-            CM: ["CONT_CRONOGRAMA_VALORADO_DE_TRABAJOS"],
-          },
-          // Duraciones variables según complejidad
-          durationByType: {
-            IC: 5, // Ínfima cuantía muy rápida
-            CE: 10, // Catálogo electrónico simple
-            CM: 15, // Convenio marco
-            EME: 30, // Emergencia acelerada
-            MC: 45, // Menor cuantía
-            COT: 60, // Cotización
-            SIE: 45, // Subasta inversa
-            CON: 120, // Consultoría más larga
-            LC: 90, // Lista corta
-            LIC: 180, // Licitación más larga (obras grandes)
-          },
-        },
-
-        // FASE DE PAGO
-        {
-          code: "PAGO",
-          name: "Fase de Pago",
-          shortName: "Pago",
-          category: "PAYMENT",
-          order: 4,
-          description: "Procesamiento de pagos y facturación",
-          isRequired: true,
-          estimatedDuration: 5,
-          requiredDocuments: [
-            "Facturas/Comprobantes de venta",
-            "Planillas de pago",
-            "Retenciones tributarias",
-            "Comprobantes de egreso",
-          ].map((doc) => ({
-            code: `PAGO_${slugify(doc)}`,
-            name: doc,
-          })),
-          applicableContractTypes: [], // Aplica a todos
-          // CORRECCIÓN: Documentos específicos para tipos simples
-          documentsExceptions: {
-            IC: ["PAGO_PLANILLAS_DE_PAGO"], // Ínfima cuantía sin planillas complejas
-            CE: ["PAGO_PLANILLAS_DE_PAGO"], // Catálogo sin planillas
-          },
-        },
-
-        // FASE DE RECEPCIÓN
-        {
-          code: "RECEP",
-          name: "Fase de Recepción",
-          shortName: "Recepción",
-          category: "RECEIPT",
-          order: 5,
-          description: "Recepción definitiva, liquidación del contrato",
-          isRequired: true,
-          estimatedDuration: 10,
-          requiredDocuments: [
-            "Acta de entrega recepción definitiva",
-            "Informe final de fiscalización",
-            "Liquidación del contrato",
-            "Devolución de garantías",
-          ].map((doc) => ({
-            code: `RECEP_${slugify(doc)}`,
-            name: doc,
-          })),
-          applicableContractTypes: [], // Aplica a todos
-          // CORRECCIÓN: Sin garantías para procedimientos simples
-          documentsExceptions: {
-            IC: [
-              "RECEP_DEVOLUCION_DE_GARANTIAS",
-              "RECEP_INFORME_FINAL_DE_FISCALIZACION",
-            ],
-            EME: ["RECEP_DEVOLUCION_DE_GARANTIAS"], // Solo si no tuvo garantías
-            CE: [
-              "RECEP_DEVOLUCION_DE_GARANTIAS",
-              "RECEP_INFORME_FINAL_DE_FISCALIZACION",
-            ],
-            CM: ["RECEP_DEVOLUCION_DE_GARANTIAS"],
-          },
-          // Duraciones variables según complejidad
-          durationByType: {
-            IC: 3, // Ínfima cuantía muy simple
-            CE: 5, // Catálogo rápido
-            EME: 5, // Emergencia sin complicaciones
-            MC: 7, // Menor cuantía
-            COT: 10, // Cotización estándar
-            SIE: 10, // Subasta inversa
-            CM: 7, // Convenio marco
-            CON: 15, // Consultoría con informes
-            LC: 12, // Lista corta
-            LIC: 20, // Licitación más compleja
-          },
-        },
-      ];
-
-      const results = {
-        created: [],
-        skipped: [],
-        errors: [],
-      };
+      const defaultPhases = this._getDefaultPhases();
+      const results = { created: [], skipped: [], errors: [] };
 
       for (const phaseData of defaultPhases) {
         try {
-          // Verificar si ya existe
           const existing = await this.contractPhaseRepository.findByCode(
             phaseData.code
           );
           if (existing) {
-            results.skipped.push({
-              code: phaseData.code,
-              reason: "Ya existe",
-            });
+            results.skipped.push({ code: phaseData.code, reason: "Ya existe" });
             continue;
           }
 
-          // Crear la fase
-          const created = await this.createContractPhase(
+          // ✅ Configurar excepciones y duraciones desde datos por defecto
+          const created = await this._createPhaseWithConfiguration(
             phaseData,
-            {},
             userData
           );
           results.created.push(created);
         } catch (error) {
-          results.errors.push({
-            code: phaseData.code,
-            error: error.message,
-          });
+          results.errors.push({ code: phaseData.code, error: error.message });
         }
       }
 
@@ -1680,6 +1437,86 @@ export class ContractConfigurationService {
         `Error inicializando fases de contratación: ${error.message}`,
         500
       );
+    }
+  }
+
+  async _createPhaseWithConfiguration(phaseData, userData) {
+    // Separar configuración específica de datos base
+    const { documentsExceptions, durationByType, ...basePhaseData } = phaseData;
+
+    // Crear fase base
+    const createdPhase = await this.createContractPhase(
+      basePhaseData,
+      {},
+      userData
+    );
+
+    // ✅ Aplicar configuraciones específicas si existen
+    if (documentsExceptions && Object.keys(documentsExceptions).length > 0) {
+      for (const [typeCode, exceptions] of Object.entries(
+        documentsExceptions
+      )) {
+        try {
+          const contractType =
+            await this.contractTypeRepository.findByCode(typeCode);
+          if (contractType && exceptions.length > 0) {
+            await this.contractPhaseRepository.addDocumentExceptions(
+              createdPhase._id,
+              contractType._id,
+              exceptions,
+              userData
+            );
+          }
+        } catch (error) {
+          console.warn(
+            `Error aplicando excepciones para ${typeCode}:`,
+            error.message
+          );
+        }
+      }
+    }
+
+    if (durationByType && Object.keys(durationByType).length > 0) {
+      for (const [typeCode, duration] of Object.entries(durationByType)) {
+        try {
+          const contractType =
+            await this.contractTypeRepository.findByCode(typeCode);
+          if (contractType && duration > 0) {
+            await this.contractPhaseRepository.setDurationForType(
+              createdPhase._id,
+              contractType._id,
+              duration,
+              userData
+            );
+          }
+        } catch (error) {
+          console.warn(
+            `Error aplicando duración para ${typeCode}:`,
+            error.message
+          );
+        }
+      }
+    }
+
+    return createdPhase;
+  }
+
+  async _getAlternativeTypes(amount, contractObject) {
+    try {
+      const allTypes = await this.contractTypeRepository.findAdvanced(
+        {
+          applicableObject: contractObject,
+          isActive: true,
+        },
+        { limit: 5 }
+      );
+
+      return {
+        suggested: allTypes.docs.slice(0, 3),
+        reason: `No hay tipos exactos para monto ${amount} en ${contractObject}`,
+      };
+    } catch (error) {
+      return { suggested: [], reason: "Error obteniendo alternativas" };
     }
   }
 
@@ -1704,5 +1541,371 @@ export class ContractConfigurationService {
     };
 
     return descriptions[category] || descriptions.OTHER;
+  }
+
+  _getDefaultTypes() {
+    return [
+      // TIPOS COMUNES
+      {
+        code: "SIE",
+        name: "Subasta Inversa Electrónica",
+        category: "COMMON",
+        description:
+          "Procedimiento común para adquisición de bienes y servicios normalizados",
+        displayOrder: 1,
+        requiresPublication: true,
+        estimatedDuration: 25, // Reducido: proceso más ágil
+        legalReference: "Art. 44-51 LOSNCP",
+        applicableObjects: ["bienes", "servicios"],
+        thresholds: { min: 0, max: null }, // Sin límite superior
+        requiresInsurance: true,
+        insurancePercentage: 5,
+      },
+      {
+        code: "LIC",
+        name: "Licitación",
+        category: "COMMON",
+        description:
+          "Procedimiento para contratación de bienes, servicios y obras de mayor cuantía",
+        displayOrder: 2,
+        requiresPublication: true,
+        estimatedDuration: 45,
+        legalReference: "Art. 32 LOSNCP",
+        applicableObjects: ["bienes", "servicios", "obras"],
+        thresholds: { min: 0, max: null },
+        requiresInsurance: true,
+        insurancePercentage: 5,
+      },
+      {
+        code: "COT",
+        name: "Cotización",
+        category: "COMMON",
+        description: "Procedimiento para contratación de cuantía media",
+        displayOrder: 3,
+        requiresPublication: true,
+        estimatedDuration: 20,
+        legalReference: "Art. 33 LOSNCP",
+        applicableObjects: ["bienes", "servicios", "obras"],
+        thresholds: { min: 0, max: null },
+        requiresInsurance: true,
+        insurancePercentage: 5,
+      },
+      {
+        code: "MC",
+        name: "Menor Cuantía",
+        category: "COMMON",
+        description: "Procedimiento para contratación de cuantía menor",
+        displayOrder: 4,
+        requiresPublication: true,
+        estimatedDuration: 15,
+        legalReference: "Art. 34 LOSNCP",
+        applicableObjects: ["bienes", "servicios", "obras"],
+        thresholds: { min: 0, max: null },
+        requiresInsurance: true,
+        insurancePercentage: 5,
+      },
+      {
+        code: "CON",
+        name: "Consultoría",
+        category: "COMMON",
+        description:
+          "Procedimiento para contratación de servicios de consultoría",
+        displayOrder: 5,
+        requiresPublication: true,
+        estimatedDuration: 40, // Aumentado: procesos más complejos
+        legalReference: "Art. 36-40 LOSNCP",
+        applicableObjects: ["consultorias"],
+        thresholds: { min: 0, max: null },
+        requiresInsurance: true,
+        insurancePercentage: 5,
+      },
+      {
+        code: "LC",
+        name: "Lista Corta",
+        category: "COMMON",
+        description: "Procedimiento para consultoría mediante lista corta",
+        displayOrder: 6,
+        requiresPublication: false, // CORRECTO: Lista corta no publica
+        estimatedDuration: 30, // Aumentado: evaluación técnica compleja
+        legalReference: "Art. 41-43 LOSNCP",
+        applicableObjects: ["consultorias"],
+        thresholds: { min: 0, max: null },
+        requiresInsurance: true,
+        insurancePercentage: 5,
+      },
+
+      // TIPOS ESPECIALES
+      {
+        code: "EME",
+        name: "Emergencia",
+        category: "SPECIAL",
+        description: "Contratación de emergencia por situaciones imprevistas",
+        displayOrder: 1,
+        requiresPublication: false, // CORRECTO
+        estimatedDuration: 3,
+        legalReference: "Art. 57 LOSNCP",
+        applicableObjects: ["bienes", "servicios", "obras"],
+        thresholds: { min: 0, max: null },
+        requiresInsurance: false, // CORRECCIÓN: Emergencia puede no requerir seguro
+        insurancePercentage: 0,
+      },
+      {
+        code: "RE",
+        name: "Régimen Especial",
+        category: "SPECIAL",
+        description: "Contratación bajo régimen especial",
+        displayOrder: 2,
+        requiresPublication: false, // CORRECTO
+        estimatedDuration: 15,
+        legalReference: "Art. 62-77 LOSNCP",
+        applicableObjects: ["bienes", "servicios", "obras"],
+        thresholds: { min: 0, max: null },
+        requiresInsurance: true,
+        insurancePercentage: 5,
+      },
+      {
+        code: "CE",
+        name: "Catálogo Electrónico",
+        category: "SPECIAL",
+        description: "Contratación a través de catálogo electrónico",
+        displayOrder: 3,
+        requiresPublication: false, // CORRECTO
+        estimatedDuration: 5, // CORRECCIÓN: Proceso muy ágil
+        legalReference: "Art. 77-80 LOSNCP",
+        applicableObjects: ["bienes", "servicios"],
+        thresholds: { min: 0, max: null },
+        requiresInsurance: false, // CORRECCIÓN: Catálogo no requiere seguro
+        insurancePercentage: 0,
+      },
+      {
+        code: "CM",
+        name: "Convenio Marco",
+        category: "SPECIAL",
+        description: "Contratación a través de convenios marco establecidos",
+        displayOrder: 4,
+        requiresPublication: false, // CORRECTO
+        estimatedDuration: 10,
+        legalReference: "Art. 81-84 LOSNCP",
+        applicableObjects: ["bienes", "servicios", "obras"],
+        thresholds: { min: 0, max: null },
+        requiresInsurance: false, // CORRECCIÓN: Convenio marco simplificado
+        insurancePercentage: 0,
+      },
+      {
+        code: "IC",
+        name: "Ínfima Cuantía",
+        category: "SPECIAL",
+        description: "Contratación de ínfima cuantía para montos muy pequeños",
+        displayOrder: 5,
+        requiresPublication: false, // CORRECTO
+        estimatedDuration: 3, // CORRECCIÓN: Proceso muy rápido
+        legalReference: "Art. 85 LOSNCP",
+        applicableObjects: ["bienes", "servicios"],
+        thresholds: { min: 0, max: null }, // Debería tener tope pero varía por entidad
+        requiresInsurance: false, // CORRECCIÓN: Ínfima cuantía no requiere seguro
+        insurancePercentage: 0,
+      },
+    ];
+  }
+
+  _getDefaultPhases() {
+    const slugify = (text) =>
+      text
+        .toString()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // quitar acentos
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, "_")
+        .replace(/^_|_$/g, "");
+
+    const defaultPhases = [
+      // FASE PREPARATORIA
+      {
+        code: "PREP",
+        name: "Fase Preparatoria",
+        shortName: "Preparatoria",
+        category: "PREPARATORY",
+        order: 1,
+        description:
+          "Definición de necesidades, estudios, certificación presupuestaria",
+        isRequired: true,
+        estimatedDuration: 10,
+        requiredDocuments: [
+          "Certificación Presupuestaria (PAC)",
+          "Estudios de Mercado",
+          "Términos de Referencia/Especificaciones Técnicas",
+          "Resolución de Inicio de Proceso",
+          "Informe de Necesidad/Justificación",
+        ].map((doc) => ({
+          code: `PREP_${slugify(doc)}`,
+          name: doc,
+        })),
+        // CORRECCIÓN: Aplicabilidad específica por tipo
+        applicableContractTypes: [], // Vacio = aplica a todos
+        // EXCEPCIÓN: Procedimientos especiales simplifican documentos
+        documentsExceptions: {
+          EME: ["PREP_ESTUDIOS_DE_MERCADO"], // Emergencia no requiere estudios previos
+          IC: ["PREP_ESTUDIOS_DE_MERCADO"], // Ínfima cuantía simplificada
+          CE: [
+            "PREP_ESTUDIOS_DE_MERCADO",
+            "PREP_TERMINOS_DE_REFERENCIA_ESPECIFICACIONES_TECNICAS",
+          ],
+          CM: ["PREP_ESTUDIOS_DE_MERCADO"],
+        },
+      },
+
+      // FASE PRECONTRACTUAL
+      {
+        code: "PRECONT",
+        name: "Fase Precontractual",
+        shortName: "Precontractual",
+        category: "PRECONTRACTUAL",
+        order: 2,
+        description: "Convocatoria, evaluación de ofertas, adjudicación",
+        isRequired: true,
+        estimatedDuration: 20,
+        requiredDocuments: [
+          "Pliegos (Documento convocatoria)",
+          "Preguntas y Respuestas/Aclaraciones",
+          "Ofertas/Propuestas de proveedores",
+          "Informe de Evaluación",
+          "Adjudicación/Declaratoria Desierto",
+        ].map((doc) => ({
+          code: `PRECONT_${slugify(doc)}`,
+          name: doc,
+        })),
+        applicableContractTypes: ["SIE", "LIC", "COT", "MC", "CON", "LC"], // CORRECCIÓN: No aplica a especiales
+        // Duraciones variables por tipo
+        durationByType: {
+          SIE: 25,
+          LIC: 35,
+          COT: 20,
+          MC: 15,
+          CON: 30,
+          LC: 25,
+        },
+      },
+
+      // FASE CONTRACTUAL
+      {
+        code: "CONT",
+        name: "Fase Contractual de Ejecución",
+        shortName: "Contractual",
+        category: "CONTRACTUAL",
+        order: 3,
+        description: "Ejecución del contrato, seguimiento y control",
+        isRequired: true,
+        estimatedDuration: 90, // Promedio para obras/servicios largos
+        requiredDocuments: [
+          "Contrato firmado",
+          "Garantías (Fiel cumplimiento, Técnica, etc.)",
+          "Cronograma valorado de trabajos",
+          "Informes de fiscalización/administración",
+        ].map((doc) => ({
+          code: `CONT_${slugify(doc)}`,
+          name: doc,
+        })),
+        applicableContractTypes: [], // Aplica a todos
+        // CORRECCIÓN: Documentos específicos por tipo
+        documentsExceptions: {
+          EME: ["CONT_CRONOGRAMA_VALORADO_DE_TRABAJOS"], // Emergencia sin cronograma
+          IC: [
+            "CONT_GARANTIAS_FIEL_CUMPLIMIENTO_TECNICA_ETC",
+            "CONT_CRONOGRAMA_VALORADO_DE_TRABAJOS",
+          ],
+          CE: ["CONT_CRONOGRAMA_VALORADO_DE_TRABAJOS"],
+          CM: ["CONT_CRONOGRAMA_VALORADO_DE_TRABAJOS"],
+        },
+        // Duraciones variables según complejidad
+        durationByType: {
+          IC: 5, // Ínfima cuantía muy rápida
+          CE: 10, // Catálogo electrónico simple
+          CM: 15, // Convenio marco
+          EME: 30, // Emergencia acelerada
+          MC: 45, // Menor cuantía
+          COT: 60, // Cotización
+          SIE: 45, // Subasta inversa
+          CON: 120, // Consultoría más larga
+          LC: 90, // Lista corta
+          LIC: 180, // Licitación más larga (obras grandes)
+        },
+      },
+
+      // FASE DE PAGO
+      {
+        code: "PAGO",
+        name: "Fase de Pago",
+        shortName: "Pago",
+        category: "PAYMENT",
+        order: 4,
+        description: "Procesamiento de pagos y facturación",
+        isRequired: true,
+        estimatedDuration: 5,
+        requiredDocuments: [
+          "Facturas/Comprobantes de venta",
+          "Planillas de pago",
+          "Retenciones tributarias",
+          "Comprobantes de egreso",
+        ].map((doc) => ({
+          code: `PAGO_${slugify(doc)}`,
+          name: doc,
+        })),
+        applicableContractTypes: [], // Aplica a todos
+        // CORRECCIÓN: Documentos específicos para tipos simples
+        documentsExceptions: {
+          IC: ["PAGO_PLANILLAS_DE_PAGO"], // Ínfima cuantía sin planillas complejas
+          CE: ["PAGO_PLANILLAS_DE_PAGO"], // Catálogo sin planillas
+        },
+      },
+
+      // FASE DE RECEPCIÓN
+      {
+        code: "RECEP",
+        name: "Fase de Recepción",
+        shortName: "Recepción",
+        category: "RECEIPT",
+        order: 5,
+        description: "Recepción definitiva, liquidación del contrato",
+        isRequired: true,
+        estimatedDuration: 10,
+        requiredDocuments: [
+          "Acta de entrega recepción definitiva",
+          "Informe final de fiscalización",
+          "Liquidación del contrato",
+          "Devolución de garantías",
+        ].map((doc) => ({
+          code: `RECEP_${slugify(doc)}`,
+          name: doc,
+        })),
+        applicableContractTypes: [], // Aplica a todos
+        // CORRECCIÓN: Sin garantías para procedimientos simples
+        documentsExceptions: {
+          IC: [
+            "RECEP_DEVOLUCION_DE_GARANTIAS",
+            "RECEP_INFORME_FINAL_DE_FISCALIZACION",
+          ],
+          EME: ["RECEP_DEVOLUCION_DE_GARANTIAS"], // Solo si no tuvo garantías
+          CE: [
+            "RECEP_DEVOLUCION_DE_GARANTIAS",
+            "RECEP_INFORME_FINAL_DE_FISCALIZACION",
+          ],
+          CM: ["RECEP_DEVOLUCION_DE_GARANTIAS"],
+        },
+        // Duraciones variables según complejidad
+        durationByType: {
+          IC: 3, // Ínfima cuantía muy simple
+          CE: 5, // Catálogo rápido
+          EME: 5, // Emergencia sin complicaciones
+          MC: 7, // Menor cuantía
+          COT: 10, // Cotización estándar
+          SIE: 10, // Subasta inversa
+          CM: 7, // Convenio marco
+          CON: 15, // Consultoría con informes
+          LC: 12, // Lista corta
+          LIC: 20, // Licitación más compleja
+        },
+      },
+    ];
+    return defaultPhases;
   }
 }

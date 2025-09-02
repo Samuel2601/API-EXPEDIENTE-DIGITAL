@@ -17,10 +17,7 @@ export class ContractTypeRepository extends BaseRepository {
    * Configurar lookups específicos para tipos de contratación
    */
   setupContractTypeLookups() {
-    // Como ContractType es un modelo de configuración, no necesita muchos lookups
-    // Pero podríamos agregar lookups hacia estadísticas de uso o relaciones futuras
     this.contractTypeLookups = {
-      // Futuro: lookup hacia estadísticas de uso
       usageStats: {
         from: "contracts",
         localField: "_id",
@@ -56,15 +53,13 @@ export class ContractTypeRepository extends BaseRepository {
         lean = true,
       } = options;
 
-      // ✅ Usar query helper del esquema
-      let query = this.model.find().byCategory(category);
+      let query = this.model.find({ category: category.toUpperCase() });
 
       if (!includeInactive) {
         query = query.where({ isActive: true });
       }
 
       query = query.sort({ displayOrder: 1, name: 1 });
-
       return await this.model.paginate(query, { page, limit, lean });
     } catch (error) {
       throw new Error(`Error buscando tipos por categoría: ${error.message}`);
@@ -79,11 +74,11 @@ export class ContractTypeRepository extends BaseRepository {
     try {
       const { page = 1, limit = 10 } = options;
 
-      // ✅ Usar query helper del esquema
       const query = this.model
-        .find()
-        .requiresPublication()
-        .where({ isActive: true })
+        .find({
+          "procedureConfig.requiresPublication": true,
+          isActive: true,
+        })
         .sort({ displayOrder: 1, name: 1 });
 
       return await this.model.paginate(query, { page, limit });
@@ -104,11 +99,18 @@ export class ContractTypeRepository extends BaseRepository {
     try {
       const { page = 1, limit = 10 } = options;
 
-      // ✅ Usar método estático del esquema
-      const applicableTypes = await this.model.findForAmount(
-        amount,
-        contractObject
+      const activeTypes = await this.model.find({ isActive: true });
+      const applicableTypes = activeTypes.filter((type) =>
+        type.isApplicableForAmount(amount, contractObject)
       );
+
+      // Ordenar por displayOrder y nombre
+      applicableTypes.sort((a, b) => {
+        if (a.displayOrder !== b.displayOrder) {
+          return a.displayOrder - b.displayOrder;
+        }
+        return a.name.localeCompare(b.name);
+      });
 
       // Si se requiere paginación, aplicarla manualmente
       if (page && limit) {
@@ -142,8 +144,9 @@ export class ContractTypeRepository extends BaseRepository {
    */
   async getActiveOrderedList() {
     try {
-      // ✅ Usar método estático del esquema
-      return await this.model.getActiveOrderedList();
+      return await this.model
+        .find({ isActive: true })
+        .sort({ displayOrder: 1, name: 1 });
     } catch (error) {
       throw new Error(`Error obteniendo lista ordenada: ${error.message}`);
     }
@@ -196,12 +199,13 @@ export class ContractTypeRepository extends BaseRepository {
    */
   async calculateRequiredInsurance(contractTypeId, contractValue) {
     try {
-      const contractType = await this.findById(contractTypeId);
+      const contractType = await this.findById(contractTypeId, {
+        lean: false,
+      });
       if (!contractType) {
         throw new Error("Tipo de contratación no encontrado");
       }
 
-      // ✅ Usar método del esquema
       return contractType.getRequiredInsuranceAmount(contractValue);
     } catch (error) {
       throw new Error(`Error calculando garantía: ${error.message}`);
@@ -215,24 +219,25 @@ export class ContractTypeRepository extends BaseRepository {
   async validateApplicability(
     contractTypeId,
     amount,
-    contractObject = "goods"
+    contractObject = "bienes"
   ) {
     try {
-      const contractType = await this.findById(contractTypeId);
+      const contractType = await this.findById(contractTypeId, {
+        lean: false,
+      });
       if (!contractType) {
         throw new Error("Tipo de contratación no encontrado");
       }
 
-      // ✅ Usar método del esquema
       const isApplicable = contractType.isApplicableForAmount(
         amount,
         contractObject
       );
 
       if (!isApplicable) {
-        const limits = contractType.amountLimits[contractObject];
-        const min = limits?.min || 0;
-        const max = limits?.max || "sin límite";
+        const limit = contractType.getLimitForObject(contractObject);
+        const min = limit?.min || 0;
+        const max = limit?.max || "sin límite";
 
         throw new Error(
           `El monto ${amount} no es aplicable para ${contractObject}. ` +
@@ -244,10 +249,53 @@ export class ContractTypeRepository extends BaseRepository {
         isApplicable: true,
         contractType: contractType,
         requiredInsurance: contractType.getRequiredInsuranceAmount(amount),
+        estimatedDuration: contractType.getEstimatedDuration(),
         procedureConfig: contractType.procedureConfig,
       };
     } catch (error) {
       throw new Error(`Error validando aplicabilidad: ${error.message}`);
+    }
+  }
+
+  /**
+   * Obtener configuración completa de un tipo
+   */
+  async getCompleteConfiguration(contractTypeId) {
+    try {
+      const contractType = await this.findById(contractTypeId, { lean: false });
+      if (!contractType) {
+        throw new Error("Tipo de contratación no encontrado");
+      }
+
+      return {
+        basic: {
+          code: contractType.code,
+          name: contractType.name,
+          category: contractType.category,
+          description: contractType.description,
+        },
+        applicability: {
+          objects: contractType.applicableObjects,
+          amountLimits: contractType.amountLimits,
+        },
+        procedure: contractType.procedureConfig,
+        legal: {
+          reference: contractType.legalReference,
+          framework: "LOSNCP",
+        },
+        computed: {
+          estimatedDuration: contractType.getEstimatedDuration(),
+          requiresInsurance: contractType.procedureConfig.requiresInsurance,
+        },
+        metadata: {
+          isActive: contractType.isActive,
+          displayOrder: contractType.displayOrder,
+          createdAt: contractType.createdAt,
+          updatedAt: contractType.updatedAt,
+        },
+      };
+    } catch (error) {
+      throw new Error(`Error obteniendo configuración: ${error.message}`);
     }
   }
 
@@ -268,23 +316,26 @@ export class ContractTypeRepository extends BaseRepository {
         category,
         requiresPublication,
         requiresInsurance,
-        minAmount,
-        maxAmount,
-        contractObject = "goods",
+        contractObject,
         searchText,
         isActive = true,
       } = criteria;
 
-      // Construir query base
       let query = this.model.find();
 
-      // Aplicar filtros usando query helpers cuando sea apropiado
-      if (category) query = query.byCategory(category);
-      if (requiresPublication) query = query.requiresPublication();
+      // Filtros básicos
+      if (category) {
+        query = query.where({ category: category.toUpperCase() });
+      }
 
-      // Filtros adicionales
       if (isActive !== undefined) {
         query = query.where({ isActive });
+      }
+
+      if (requiresPublication !== undefined) {
+        query = query.where({
+          "procedureConfig.requiresPublication": requiresPublication,
+        });
       }
 
       if (requiresInsurance !== undefined) {
@@ -293,31 +344,21 @@ export class ContractTypeRepository extends BaseRepository {
         });
       }
 
-      // Filtros por rango de montos (más complejo)
-      if (minAmount !== undefined || maxAmount !== undefined) {
-        const amountFilter = {};
-        if (minAmount !== undefined) {
-          amountFilter[`amountLimits.${contractObject}.min`] = {
-            $lte: minAmount,
-          };
-        }
-        if (maxAmount !== undefined) {
-          amountFilter[`amountLimits.${contractObject}.max`] = {
-            $gte: maxAmount,
-          };
-        }
-        query = query.where(amountFilter);
+      if (contractObject) {
+        query = query.where({ applicableObjects: contractObject });
       }
 
       if (searchText) {
         query = query.where({
-          $text: { $search: searchText },
+          $or: [
+            { name: { $regex: searchText, $options: "i" } },
+            { code: { $regex: searchText, $options: "i" } },
+            { description: { $regex: searchText, $options: "i" } },
+          ],
         });
       }
 
-      // Aplicar ordenamiento
       query = query.sort(sort);
-
       return await this.model.paginate(query, { page, limit });
     } catch (error) {
       throw new Error(`Error en búsqueda avanzada: ${error.message}`);
@@ -403,6 +444,94 @@ export class ContractTypeRepository extends BaseRepository {
   }
 
   // ===== MÉTODOS DE CONFIGURACIÓN Y REPORTE =====
+  // ===== REPORTES Y ESTADÍSTICAS =====
+
+  async getConfigurationReport() {
+    try {
+      const pipeline = [
+        { $match: { isActive: true } },
+        {
+          $group: {
+            _id: "$category",
+            types: {
+              $push: {
+                code: "$code",
+                name: "$name",
+                applicableObjects: "$applicableObjects",
+                amountLimits: "$amountLimits",
+                procedureConfig: "$procedureConfig",
+                legalReference: "$legalReference",
+              },
+            },
+            avgPublicationDays: { $avg: "$procedureConfig.publicationDays" },
+            avgEvaluationDays: { $avg: "$procedureConfig.evaluationDays" },
+            avgEstimatedDuration: {
+              $avg: "$procedureConfig.estimatedDuration",
+            },
+            requiresInsuranceCount: {
+              $sum: { $cond: ["$procedureConfig.requiresInsurance", 1, 0] },
+            },
+            totalCount: { $sum: 1 },
+          },
+        },
+        {
+          $project: {
+            category: "$_id",
+            types: 1,
+            avgPublicationDays: { $round: ["$avgPublicationDays", 1] },
+            avgEvaluationDays: { $round: ["$avgEvaluationDays", 1] },
+            avgEstimatedDuration: { $round: ["$avgEstimatedDuration", 1] },
+            requiresInsurancePercentage: {
+              $round: [
+                {
+                  $multiply: [
+                    { $divide: ["$requiresInsuranceCount", "$totalCount"] },
+                    100,
+                  ],
+                },
+                1,
+              ],
+            },
+            totalCount: 1,
+          },
+        },
+        { $sort: { category: 1 } },
+      ];
+
+      return await this.model.aggregate(pipeline);
+    } catch (error) {
+      throw new Error(`Error generando reporte: ${error.message}`);
+    }
+  }
+
+  async getThresholdAnalysis(contractObject = "bienes") {
+    try {
+      const pipeline = [
+        { $match: { isActive: true, applicableObjects: contractObject } },
+        {
+          $project: {
+            code: 1,
+            name: 1,
+            category: 1,
+            minThreshold: "$thresholds.min",
+            maxThreshold: "$thresholds.max",
+            hasThresholds: {
+              $or: [
+                { $gt: ["$thresholds.min", 0] },
+                { $ne: ["$thresholds.max", null] },
+              ],
+            },
+            procedureConfig: 1,
+          },
+        },
+        { $sort: { minThreshold: 1, name: 1 } },
+      ];
+
+      return await this.model.aggregate(pipeline);
+    } catch (error) {
+      throw new Error(`Error análisis de umbrales: ${error.message}`);
+    }
+  }
 
   /**
    * Obtener configuración de procedimientos por categoría
@@ -510,19 +639,33 @@ export class ContractTypeRepository extends BaseRepository {
       }
     }
 
-    // Validar límites de montos
-    const objects = ["goods", "services", "works"];
-    for (const obj of objects) {
-      if (data.amountLimits && data.amountLimits[obj]) {
-        const limits = data.amountLimits[obj];
-        if (limits.min !== undefined && limits.max !== undefined) {
-          if (limits.min > limits.max) {
-            errors.push(
-              `El monto mínimo no puede ser mayor al máximo para ${obj}`
-            );
-          }
+    // Validar amountLimits
+    if (data.amountLimits && data.amountLimits.length > 0) {
+      const objectTypes = data.amountLimits.map((item) => item.objectType);
+      const uniqueTypes = [...new Set(objectTypes)];
+
+      if (objectTypes.length !== uniqueTypes.length) {
+        errors.push(
+          "No puede haber límites duplicados para el mismo tipo de objeto"
+        );
+      }
+
+      for (const limit of data.amountLimits) {
+        if (limit.min > limit.max) {
+          errors.push(
+            `Para ${limit.objectType}, el mínimo no puede ser mayor al máximo`
+          );
         }
       }
+    }
+
+    // Validar objetos aplicables
+    if (
+      data.applicableObjects &&
+      (!Array.isArray(data.applicableObjects) ||
+        data.applicableObjects.length === 0)
+    ) {
+      errors.push("Debe especificar al menos un objeto aplicable");
     }
 
     // Validar porcentajes
@@ -530,6 +673,14 @@ export class ContractTypeRepository extends BaseRepository {
       const percentage = data.procedureConfig.insurancePercentage;
       if (percentage < 0 || percentage > 100) {
         errors.push("El porcentaje de garantía debe estar entre 0 y 100");
+      }
+    }
+
+    // Validar duración estimada
+    if (data.procedureConfig && data.procedureConfig.estimatedDuration) {
+      const duration = data.procedureConfig.estimatedDuration;
+      if (duration < 1 || duration > 365) {
+        errors.push("La duración estimada debe estar entre 1 y 365 días");
       }
     }
 
@@ -547,7 +698,7 @@ export class ContractTypeRepository extends BaseRepository {
     try {
       await this.validateBeforeCreate(data);
 
-      // Normalizar código a mayúsculas
+      // Normalizar código
       if (data.code) {
         data.code = data.code.toUpperCase().trim();
       }
@@ -555,6 +706,11 @@ export class ContractTypeRepository extends BaseRepository {
       // Normalizar categoría
       if (data.category) {
         data.category = data.category.toUpperCase();
+      }
+
+      // Asegurar objetos aplicables por defecto
+      if (!data.applicableObjects || data.applicableObjects.length === 0) {
+        data.applicableObjects = ["bienes", "servicios"];
       }
 
       return await super.create(data, userData, options);
