@@ -430,12 +430,13 @@ export class ContractTypeRepository extends BaseRepository {
             },
           },
         },
-
-        // Ordenar
-        { $sort: { displayOrder: 1, name: 1 } },
       ];
 
-      return await this.aggregateWithPagination(pipeline, { page, limit });
+      return await this.searchWithAggregation(pipeline, {
+        page,
+        limit,
+        sort: { displayOrder: 1, name: 1 },
+      });
     } catch (error) {
       throw new Error(
         `Error obteniendo tipos con estadísticas: ${error.message}`

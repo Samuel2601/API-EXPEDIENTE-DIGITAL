@@ -60,30 +60,30 @@ export class ContractConfigurationService {
 
           return {
             ...(phase.toJSON ? phase.toJSON() : phase),
-            effectiveConfiguration: phaseConfig.effectiveForType,
+            effectiveConfig: {
+              ...phaseConfig,
+              documentsRequired: this._mergeDocumentRequirements(
+                phase.requiredDocuments,
+                phaseConfig?.documentExceptions
+              ),
+              duration: this._calculateEffectiveDuration(
+                phase.defaultDuration,
+                phaseConfig?.customDuration
+              ),
+            },
           };
         })
       );
 
       return {
-        contractType,
+        contractType: contractType.toJSON
+          ? contractType.toJSON()
+          : contractType,
         phases: effectivePhases,
         summary: {
           totalPhases: effectivePhases.length,
-          totalEstimatedDays: effectivePhases.reduce(
-            (sum, p) =>
-              sum +
-              (p.effectiveConfiguration?.effectiveDuration ||
-                p.phaseConfig?.estimatedDays ||
-                0),
-            0
-          ),
-          phasesWithExceptions: effectivePhases.filter(
-            (p) => p.effectiveConfiguration?.hasExceptions
-          ).length,
-          phasesWithCustomDuration: effectivePhases.filter(
-            (p) => p.effectiveConfiguration?.hasCustomDuration
-          ).length,
+          requiredPhases: effectivePhases.filter((p) => p.isRequired).length,
+          optionalPhases: effectivePhases.filter((p) => !p.isRequired).length,
         },
         metadata: {
           generatedAt: new Date().toISOString(),
@@ -894,17 +894,33 @@ export class ContractConfigurationService {
 
       // Filtrar por categoría si se especifica
       if (category) {
-        query.category = category;
+        return await this.contractPhaseRepository.findByCategory(category, {
+          includeInactive,
+          page: page,
+          limit: limit,
+        });
       }
 
       // Filtrar por tipo de contrato si se especifica
       if (contractTypeCode) {
-        query["applicableContractTypes.code"] = contractTypeCode;
+        const contractType =
+          await this.contractTypeRepository.findByCode(contractTypeCode);
+        if (contractType) {
+          return await this.contractPhaseRepository.findForContractType(
+            contractType._id,
+            {
+              populateDependencies: true,
+              includeInactive,
+            }
+          );
+        }
       }
 
       const phases = await this.contractPhaseRepository.findAll(query, {
         page,
         limit,
+        includeDeleted: includeInactive ? true : false,
+        populate: ["dependencies.requiredPhases.phase"],
         sort: { order: 1, name: 1 },
       });
 
@@ -1907,5 +1923,82 @@ export class ContractConfigurationService {
       },
     ];
     return defaultPhases;
+  }
+
+  // ===== MÉTODOS AUXILIARES PRIVADOS =====
+
+  /**
+   * Combinar requerimientos de documentos con excepciones
+   */
+  _mergeDocumentRequirements(baseDocuments, exceptions = []) {
+    const finalDocuments = [...(baseDocuments || [])];
+
+    exceptions.forEach((exception) => {
+      if (exception.action === "ADD") {
+        finalDocuments.push(exception.document);
+      } else if (exception.action === "REMOVE") {
+        const index = finalDocuments.findIndex(
+          (doc) => doc.code === exception.document.code
+        );
+        if (index > -1) finalDocuments.splice(index, 1);
+      }
+    });
+
+    return finalDocuments;
+  }
+
+  /**
+   * Calcular duración efectiva considerando configuraciones específicas
+   */
+  _calculateEffectiveDuration(defaultDuration, customDuration) {
+    return (
+      customDuration || defaultDuration || { days: 15, isBusinessDays: true }
+    );
+  }
+
+  /**
+   * Validar integridad de la configuración
+   */
+  async _validateConfigurationIntegrity() {
+    const [types, phases] = await Promise.all([
+      this.contractTypeRepository.findAll({ isActive: true }),
+      this.contractPhaseRepository.findAll({ isActive: true }),
+    ]);
+
+    const issues = [];
+
+    // Validar que cada tipo tenga al menos una fase preparatoria
+    for (const type of types) {
+      const preparatoryPhases = phases.filter(
+        (p) =>
+          p.category === "PREPARATORIA" &&
+          p.typeSpecificConfig?.some((config) =>
+            config.contractType.equals(type._id)
+          )
+      );
+
+      if (preparatoryPhases.length === 0) {
+        issues.push(`Tipo ${type.code} no tiene fase preparatoria configurada`);
+      }
+    }
+
+    if (issues.length > 0) {
+      console.warn("⚠️  Problemas de integridad encontrados:", issues);
+    }
+
+    return { valid: issues.length === 0, issues };
+  }
+
+  /**
+   * Obtener descripción de categoría
+   */
+  _getCategoryDescription(category) {
+    const descriptions = {
+      COMUN: "Procedimientos de uso común regulados por la LOSNCP",
+      ESPECIAL: "Procedimientos especiales con normativas específicas",
+      EMERGENCIA: "Procedimientos de emergencia y urgencia",
+      CATALOGO: "Compras a través de catálogo electrónico",
+    };
+    return descriptions[category] || `Categoría: ${category}`;
   }
 }

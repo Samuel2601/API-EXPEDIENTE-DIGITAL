@@ -247,11 +247,10 @@ export class BaseRepository {
    * Búsqueda usando agregación MongoDB con lookups automáticos
    * @param {Object} config - Configuración de la búsqueda
    */
-  async searchWithAggregation(config) {
+  async searchWithAggregation(config, options = {}) {
     try {
       const {
         filters = {},
-        options = {},
         lookups = [],
         customPipeline = [],
         enableAutoLookups = true,
@@ -263,10 +262,10 @@ export class BaseRepository {
       );
 
       const {
-        page = 1,
-        limit = 10,
-        sort = { createdAt: -1 },
-        includeDeleted = false,
+        page = options.page || 1,
+        limit = options.limit || 10,
+        sort = options.sort || { createdAt: -1 },
+        includeDeleted = options.includeDeleted || false,
       } = options;
 
       const skip = (page - 1) * limit;
@@ -555,6 +554,11 @@ export class BaseRepository {
    * Estadísticas usando agregación
    */
   async getStatsWithAggregation(config = {}) {
+    // Si es un array, asumimos que ya es un pipeline armado
+    if (Array.isArray(config)) {
+      return await this.model.aggregate(config);
+    }
+
     const {
       groupBy = null,
       dateField = "createdAt",

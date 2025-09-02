@@ -810,7 +810,8 @@ export class ContractService {
         },
       ];
 
-      const [stats] = await this.contractRepository.aggregate(pipeline);
+      const [stats] =
+        await this.contractRepository.getStatsWithAggregation(pipeline);
 
       if (!stats) {
         return {
