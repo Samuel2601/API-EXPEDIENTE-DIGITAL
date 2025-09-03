@@ -47,7 +47,12 @@ export class ContractPhaseRepository extends BaseRepository {
    */
   async findByCategory(category, options = {}) {
     try {
-      const { page = 1, limit = 10, includeInactive = false } = options;
+      const {
+        page = 1,
+        limit = 10,
+        includeInactive = false,
+        lean = true,
+      } = options;
 
       // ✅ Usar query helper del esquema con ordenamiento secuencial
       let query = this.model.find().byCategory(category).sequential();

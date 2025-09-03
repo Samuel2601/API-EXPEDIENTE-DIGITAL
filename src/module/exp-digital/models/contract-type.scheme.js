@@ -1,5 +1,5 @@
 // src/module/exp-digital/models/contract-type.scheme.js
-import mongoose from "mongoose";
+import mongoose, { Error } from "mongoose";
 import mongoosePaginate from "mongoose-paginate-v2";
 import {
   setupBaseSchema,
@@ -277,9 +277,8 @@ ContractTypeSchema.methods.isApplicableForAmount = function (
   amount,
   contractObject = "bienes"
 ) {
-  if (!this.applicableObjects.includes(contractObject)) {
-    return false;
-  }
+  if (typeof amount !== "number") return false;
+  if (!this.applicableObjects.includes(contractObject)) return false;
 
   const limit = this.amountLimits.find((l) => l.objectType === contractObject);
   if (!limit) return false;
@@ -308,7 +307,7 @@ ContractTypeSchema.statics.findForAmount = function (
   amount,
   contractObject = "bienes"
 ) {
-  return this.findActive().then((types) => {
+  return this.find({ isActive: true }).then((types) => {
     return types.filter((type) =>
       type.isApplicableForAmount(amount, contractObject)
     );
@@ -319,8 +318,45 @@ ContractTypeSchema.statics.findByCategory = function (category) {
   return this.findActive({ category: category.toUpperCase() });
 };
 
+ContractTypeSchema.statics.findByRegimen = function (regimen) {
+  return this.findActive({ regimen: regimen.toUpperCase() });
+};
+
 ContractTypeSchema.statics.getActiveOrderedList = function () {
   return this.findActive({}, { sort: { displayOrder: 1, name: 1 } });
+};
+
+ContractTypeSchema.statics.findForAmountPaginated = async function (
+  amount,
+  contractObject = "bienes",
+  options = {}
+) {
+  const { page = 1, limit = 10, lean = true } = options;
+
+  const query = { isActive: true };
+  const types = await this.paginate(query, {
+    page,
+    limit,
+    lean,
+    sort: { displayOrder: 1, name: 1 },
+  });
+
+  const filteredDocs = types.docs.filter((type) =>
+    type.isApplicableForAmount(amount, contractObject)
+  );
+
+  return {
+    docs: filteredDocs,
+    totalDocs: filteredDocs.length,
+    limit,
+    totalPages: Math.ceil(filteredDocs.length / limit),
+    page,
+    pagingCounter: (page - 1) * limit + 1,
+    hasPrevPage: page > 1,
+    hasNextPage: page * limit < filteredDocs.length,
+    prevPage: page > 1 ? page - 1 : null,
+    nextPage: page * limit < filteredDocs.length ? page + 1 : null,
+  };
 };
 
 // === VIRTUALES ===

@@ -53,7 +53,7 @@ export class ContractTypeRepository extends BaseRepository {
         lean = true,
       } = options;
 
-      let query = this.model.find({ category: category.toUpperCase() });
+      let query = this.model.find().byCategory(category).sequential();
 
       if (!includeInactive) {
         query = query.where({ isActive: true });
@@ -63,6 +63,33 @@ export class ContractTypeRepository extends BaseRepository {
       return await this.model.paginate(query, { page, limit, lean });
     } catch (error) {
       throw new Error(`Error buscando tipos por categoría: ${error.message}`);
+    }
+  }
+
+  /**
+   * Buscar fases por régimen - USA QUERY HELPER
+   * ✅ MEJORA: Utiliza el query helper del esquema
+   */
+  async findByRegimen(regimen, options = {}) {
+    try {
+      const {
+        page = 1,
+        limit = 10,
+        includeInactive = false,
+        lean = true,
+      } = options;
+
+      // ✅ Usar query helper del esquema con ordenamiento secuencial
+      let query = this.model.find().byRegimen(regimen).sequential();
+
+      if (!includeInactive) {
+        query = query.where({ isActive: true });
+      }
+
+      query = query.sort({ displayOrder: 1, name: 1 });
+      return await this.model.paginate(query, { page, limit, lean });
+    } catch (error) {
+      throw new Error(`Error buscando fases por régimen: ${error.message}`);
     }
   }
 
@@ -95,44 +122,18 @@ export class ContractTypeRepository extends BaseRepository {
    * Obtener tipos aplicables para un monto y objeto contractual - USA MÉTODO ESTÁTICO
    * ✅ MEJORA: Utiliza el método estático del esquema
    */
-  async findForAmount(amount, contractObject = "goods", options = {}) {
+  async findForAmount(amount, contractObject = "bienes", options = {}) {
     try {
-      const { page = 1, limit = 10 } = options;
+      const { page = 1, limit = 10, lean = true } = options;
 
-      const activeTypes = await this.model.find({ isActive: true });
-      const applicableTypes = activeTypes.filter((type) =>
-        type.isApplicableForAmount(amount, contractObject)
+      // Usamos el método estático paginado del modelo
+      const result = await this.model.ContractType.findForAmountPaginated(
+        amount,
+        contractObject,
+        { page, limit, lean }
       );
 
-      // Ordenar por displayOrder y nombre
-      applicableTypes.sort((a, b) => {
-        if (a.displayOrder !== b.displayOrder) {
-          return a.displayOrder - b.displayOrder;
-        }
-        return a.name.localeCompare(b.name);
-      });
-
-      // Si se requiere paginación, aplicarla manualmente
-      if (page && limit) {
-        const startIndex = (page - 1) * limit;
-        const endIndex = page * limit;
-        const paginatedTypes = applicableTypes.slice(startIndex, endIndex);
-
-        return {
-          docs: paginatedTypes,
-          totalDocs: applicableTypes.length,
-          limit: limit,
-          totalPages: Math.ceil(applicableTypes.length / limit),
-          page: page,
-          pagingCounter: startIndex + 1,
-          hasPrevPage: page > 1,
-          hasNextPage: endIndex < applicableTypes.length,
-          prevPage: page > 1 ? page - 1 : null,
-          nextPage: endIndex < applicableTypes.length ? page + 1 : null,
-        };
-      }
-
-      return applicableTypes;
+      return result;
     } catch (error) {
       throw new Error(`Error buscando tipos por monto: ${error.message}`);
     }
