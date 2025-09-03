@@ -29,6 +29,7 @@ const AmountLimitJSON = {
         "obras_artisticas",
         "derechos_autor",
         "consultorias",
+        "consultorias_financiamiento",
         "investigacion",
         "desarrollo_tecnologico",
       ],
@@ -54,6 +55,7 @@ const AmountLimitJSON = {
           "obras_artisticas",
           "derechos_autor",
           "consultorias",
+          "consultorias_financiamiento",
           "investigacion",
           "desarrollo_tecnologico",
         ],
@@ -80,10 +82,11 @@ const AmountLimitJSON = {
   },
   max: {
     type: Number,
-    required: true,
+    required: false, // ✅ CAMBIO: Permitir null para "sin límite superior"
     min: 0,
+    default: null, // ✅ CAMBIO: Default null
     meta: {
-      validation: { isNumeric: true, min: 0 },
+      validation: { isNumeric: true, min: 0, optional: true },
       messages: {
         isNumeric: "El límite máximo debe ser numérico",
         min: "El límite máximo no puede ser negativo",
@@ -154,6 +157,8 @@ export const ContractTypeJSON = {
         "CONTRATACION_DIRECTA",
         "ENCARGO_DE_CONFIANZA",
         "COMPRA_MINORISTA",
+        "CATALOGO_ELECTRONICO",
+        "CONSULTORIA",
       ],
       message: "Procedimiento de contratación no válido según LOSNCP",
     },
@@ -180,7 +185,24 @@ export const ContractTypeJSON = {
   applicableObjects: {
     type: [String],
     enum: {
-      values: ["bienes", "servicios", "obras", "consultorias"],
+      values: [
+        "bienes",
+        "bienes_normalizados",
+        "bienes_no_normalizados",
+        "bienes_catalogo",
+        "servicios",
+        "servicios_normalizados",
+        "servicios_no_normalizados",
+        "servicios_catalogo",
+        "servicios_personales",
+        "obras",
+        "obras_artisticas",
+        "derechos_autor",
+        "consultorias",
+        "consultorias_financiamiento",
+        "investigacion",
+        "desarrollo_tecnologico",
+      ],
       message: "Objeto de contratación no válido",
     },
     default: ["bienes", "servicios"],
@@ -254,55 +276,6 @@ setupBaseSchema(ContractTypeSchema, {
   addBaseFields: true,
 });
 
-// === MIDDLEWARES PERSONALIZADOS ===
-
-ContractTypeSchema.pre("save", function (next) {
-  // Validar que los límites sean consistentes con los objetos aplicables
-  const applicableObjectsSet = new Set(this.applicableObjects);
-
-  for (const limit of this.amountLimits) {
-    // Validar min <= max
-    if (limit.min > limit.max) {
-      const err = new Error.ValidationError(this);
-      err.errors.amountLimits = new Error.ValidatorError({
-        message: `Para ${limit.objectType}, el límite mínimo (${limit.min}) no puede ser mayor al máximo (${limit.max})`,
-        path: "amountLimits",
-        value: this.amountLimits,
-      });
-      return next(err);
-    }
-
-    // Validar que el objeto del límite esté en applicableObjects
-    if (!applicableObjectsSet.has(limit.objectType)) {
-      const err = new Error.ValidationError(this);
-      err.errors.amountLimits = new Error.ValidatorError({
-        message: `El objeto "${limit.objectType}" en amountLimits no está en applicableObjects`,
-        path: "amountLimits",
-        value: this.amountLimits,
-      });
-      return next(err);
-    }
-  }
-
-  // Validar que todos los objetos aplicables tengan límites definidos
-  for (const obj of this.applicableObjects) {
-    const hasLimit = this.amountLimits.some(
-      (limit) => limit.objectType === obj
-    );
-    if (!hasLimit) {
-      const err = new Error.ValidationError(this);
-      err.errors.amountLimits = new Error.ValidatorError({
-        message: `Falta definir límites para el objeto "${obj}" que está en applicableObjects`,
-        path: "amountLimits",
-        value: this.amountLimits,
-      });
-      return next(err);
-    }
-  }
-
-  next();
-});
-
 // === MÉTODOS DE INSTANCIA ===
 
 ContractTypeSchema.methods.isApplicableForAmount = function (
@@ -315,8 +288,68 @@ ContractTypeSchema.methods.isApplicableForAmount = function (
   const limit = this.amountLimits.find((l) => l.objectType === contractObject);
   if (!limit) return false;
 
-  return amount >= (limit.min || 0) && amount <= limit.max;
+  // ✅ CAMBIO: Manejar max: null (sin límite superior)
+  const minValid = amount >= (limit.min || 0);
+  const maxValid = limit.max === null || amount <= limit.max;
+
+  return minValid && maxValid;
 };
+
+// === MIDDLEWARES PERSONALIZADOS ===
+
+ContractTypeSchema.pre("save", function (next) {
+  const applicableObjectsSet = new Set(this.applicableObjects);
+
+  for (const limit of this.amountLimits) {
+    // Validar que el min no sea negativo
+    if (limit.min < 0) {
+      const err = new Error.ValidationError(this);
+      err.errors.amountLimits = new Error.ValidatorError({
+        message: `Para ${limit.objectType}, el límite mínimo no puede ser negativo`,
+        path: "amountLimits",
+        value: this.amountLimits,
+      });
+      return next(err);
+    }
+
+    // Validar min <= max solo cuando max no sea null
+    if (
+      limit.max !== null &&
+      limit.max !== undefined &&
+      typeof limit.max === "number" &&
+      !isNaN(limit.max) &&
+      limit.min > limit.max
+    ) {
+      const err = new Error.ValidationError(this);
+      err.errors.amountLimits = new Error.ValidatorError({
+        message: `Para ${limit.objectType}, el límite mínimo (${limit.min}) no puede ser mayor al máximo (${limit.max})`,
+        path: "amountLimits",
+        value: this.amountLimits,
+      });
+      return next(err);
+    }
+
+    // ✅ CAMBIO: Validación más flexible para objetos aplicables
+    // Permitir tanto objetos genéricos como específicos
+    const isGenericMatch = applicableObjectsSet.has(limit.objectType);
+    const isSpecificMatch = Array.from(applicableObjectsSet).some(
+      (appObj) =>
+        limit.objectType.startsWith(appObj + "_") || limit.objectType === appObj
+    );
+
+    if (!isGenericMatch && !isSpecificMatch) {
+      const err = new Error.ValidationError(this);
+      err.errors.amountLimits = new Error.ValidatorError({
+        message: `El objeto "${limit.objectType}" en amountLimits no coincide con applicableObjects: [${Array.from(applicableObjectsSet).join(", ")}]`,
+        path: "amountLimits",
+        value: this.amountLimits,
+      });
+      return next(err);
+    }
+  }
+
+  next();
+});
 
 ContractTypeSchema.methods.getLimitForObject = function (contractObject) {
   return this.amountLimits.find((l) => l.objectType === contractObject);
@@ -340,9 +373,29 @@ ContractTypeSchema.statics.findForAmount = function (
   contractObject = "bienes"
 ) {
   return this.find({ isActive: true }).then((types) => {
-    return types.filter((type) =>
-      type.isApplicableForAmount(amount, contractObject)
-    );
+    return types.filter((type) => {
+      // Buscar coincidencia exacta o por prefijo
+      const exactMatch = type.amountLimits.find(
+        (l) => l.objectType === contractObject
+      );
+      if (exactMatch) {
+        const minValid = amount >= (exactMatch.min || 0);
+        const maxValid = exactMatch.max === null || amount <= exactMatch.max;
+        return minValid && maxValid;
+      }
+
+      // Buscar coincidencia por prefijo (ej: "bienes" coincide con "bienes_normalizados")
+      const prefixMatch = type.amountLimits.find((l) =>
+        l.objectType.startsWith(contractObject + "_")
+      );
+      if (prefixMatch) {
+        const minValid = amount >= (prefixMatch.min || 0);
+        const maxValid = prefixMatch.max === null || amount <= prefixMatch.max;
+        return minValid && maxValid;
+      }
+
+      return false;
+    });
   });
 };
 

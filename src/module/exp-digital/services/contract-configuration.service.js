@@ -710,11 +710,11 @@ export class ContractConfigurationService {
       if (existingType) {
         throw createValidationError(`Código ya existe: ${typeData.code}`);
       }
-
+      console.log(typeData);
       return await this.contractTypeRepository.create(typeData, userData);
     } catch (error) {
       throw createError(
-        ERROR_CODES.CREATION_ERROR,
+        ERROR_CODES.CREATE_ERROR,
         `Error creando tipo: ${error.message}`,
         400
       );
