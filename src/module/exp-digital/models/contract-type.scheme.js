@@ -320,6 +320,9 @@ ContractTypeSchema.pre("save", function (next) {
       !isNaN(limit.max) &&
       limit.min > limit.max
     ) {
+      console.log(
+        `Para ${limit.objectType}, el límite mínimo (${limit.min}) no puede ser mayor al máximo (${limit.max})`
+      );
       const err = new Error.ValidationError(this);
       err.errors.amountLimits = new Error.ValidatorError({
         message: `Para ${limit.objectType}, el límite mínimo (${limit.min}) no puede ser mayor al máximo (${limit.max})`,

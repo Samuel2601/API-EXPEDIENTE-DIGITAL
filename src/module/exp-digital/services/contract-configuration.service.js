@@ -1475,6 +1475,7 @@ export class ContractConfigurationService {
         try {
           const contractType =
             await this.contractTypeRepository.findByCode(typeCode);
+
           if (contractType && exceptions.length > 0) {
             await this.contractPhaseRepository.addDocumentExceptions(
               createdPhase._id,

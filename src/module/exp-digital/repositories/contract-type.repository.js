@@ -653,7 +653,13 @@ export class ContractTypeRepository extends BaseRepository {
       }
 
       for (const limit of data.amountLimits) {
-        if (limit.min > limit.max) {
+        if (
+          limit.max !== null &&
+          limit.max !== undefined &&
+          typeof limit.max === "number" &&
+          !isNaN(limit.max) &&
+          limit.min > limit.max
+        ) {
           errors.push(
             `Para ${limit.objectType}, el mínimo no puede ser mayor al máximo`
           );
