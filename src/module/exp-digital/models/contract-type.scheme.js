@@ -15,7 +15,23 @@ const AmountLimitJSON = {
     type: String,
     required: true,
     enum: {
-      values: ["bienes", "servicios", "obras", "consultorias"],
+      values: [
+        "bienes",
+        "bienes_normalizados",
+        "bienes_no_normalizados",
+        "bienes_catalogo",
+        "servicios",
+        "servicios_normalizados",
+        "servicios_no_normalizados",
+        "servicios_catalogo",
+        "servicios_personales",
+        "obras",
+        "obras_artisticas",
+        "derechos_autor",
+        "consultorias",
+        "investigacion",
+        "desarrollo_tecnologico",
+      ],
       message:
         "Tipo de objeto no válido. Debe ser: bienes, servicios, obras o consultorias",
     },
@@ -24,7 +40,23 @@ const AmountLimitJSON = {
       validation: {
         isString: true,
         required: true,
-        isIn: ["bienes", "servicios", "obras", "consultorias"],
+        isIn: [
+          "bienes",
+          "bienes_normalizados",
+          "bienes_no_normalizados",
+          "bienes_catalogo",
+          "servicios",
+          "servicios_normalizados",
+          "servicios_no_normalizados",
+          "servicios_catalogo",
+          "servicios_personales",
+          "obras",
+          "obras_artisticas",
+          "derechos_autor",
+          "consultorias",
+          "investigacion",
+          "desarrollo_tecnologico",
+        ],
       },
       messages: {
         required: "El tipo de objeto es obligatorio",
@@ -67,10 +99,10 @@ export const ContractTypeJSON = {
     unique: true,
     uppercase: true,
     trim: true,
-    maxlength: 10,
+    maxlength: 50,
     validate: {
       validator: function (v) {
-        return /^[A-Z]{2,10}$/.test(v);
+        return /^[A-Z_]{2,50}$/.test(v);
       },
       message:
         "El código debe contener solo letras mayúsculas (2-10 caracteres)",
