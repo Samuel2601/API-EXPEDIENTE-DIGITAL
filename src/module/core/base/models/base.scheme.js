@@ -374,6 +374,7 @@ export const setupBaseSchema = (schema, options = {}) => {
     transform: function (doc, ret) {
       // Remover campos internos al serializar
       delete ret.__v;
+      delete ret._id;
       delete ret.deletedBy;
       delete ret.deletionReason;
 
