@@ -11,7 +11,7 @@ const router = express.Router();
 router.use("/departments", departmentRoutes);
 router.use("/permissions", modulePermissionRoutes);
 router.use("/files", fileRoutes);
-router.use("/contracts", contractRoutes);
 router.use("/contracts/configuration", contractConfigurationRoutes);
+router.use("/contracts", contractRoutes);
 
 export default router;

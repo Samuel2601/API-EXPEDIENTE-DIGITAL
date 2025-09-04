@@ -39,18 +39,19 @@ export class ContractConfigurationController {
       const { user, query } = req;
       const {
         includeInactive = false,
-        category = null,
+        regime = null,
         page = 1,
         limit = 50,
       } = query;
 
       console.log(
-        `📋 Usuario ${user.userId} consultando tipos de contratación`
+        `📋 Usuario ${user.userId} consultando tipos de contratación`,
+        query
       );
 
       const options = {
         includeInactive: includeInactive === "true",
-        category,
+        regime,
         page: parseInt(page),
         limit: parseInt(limit),
       };

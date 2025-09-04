@@ -365,32 +365,55 @@ ContractPhaseSchema.pre("save", async function (next) {
 // === MÉTODOS DE INSTANCIA ===
 
 ContractPhaseSchema.methods.getEffectiveDocuments = function (contractTypeId) {
-  if (!contractTypeId) return this.requiredDocuments;
+  // Si no se especifica tipo de contrato, devolver documentos base
+  if (!contractTypeId) {
+    return this.requiredDocuments || [];
+  }
 
-  const specificConfig = this.typeSpecificConfig.find(
-    (config) => config.contractType.toString() === contractTypeId.toString()
+  const specificConfig = this.getTypeSpecificConfiguration(contractTypeId);
+
+  // Documentos base filtrados (excluyendo los que están en excludedDocuments)
+  const excludedCodes = specificConfig.excludedDocuments || [];
+  const baseDocuments = (this.requiredDocuments || []).filter(
+    (doc) => !excludedCodes.includes(doc.code)
   );
 
-  if (!specificConfig) return this.requiredDocuments;
+  // Documentos adicionales específicos del tipo
+  const additionalDocuments = specificConfig.additionalDocuments || [];
 
-  const excluded = specificConfig.excludedDocuments || [];
-  const additional = specificConfig.additionalDocuments || [];
-
-  // Filtrar documentos base excluidos y agregar documentos adicionales
-  const baseDocuments = this.requiredDocuments.filter(
-    (doc) => !excluded.includes(doc.code)
-  );
-  return [...baseDocuments, ...additional];
+  // Combinar base + adicionales
+  return [...baseDocuments, ...additionalDocuments];
 };
 
 ContractPhaseSchema.methods.getEffectiveDuration = function (contractTypeId) {
-  if (!contractTypeId) return this.phaseConfig.estimatedDays;
+  // Duración base por defecto
+  const baseDuration = this.phaseConfig?.estimatedDays || 5;
 
-  const specificConfig = this.typeSpecificConfig.find(
-    (config) => config.contractType.toString() === contractTypeId.toString()
-  );
+  if (!contractTypeId) {
+    return baseDuration;
+  }
 
-  return specificConfig?.customDuration || this.phaseConfig.estimatedDays;
+  const specificConfig = this.getTypeSpecificConfiguration(contractTypeId);
+
+  // Si tiene duración personalizada, usarla; sino usar la base
+  return specificConfig.customDuration || baseDuration;
+};
+
+ContractPhaseSchema.methods.getConfigurationSummary = function () {
+  return {
+    code: this.code,
+    name: this.name,
+    category: this.category,
+    order: this.order,
+    baseConfiguration: {
+      estimatedDays: this.phaseConfig?.estimatedDays || 5,
+      isOptional: this.phaseConfig?.isOptional || false,
+      requiresApproval: this.phaseConfig?.requiresApproval || true,
+      documentsCount: this.requiredDocuments?.length || 0,
+    },
+    typeSpecificConfigurations: this.typeSpecificConfig.length,
+    configuredTypes: this.getConfiguredContractTypes(),
+  };
 };
 
 ContractPhaseSchema.methods.isApplicableToContractType = function (
@@ -413,6 +436,260 @@ ContractPhaseSchema.methods.getOptionalDocuments = function (
 ) {
   const effectiveDocuments = this.getEffectiveDocuments(contractTypeId);
   return effectiveDocuments.filter((doc) => !doc.isMandatory);
+};
+
+/**
+ * ✅ NUEVO: Agregar excepción de documento para un tipo de contrato específico
+ * Maneja typeSpecificConfig correctamente
+ */
+ContractPhaseSchema.methods.addDocumentException = function (
+  contractTypeId,
+  documentCodes
+) {
+  // Buscar configuración existente para este tipo de contrato
+  const existingConfigIndex = this.typeSpecificConfig.findIndex(
+    (config) => config.contractType.toString() === contractTypeId.toString()
+  );
+
+  // Normalizar documentCodes a array
+  const codes = Array.isArray(documentCodes) ? documentCodes : [documentCodes];
+
+  if (existingConfigIndex >= 0) {
+    // Actualizar configuración existente
+    const existingConfig = this.typeSpecificConfig[existingConfigIndex];
+    const currentExclusions = existingConfig.excludedDocuments || [];
+
+    // Agregar nuevas exclusiones evitando duplicados
+    const newExclusions = [...new Set([...currentExclusions, ...codes])];
+
+    this.typeSpecificConfig[existingConfigIndex].excludedDocuments =
+      newExclusions;
+  } else {
+    // Crear nueva configuración
+    this.typeSpecificConfig.push({
+      contractType: contractTypeId,
+      excludedDocuments: codes,
+      additionalDocuments: [],
+      customDuration: undefined,
+    });
+  }
+
+  return this.save();
+};
+
+/**
+ * ✅ NUEVO: Remover excepción de documento para un tipo de contrato específico
+ */
+ContractPhaseSchema.methods.removeDocumentException = function (
+  contractTypeId,
+  documentCodes
+) {
+  const existingConfigIndex = this.typeSpecificConfig.findIndex(
+    (config) => config.contractType.toString() === contractTypeId.toString()
+  );
+
+  if (existingConfigIndex >= 0) {
+    const codes = Array.isArray(documentCodes)
+      ? documentCodes
+      : [documentCodes];
+    const currentExclusions =
+      this.typeSpecificConfig[existingConfigIndex].excludedDocuments || [];
+
+    // Filtrar códigos a remover
+    const updatedExclusions = currentExclusions.filter(
+      (code) => !codes.includes(code)
+    );
+
+    this.typeSpecificConfig[existingConfigIndex].excludedDocuments =
+      updatedExclusions;
+  }
+
+  return this.save();
+};
+
+ContractPhaseSchema.methods.setDurationForType = function (
+  contractTypeId,
+  duration
+) {
+  if (duration < 1 || duration > 365) {
+    throw new Error("La duración debe estar entre 1 y 365 días");
+  }
+
+  // Buscar configuración existente
+  const existingConfigIndex = this.typeSpecificConfig.findIndex(
+    (config) => config.contractType.toString() === contractTypeId.toString()
+  );
+
+  if (existingConfigIndex >= 0) {
+    // Actualizar configuración existente
+    this.typeSpecificConfig[existingConfigIndex].customDuration = duration;
+  } else {
+    // Crear nueva configuración
+    this.typeSpecificConfig.push({
+      contractType: contractTypeId,
+      excludedDocuments: [],
+      additionalDocuments: [],
+      customDuration: duration,
+    });
+  }
+
+  return this.save();
+};
+
+/**
+ * ✅ NUEVO: Agregar documentos adicionales para un tipo de contrato
+ */
+ContractPhaseSchema.methods.addAdditionalDocuments = function (
+  contractTypeId,
+  documents
+) {
+  const existingConfigIndex = this.typeSpecificConfig.findIndex(
+    (config) => config.contractType.toString() === contractTypeId.toString()
+  );
+
+  const docs = Array.isArray(documents) ? documents : [documents];
+
+  if (existingConfigIndex >= 0) {
+    // Actualizar configuración existente
+    const existingConfig = this.typeSpecificConfig[existingConfigIndex];
+    const currentAdditional = existingConfig.additionalDocuments || [];
+
+    // Agregar nuevos documentos evitando duplicados por código
+    const newAdditional = [...currentAdditional];
+    docs.forEach((doc) => {
+      if (!newAdditional.some((existing) => existing.code === doc.code)) {
+        newAdditional.push(doc);
+      }
+    });
+
+    this.typeSpecificConfig[existingConfigIndex].additionalDocuments =
+      newAdditional;
+  } else {
+    // Crear nueva configuración
+    this.typeSpecificConfig.push({
+      contractType: contractTypeId,
+      excludedDocuments: [],
+      additionalDocuments: docs,
+      customDuration: undefined,
+    });
+  }
+
+  return this.save();
+};
+
+/**
+ * ✅ NUEVO: Obtener configuración completa para un tipo de contrato específico
+ */
+ContractPhaseSchema.methods.getTypeSpecificConfiguration = function (
+  contractTypeId
+) {
+  const config = this.typeSpecificConfig.find(
+    (config) => config.contractType.toString() === contractTypeId.toString()
+  );
+
+  return (
+    config || {
+      contractType: contractTypeId,
+      excludedDocuments: [],
+      additionalDocuments: [],
+      customDuration: undefined,
+      overridePhaseConfig: {},
+    }
+  );
+};
+
+/**
+ * ✅ NUEVO: Validar si una fase aplica a un tipo de contrato específico
+ * (Sobrescribe el método existente para mejor funcionalidad)
+ */
+ContractPhaseSchema.methods.isApplicableToContractType = function (
+  contractTypeId
+) {
+  // Si no hay configuraciones específicas, aplica a todos
+  if (!this.typeSpecificConfig || this.typeSpecificConfig.length === 0) {
+    return true;
+  }
+
+  // Si tiene configuraciones específicas, verificar si este tipo está incluido
+  return this.typeSpecificConfig.some(
+    (config) => config.contractType.toString() === contractTypeId.toString()
+  );
+};
+
+/**
+ * ✅ NUEVO: Limpiar configuración para un tipo de contrato
+ */
+ContractPhaseSchema.methods.removeTypeSpecificConfiguration = function (
+  contractTypeId
+) {
+  this.typeSpecificConfig = this.typeSpecificConfig.filter(
+    (config) => config.contractType.toString() !== contractTypeId.toString()
+  );
+
+  return this.save();
+};
+
+/**
+ * ✅ NUEVO: Obtener todos los tipos de contrato configurados
+ */
+ContractPhaseSchema.methods.getConfiguredContractTypes = function () {
+  return this.typeSpecificConfig.map((config) => config.contractType);
+};
+
+/**
+ * ✅ NUEVO: Validar integridad de configuraciones específicas
+ */
+ContractPhaseSchema.methods.validateTypeSpecificConfigurations = function () {
+  const errors = [];
+
+  this.typeSpecificConfig.forEach((config, index) => {
+    // Validar que contractType sea válido
+    if (!config.contractType) {
+      errors.push(`Configuración ${index}: contractType es requerido`);
+    }
+
+    // Validar duración si está definida
+    if (config.customDuration !== undefined) {
+      if (
+        typeof config.customDuration !== "number" ||
+        config.customDuration < 1 ||
+        config.customDuration > 365
+      ) {
+        errors.push(
+          `Configuración ${index}: customDuration debe estar entre 1 y 365`
+        );
+      }
+    }
+
+    // Validar documentos excluidos
+    if (config.excludedDocuments && !Array.isArray(config.excludedDocuments)) {
+      errors.push(
+        `Configuración ${index}: excludedDocuments debe ser un array`
+      );
+    }
+
+    // Validar documentos adicionales
+    if (config.additionalDocuments) {
+      if (!Array.isArray(config.additionalDocuments)) {
+        errors.push(
+          `Configuración ${index}: additionalDocuments debe ser un array`
+        );
+      } else {
+        config.additionalDocuments.forEach((doc, docIndex) => {
+          if (!doc.code || !doc.name) {
+            errors.push(
+              `Configuración ${index}, documento ${docIndex}: code y name son requeridos`
+            );
+          }
+        });
+      }
+    }
+  });
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
 };
 
 // === MÉTODOS ESTÁTICOS ===

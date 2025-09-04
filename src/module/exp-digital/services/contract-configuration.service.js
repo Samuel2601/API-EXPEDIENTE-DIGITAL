@@ -448,28 +448,25 @@ export class ContractConfigurationService {
     try {
       const {
         includeInactive = false,
-        category = null,
+        regime = null,
         page = 1,
         limit = 50,
       } = options;
 
       console.log(`📋 Obteniendo tipos de contratación:`, options);
 
-      if (category) {
-        const types = await this.contractTypeRepository.findByCategory(
-          category,
-          {
-            includeInactive,
-            page,
-            limit,
-          }
-        );
+      if (regime) {
+        const types = await this.contractTypeRepository.findByRegimen(regime, {
+          includeInactive,
+          page,
+          limit,
+        });
 
         return {
-          [category.toLowerCase()]: {
-            category,
+          [regime.toLowerCase()]: {
+            regime,
             description:
-              category === "COMMON"
+              regime === "COMUN"
                 ? "Procedimientos Comunes según LOSNCP"
                 : "Procedimientos Especiales según LOSNCP",
             types: types.docs || types,
@@ -482,12 +479,12 @@ export class ContractConfigurationService {
       }
 
       const [commonTypes, specialTypes] = await Promise.all([
-        this.contractTypeRepository.findByCategory("COMMON", {
+        this.contractTypeRepository.findByRegimen("COMUN", {
           includeInactive,
           page: 1,
           limit: 100,
         }),
-        this.contractTypeRepository.findByCategory("SPECIAL", {
+        this.contractTypeRepository.findByRegimen("ESPECIAL", {
           includeInactive,
           page: 1,
           limit: 100,
@@ -495,14 +492,14 @@ export class ContractConfigurationService {
       ]);
 
       return {
-        common: {
-          category: "COMMON",
+        comun: {
+          regime: "COMUN",
           description: "Procedimientos Comunes según LOSNCP",
           types: commonTypes.docs || commonTypes,
           count: commonTypes.totalDocs || commonTypes.length,
         },
-        special: {
-          category: "SPECIAL",
+        especial: {
+          regime: "ESPECIAL",
           description: "Procedimientos Especiales según LOSNCP",
           types: specialTypes.docs || specialTypes,
           count: specialTypes.totalDocs || specialTypes.length,
@@ -905,6 +902,7 @@ export class ContractConfigurationService {
       if (contractTypeCode) {
         const contractType =
           await this.contractTypeRepository.findByCode(contractTypeCode);
+        console.log("Buscando contracType", contractType);
         if (contractType) {
           return await this.contractPhaseRepository.findForContractType(
             contractType._id,
@@ -1457,10 +1455,10 @@ export class ContractConfigurationService {
   }
 
   async _createPhaseWithConfiguration(phaseData, userData) {
-    // Separar configuración específica de datos base
-    const { documentsExceptions, durationByType, ...basePhaseData } = phaseData;
+    // Separar configuraciones específicas de los datos base
+    const { typeSpecificConfig, ...basePhaseData } = phaseData;
 
-    // Crear fase base
+    // Crear fase base sin las configuraciones específicas
     const createdPhase = await this.createContractPhase(
       basePhaseData,
       {},
@@ -1468,54 +1466,89 @@ export class ContractConfigurationService {
     );
 
     // ✅ Aplicar configuraciones específicas si existen
-    if (documentsExceptions && Object.keys(documentsExceptions).length > 0) {
-      for (const [typeCode, exceptions] of Object.entries(
-        documentsExceptions
-      )) {
+    if (typeSpecificConfig && typeSpecificConfig.length > 0) {
+      for (const config of typeSpecificConfig) {
         try {
-          const contractType =
-            await this.contractTypeRepository.findByCode(typeCode);
+          // Resolver el código del tipo de contrato a ObjectId
+          const contractType = await this.contractTypeRepository.findByCode(
+            config.contractType
+          );
 
-          if (contractType && exceptions.length > 0) {
-            await this.contractPhaseRepository.addDocumentExceptions(
+          if (contractType) {
+            // Preparar configuración con ObjectId
+            const configWithObjectId = {
+              ...config,
+              contractType: contractType._id,
+            };
+
+            // Usar método del repository para agregar configuración
+            await this.contractPhaseRepository.addTypeSpecificConfiguration(
               createdPhase._id,
-              contractType._id,
-              exceptions,
+              configWithObjectId,
               userData
+            );
+          } else {
+            console.warn(
+              `Tipo de contrato no encontrado: ${config.contractType}`
             );
           }
         } catch (error) {
           console.warn(
-            `Error aplicando excepciones para ${typeCode}:`,
+            `Error aplicando configuración para ${config.contractType}:`,
             error.message
           );
         }
       }
     }
 
-    if (durationByType && Object.keys(durationByType).length > 0) {
-      for (const [typeCode, duration] of Object.entries(durationByType)) {
-        try {
-          const contractType =
-            await this.contractTypeRepository.findByCode(typeCode);
-          if (contractType && duration > 0) {
-            await this.contractPhaseRepository.setDurationForType(
-              createdPhase._id,
-              contractType._id,
-              duration,
-              userData
-            );
-          }
-        } catch (error) {
-          console.warn(
-            `Error aplicando duración para ${typeCode}:`,
-            error.message
-          );
+    return await this.contractPhaseRepository.findById(createdPhase._id);
+  }
+
+  /**
+   * ✅ NUEVO: Método auxiliar para migrar configuraciones existentes
+   * Convierte el formato antiguo al nuevo si es necesario
+   */
+  _convertLegacyConfiguration(phaseData) {
+    // Si ya está en el formato nuevo, devolverlo tal como está
+    if (phaseData.typeSpecificConfig) {
+      return phaseData;
+    }
+
+    // Convertir formato legacy (documentsExceptions + durationByType)
+    const typeSpecificConfig = [];
+
+    if (phaseData.documentsExceptions || phaseData.durationByType) {
+      const allTypes = new Set([
+        ...Object.keys(phaseData.documentsExceptions || {}),
+        ...Object.keys(phaseData.durationByType || {}),
+      ]);
+
+      for (const contractTypeCode of allTypes) {
+        const config = {
+          contractType: contractTypeCode,
+        };
+
+        if (phaseData.documentsExceptions?.[contractTypeCode]) {
+          config.excludedDocuments =
+            phaseData.documentsExceptions[contractTypeCode];
         }
+
+        if (phaseData.durationByType?.[contractTypeCode]) {
+          config.customDuration = phaseData.durationByType[contractTypeCode];
+        }
+
+        typeSpecificConfig.push(config);
       }
     }
 
-    return createdPhase;
+    // Remover propiedades legacy y agregar la nueva
+    const { documentsExceptions, durationByType, ...cleanPhaseData } =
+      phaseData;
+
+    return {
+      ...cleanPhaseData,
+      typeSpecificConfig,
+    };
   }
 
   async _getAlternativeTypes(amount, contractObject) {
@@ -1938,211 +1971,198 @@ export class ContractConfigurationService {
         order: 1,
         description:
           "Planificación anual, estudios preliminares y estimación de costos",
-        isRequired: true,
-        estimatedDuration: 10,
+        phaseConfig: {
+          isOptional: false,
+          allowParallel: false,
+          estimatedDays: 10,
+          requiresApproval: true,
+          autoAdvance: false,
+          notificationDays: 3,
+        },
         requiredDocuments: [
           "Plan Anual de Contrataciones",
           "Estudios de Mercado",
           "Estimación de Costos",
-        ].map((doc) => ({ code: `PLAN_${slugify(doc)}`, name: doc })),
-        applicableContractTypes: allContractTypes,
-        documentsExceptions: {
-          INFIMA_CUANTIA: ["PLAN_ESTUDIOS_DE_MERCADO"],
-          MENOR_CUANTIA: ["PLAN_ESTUDIOS_DE_MERCADO"],
-          SUBASTA_INVERSA_NORMALIZADA: ["PLAN_ESTUDIOS_DE_MERCADO"],
-          SUBASTA_INVERSA_NO_NORMALIZADA: ["PLAN_ESTUDIOS_DE_MERCADO"],
-          LICITACION_PUBLICA: ["PLAN_ESTUDIOS_DE_MERCADO"],
-          OBRAS_COTIZACION: ["PLAN_ESTUDIOS_DE_MERCADO"],
-          OBRAS_LICITACION: ["PLAN_ESTUDIOS_DE_MERCADO"],
-          CONSULTORIA_DIRECTA: ["PLAN_ESTUDIOS_DE_MERCADO"],
-          CONSULTORIA_LISTA_CORTA: ["PLAN_ESTUDIOS_DE_MERCADO"],
-          CONCURSO_PUBLICO_CONSULTORIA: ["PLAN_ESTUDIOS_DE_MERCADO"],
-          CATALOGO_ELECTRONICO: ["PLAN_ESTUDIOS_DE_MERCADO"],
-          CONTRATACION_DIRECTA_ESP: ["PLAN_ESTUDIOS_DE_MERCADO"],
-          ENCARGO_CONFIANZA_ESP: ["PLAN_ESTUDIOS_DE_MERCADO"],
-          OBRAS_ARTISTICAS_ESP: ["PLAN_ESTUDIOS_DE_MERCADO"],
-          INVESTIGACION_CIENTIFICA_ESP: ["PLAN_ESTUDIOS_DE_MERCADO"],
-          FERIAS_INCLUSIVAS: ["PLAN_ESTUDIOS_DE_MERCADO"],
-        },
+        ].map((doc) => ({
+          code: `PLAN_${slugify(doc)}`,
+          name: doc,
+          isMandatory: true,
+          allowedFileTypes: ["pdf", "docx"],
+          maxFileSize: 10485760,
+        })),
+        // ✅ NUEVO: Configuraciones específicas usando typeSpecificConfig
+        typeSpecificConfig: [
+          {
+            contractType: "INFIMA_CUANTIA", // Se resolverá a ObjectId en _createPhaseWithConfiguration
+            excludedDocuments: ["PLAN_ESTUDIOS_DE_MERCADO"],
+            customDuration: 5,
+          },
+          {
+            contractType: "MENOR_CUANTIA",
+            excludedDocuments: ["PLAN_ESTUDIOS_DE_MERCADO"],
+            customDuration: 7,
+          },
+          {
+            contractType: "LICITACION_PUBLICA",
+            customDuration: 15,
+          },
+        ],
       },
 
-      // FASE DE PREPARACIÓN
+      // FASE PREPARATORIA
       {
         code: "PREP",
-        name: "Fase de Preparación",
-        shortName: "Preparación",
+        name: "Fase Preparatoria",
+        shortName: "Preparatoria",
         category: "PREPARACION",
         order: 2,
         description:
-          "Definición de necesidades, elaboración de bases y aprobación del proceso",
-        isRequired: true,
-        estimatedDuration: 10,
-        requiredDocuments: [
-          "Términos de Referencia / Especificaciones Técnicas",
-          "Resolución de Inicio de Proceso",
-          "Informe de Necesidad / Justificación",
-        ].map((doc) => ({ code: `PREP_${slugify(doc)}`, name: doc })),
-        applicableContractTypes: allContractTypes,
-        documentsExceptions: {
-          INFIMA_CUANTIA: ["PREP_ESTUDIOS_DE_MERCADO"],
-          MENOR_CUANTIA: ["PREP_ESTUDIOS_DE_MERCADO"],
-          SUBASTA_INVERSA_NORMALIZADA: ["PREP_ESTUDIOS_DE_MERCADO"],
-          SUBASTA_INVERSA_NO_NORMALIZADA: ["PREP_ESTUDIOS_DE_MERCADO"],
-          LICITACION_PUBLICA: ["PREP_ESTUDIOS_DE_MERCADO"],
-          OBRAS_COTIZACION: ["PREP_ESTUDIOS_DE_MERCADO"],
-          OBRAS_LICITACION: ["PREP_ESTUDIOS_DE_MERCADO"],
-          CONSULTORIA_DIRECTA: ["PREP_ESTUDIOS_DE_MERCADO"],
-          CONSULTORIA_LISTA_CORTA: ["PREP_ESTUDIOS_DE_MERCADO"],
-          CONCURSO_PUBLICO_CONSULTORIA: ["PREP_ESTUDIOS_DE_MERCADO"],
-          CATALOGO_ELECTRONICO: ["PREP_ESTUDIOS_DE_MERCADO"],
-          CONTRATACION_DIRECTA_ESP: ["PREP_ESTUDIOS_DE_MERCADO"],
-          ENCARGO_CONFIANZA_ESP: ["PREP_ESTUDIOS_DE_MERCADO"],
-          OBRAS_ARTISTICAS_ESP: ["PREP_ESTUDIOS_DE_MERCADO"],
-          INVESTIGACION_CIENTIFICA_ESP: ["PREP_ESTUDIOS_DE_MERCADO"],
-          FERIAS_INCLUSIVAS: ["PREP_ESTUDIOS_DE_MERCADO"],
+          "Elaboración de estudios técnicos, términos de referencia y especificaciones",
+        phaseConfig: {
+          isOptional: false,
+          allowParallel: true,
+          estimatedDays: 15,
+          requiresApproval: true,
+          autoAdvance: false,
+          notificationDays: 3,
         },
+        requiredDocuments: [
+          "Certificación Presupuestaria",
+          "Términos de Referencia",
+          "Especificaciones Técnicas",
+          "Resolución de Inicio",
+          "Estudio de Desagregación Tecnológica",
+        ].map((doc) => ({
+          code: `PREP_${slugify(doc)}`,
+          name: doc,
+          isMandatory: true,
+          allowedFileTypes: ["pdf", "docx"],
+          maxFileSize: 10485760,
+        })),
+        typeSpecificConfig: [
+          {
+            contractType: "INFIMA_CUANTIA",
+            excludedDocuments: ["PREP_ESTUDIO_DE_DESAGREGACION_TECNOLOGICA"],
+            customDuration: 5,
+          },
+          {
+            contractType: "MENOR_CUANTIA",
+            excludedDocuments: ["PREP_ESTUDIO_DE_DESAGREGACION_TECNOLOGICA"],
+            customDuration: 8,
+          },
+          {
+            contractType: "CONSULTORIA_DIRECTA",
+            additionalDocuments: [
+              {
+                code: "PREP_PERFIL_CONSULTOR",
+                name: "Perfil del Consultor",
+                isMandatory: true,
+                allowedFileTypes: ["pdf"],
+                maxFileSize: 5242880,
+              },
+            ],
+            customDuration: 20,
+          },
+        ],
       },
 
-      // FASE DE CONVOCATORIA
+      // FASE PRECONTRACTUAL
       {
-        code: "CONVOC",
-        name: "Fase de Convocatoria",
-        shortName: "Convocatoria",
+        code: "PRECON",
+        name: "Fase Precontractual",
+        shortName: "Precontractual",
         category: "CONVOCATORIA",
         order: 3,
-        description: "Publicación de la licitación o invitación a participar",
-        isRequired: true,
-        estimatedDuration: 5,
-        requiredDocuments: [
-          "Pliegos / Documento de Convocatoria",
-          "Preguntas y Respuestas / Aclaraciones",
-          "Registro de Participantes",
-        ].map((doc) => ({ code: `CONVOC_${slugify(doc)}`, name: doc })),
-        applicableContractTypes: allContractTypes,
-        documentsExceptions: {
-          INFIMA_CUANTIA: ["CONVOC_PREGUNTAS_Y_RESPUESTAS_ACLARACIONES"],
-          MENOR_CUANTIA: ["CONVOC_PREGUNTAS_Y_RESPUESTAS_ACLARACIONES"],
-          SUBASTA_INVERSA_NORMALIZADA: [
-            "CONVOC_PREGUNTAS_Y_RESPUESTAS_ACLARACIONES",
-          ],
-          SUBASTA_INVERSA_NO_NORMALIZADA: [
-            "CONVOC_PREGUNTAS_Y_RESPUESTAS_ACLARACIONES",
-          ],
-          LICITACION_PUBLICA: [],
-          OBRAS_COTIZACION: [],
-          OBRAS_LICITACION: [],
-          CONSULTORIA_DIRECTA: [],
-          CONSULTORIA_LISTA_CORTA: [],
-          CONCURSO_PUBLICO_CONSULTORIA: [],
-          CATALOGO_ELECTRONICO: [],
-          CONTRATACION_DIRECTA_ESP: [],
-          ENCARGO_CONFIANZA_ESP: [],
-          OBRAS_ARTISTICAS_ESP: [],
-          INVESTIGACION_CIENTIFICA_ESP: [],
-          FERIAS_INCLUSIVAS: [],
+        description: "Convocatoria, recepción y evaluación de ofertas",
+        phaseConfig: {
+          isOptional: false,
+          allowParallel: false,
+          estimatedDays: 20,
+          requiresApproval: true,
+          autoAdvance: false,
+          notificationDays: 5,
         },
-      },
-
-      // FASE DE EVALUACIÓN
-      {
-        code: "EVAL",
-        name: "Fase de Evaluación",
-        shortName: "Evaluación",
-        category: "EVALUACION",
-        order: 4,
-        description: "Evaluación técnica, financiera y legal de las ofertas",
-        isRequired: true,
-        estimatedDuration: 10,
         requiredDocuments: [
-          "Ofertas / Propuestas de proveedores",
+          "Pliegos",
+          "Ofertas Recibidas",
+          "Preguntas y Respuestas",
           "Informe de Evaluación",
-        ].map((doc) => ({ code: `EVAL_${slugify(doc)}`, name: doc })),
-        applicableContractTypes: allContractTypes,
-        documentsExceptions: {
-          INFIMA_CUANTIA: ["EVAL_INFORME_DE_EVALUACION"],
-          MENOR_CUANTIA: ["EVAL_INFORME_DE_EVALUACION"],
-          SUBASTA_INVERSA_NORMALIZADA: ["EVAL_INFORME_DE_EVALUACION"],
-          SUBASTA_INVERSA_NO_NORMALIZADA: ["EVAL_INFORME_DE_EVALUACION"],
-          LICITACION_PUBLICA: [],
-          OBRAS_COTIZACION: [],
-          OBRAS_LICITACION: [],
-          CONSULTORIA_DIRECTA: [],
-          CONSULTORIA_LISTA_CORTA: [],
-          CONCURSO_PUBLICO_CONSULTORIA: [],
-          CATALOGO_ELECTRONICO: [],
-          CONTRATACION_DIRECTA_ESP: [],
-          ENCARGO_CONFIANZA_ESP: [],
-          OBRAS_ARTISTICAS_ESP: [],
-          INVESTIGACION_CIENTIFICA_ESP: [],
-          FERIAS_INCLUSIVAS: [],
-        },
+          "Adjudicación",
+        ].map((doc) => ({
+          code: `PRECON_${slugify(doc)}`,
+          name: doc,
+          isMandatory: true,
+          allowedFileTypes: ["pdf", "docx", "xlsx"],
+          maxFileSize: 15728640,
+        })),
+        typeSpecificConfig: [
+          {
+            contractType: "INFIMA_CUANTIA",
+            excludedDocuments: [
+              "PRECON_PLIEGOS",
+              "PRECON_INFORME_DE_EVALUACION",
+            ],
+            customDuration: 3,
+          },
+          {
+            contractType: "SUBASTA_INVERSA_NORMALIZADA",
+            customDuration: 15,
+          },
+          {
+            contractType: "LICITACION_PUBLICA",
+            customDuration: 30,
+          },
+        ],
       },
 
-      // FASE DE ADJUDICACIÓN
-      {
-        code: "ADJ",
-        name: "Fase de Adjudicación",
-        shortName: "Adjudicación",
-        category: "ADJUDICACION",
-        order: 5,
-        description: "Decisión final, notificación y firma de contrato",
-        isRequired: true,
-        estimatedDuration: 5,
-        requiredDocuments: [
-          "Acta de Adjudicación",
-          "Notificación al proveedor",
-          "Contrato firmado",
-        ].map((doc) => ({ code: `ADJ_${slugify(doc)}`, name: doc })),
-        applicableContractTypes: allContractTypes,
-        documentsExceptions: allContractTypes.reduce((acc, code) => {
-          acc[code] = [];
-          return acc;
-        }, {}),
-      },
-
-      // FASE DE EJECUCIÓN
+      // FASE CONTRACTUAL
       {
         code: "EJEC",
-        name: "Fase de Ejecución",
+        name: "Fase Contractual/Ejecución",
         shortName: "Ejecución",
         category: "EJECUCION",
-        order: 6,
-        description: "Ejecución del contrato, seguimiento y control",
-        isRequired: true,
-        estimatedDuration: 90,
-        requiredDocuments: [
-          "Cronograma Valorado de Trabajos",
-          "Informes de Fiscalización / Administración",
-          "Garantías (Fiel cumplimiento, Técnica, etc.)",
-        ].map((doc) => ({ code: `EJEC_${slugify(doc)}`, name: doc })),
-        applicableContractTypes: allContractTypes,
-        documentsExceptions: {
-          INFIMA_CUANTIA: [
-            "EJEC_GARANTIAS_FIEL_CUMPLIMIENTO_TECNICA_ETC",
-            "EJEC_CRONOGRAMA_VALORADO_DE_TRABAJOS",
-          ],
-          MENOR_CUANTIA: ["EJEC_CRONOGRAMA_VALORADO_DE_TRABAJOS"],
-          SUBASTA_INVERSA_NORMALIZADA: ["EJEC_CRONOGRAMA_VALORADO_DE_TRABAJOS"],
-          SUBASTA_INVERSA_NO_NORMALIZADA: [
-            "EJEC_CRONOGRAMA_VALORADO_DE_TRABAJOS",
-          ],
-          LICITACION_PUBLICA: ["EJEC_CRONOGRAMA_VALORADO_DE_TRABAJOS"],
-          OBRAS_COTIZACION: ["EJEC_CRONOGRAMA_VALORADO_DE_TRABAJOS"],
-          OBRAS_LICITACION: ["EJEC_CRONOGRAMA_VALORADO_DE_TRABAJOS"],
-          CONSULTORIA_DIRECTA: ["EJEC_CRONOGRAMA_VALORADO_DE_TRABAJOS"],
-          CONSULTORIA_LISTA_CORTA: ["EJEC_CRONOGRAMA_VALORADO_DE_TRABAJOS"],
-          CONCURSO_PUBLICO_CONSULTORIA: [
-            "EJEC_CRONOGRAMA_VALORADO_DE_TRABAJOS",
-          ],
-          CATALOGO_ELECTRONICO: ["EJEC_CRONOGRAMA_VALORADO_DE_TRABAJOS"],
-          CONTRATACION_DIRECTA_ESP: ["EJEC_CRONOGRAMA_VALORADO_DE_TRABAJOS"],
-          ENCARGO_CONFIANZA_ESP: ["EJEC_CRONOGRAMA_VALORADO_DE_TRABAJOS"],
-          OBRAS_ARTISTICAS_ESP: ["EJEC_CRONOGRAMA_VALORADO_DE_TRABAJOS"],
-          INVESTIGACION_CIENTIFICA_ESP: [
-            "EJEC_CRONOGRAMA_VALORADO_DE_TRABAJOS",
-          ],
-          FERIAS_INCLUSIVAS: ["EJEC_CRONOGRAMA_VALORADO_DE_TRABAJOS"],
+        order: 4,
+        description: "Ejecución del contrato, entregables y seguimiento",
+        phaseConfig: {
+          isOptional: false,
+          allowParallel: true,
+          estimatedDays: 90,
+          requiresApproval: false,
+          autoAdvance: false,
+          notificationDays: 7,
         },
+        requiredDocuments: [
+          "Contrato Firmado",
+          "Garantías",
+          "Cronograma Valorado",
+          "Actas Entrega Parcial",
+          "Informes de Fiscalización",
+        ].map((doc) => ({
+          code: `EJEC_${slugify(doc)}`,
+          name: doc,
+          isMandatory: doc !== "Actas Entrega Parcial",
+          allowedFileTypes: ["pdf", "docx", "xlsx"],
+          maxFileSize: 20971520,
+        })),
+        typeSpecificConfig: [
+          {
+            contractType: "OBRAS_LICITACION",
+            additionalDocuments: [
+              {
+                code: "EJEC_PLANILLAS_AVANCE",
+                name: "Planillas de Avance",
+                isMandatory: true,
+                allowedFileTypes: ["xlsx", "pdf"],
+                maxFileSize: 10485760,
+              },
+            ],
+            customDuration: 180,
+          },
+          {
+            contractType: "CONSULTORIA_DIRECTA",
+            customDuration: 60,
+          },
+        ],
       },
 
       // FASE DE LIQUIDACIÓN
@@ -2151,58 +2171,43 @@ export class ContractConfigurationService {
         name: "Fase de Liquidación",
         shortName: "Liquidación",
         category: "LIQUIDACION",
-        order: 7,
-        description: "Recepción definitiva, cierre y liquidación del contrato",
-        isRequired: true,
-        estimatedDuration: 10,
-        requiredDocuments: [
-          "Acta de Entrega Recepción Definitiva",
-          "Informe Final de Fiscalización",
-          "Devolución de Garantías",
-        ].map((doc) => ({ code: `LIQ_${slugify(doc)}`, name: doc })),
-        applicableContractTypes: allContractTypes,
-        documentsExceptions: {
-          INFIMA_CUANTIA: [
-            "LIQ_DEVOLUCION_DE_GARANTIAS",
-            "LIQ_INFORME_FINAL_DE_FISCALIZACION",
-          ],
-          MENOR_CUANTIA: ["LIQ_DEVOLUCION_DE_GARANTIAS"],
-          SUBASTA_INVERSA_NORMALIZADA: ["LIQ_DEVOLUCION_DE_GARANTIAS"],
-          SUBASTA_INVERSA_NO_NORMALIZADA: ["LIQ_DEVOLUCION_DE_GARANTIAS"],
-          LICITACION_PUBLICA: ["LIQ_DEVOLUCION_DE_GARANTIAS"],
-          OBRAS_COTIZACION: ["LIQ_DEVOLUCION_DE_GARANTIAS"],
-          OBRAS_LICITACION: ["LIQ_DEVOLUCION_DE_GARANTIAS"],
-          CONSULTORIA_DIRECTA: ["LIQ_DEVOLUCION_DE_GARANTIAS"],
-          CONSULTORIA_LISTA_CORTA: ["LIQ_DEVOLUCION_DE_GARANTIAS"],
-          CONCURSO_PUBLICO_CONSULTORIA: ["LIQ_DEVOLUCION_DE_GARANTIAS"],
-          CATALOGO_ELECTRONICO: ["LIQ_DEVOLUCION_DE_GARANTIAS"],
-          CONTRATACION_DIRECTA_ESP: ["LIQ_DEVOLUCION_DE_GARANTIAS"],
-          ENCARGO_CONFIANZA_ESP: ["LIQ_DEVOLUCION_DE_GARANTIAS"],
-          OBRAS_ARTISTICAS_ESP: ["LIQ_DEVOLUCION_DE_GARANTIAS"],
-          INVESTIGACION_CIENTIFICA_ESP: ["LIQ_DEVOLUCION_DE_GARANTIAS"],
-          FERIAS_INCLUSIVAS: ["LIQ_DEVOLUCION_DE_GARANTIAS"],
+        order: 5,
+        description: "Recepción definitiva, liquidación y cierre del proceso",
+        phaseConfig: {
+          isOptional: false,
+          allowParallel: false,
+          estimatedDays: 15,
+          requiresApproval: true,
+          autoAdvance: false,
+          notificationDays: 3,
         },
-      },
-
-      // FASE DE ARCHIVO
-      {
-        code: "ARCH",
-        name: "Fase de Archivo",
-        shortName: "Archivo",
-        category: "ARCHIVO",
-        order: 8,
-        description: "Archivo del expediente y cierre documental",
-        isRequired: true,
-        estimatedDuration: 5,
         requiredDocuments: [
-          "Expediente Completo Archivado",
-          "Resumen del Proceso",
-        ].map((doc) => ({ code: `ARCH_${slugify(doc)}`, name: doc })),
-        applicableContractTypes: allContractTypes,
-        documentsExceptions: allContractTypes.reduce((acc, code) => {
-          acc[code] = [];
-          return acc;
-        }, {}),
+          "Acta Entrega Recepción Definitiva",
+          "Liquidación del Contrato",
+          "Informe Final Fiscalización",
+          "Devolución Garantías",
+        ].map((doc) => ({
+          code: `LIQ_${slugify(doc)}`,
+          name: doc,
+          isMandatory: true,
+          allowedFileTypes: ["pdf", "docx"],
+          maxFileSize: 10485760,
+        })),
+        typeSpecificConfig: [
+          {
+            contractType: "OBRAS_LICITACION",
+            additionalDocuments: [
+              {
+                code: "LIQ_PLANOS_AS_BUILT",
+                name: "Planos As Built",
+                isMandatory: true,
+                allowedFileTypes: ["pdf", "dwg"],
+                maxFileSize: 52428800,
+              },
+            ],
+            customDuration: 30,
+          },
+        ],
       },
     ];
   }

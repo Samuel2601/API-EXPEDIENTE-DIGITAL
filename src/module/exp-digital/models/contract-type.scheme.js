@@ -406,8 +406,8 @@ ContractTypeSchema.statics.findByCategory = function (category) {
   return this.findActive({ category: category.toUpperCase() });
 };
 
-ContractTypeSchema.statics.findByRegimen = function (regimen) {
-  return this.findActive({ regimen: regimen.toUpperCase() });
+ContractTypeSchema.statics.findByRegimen = function (regime) {
+  return this.findActive({ regime: regime.toUpperCase() });
 };
 
 ContractTypeSchema.statics.getActiveOrderedList = function () {

@@ -53,7 +53,7 @@ export class ContractTypeRepository extends BaseRepository {
         lean = true,
       } = options;
 
-      let query = this.model.find().byCategory(category).sequential();
+      let query = this.model.findByCategory(category);
 
       if (!includeInactive) {
         query = query.where({ isActive: true });
@@ -80,7 +80,7 @@ export class ContractTypeRepository extends BaseRepository {
       } = options;
 
       // ✅ Usar query helper del esquema con ordenamiento secuencial
-      let query = this.model.find().byRegimen(regimen).sequential();
+      let query = this.model.findByRegimen(regimen);
 
       if (!includeInactive) {
         query = query.where({ isActive: true });
