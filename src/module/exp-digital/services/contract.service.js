@@ -24,6 +24,7 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { FileRepository } from "../repositories/file.repository.js";
+import { Types } from "mongoose";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -3619,7 +3620,7 @@ export class ContractService {
       this._applyPermissionFilters(baseFilters, options.permissions);
 
       // Obtener estadísticas rápidas
-      const quickStats = await this.contractRepository.aggregate([
+      const quickStats = await this.contractRepository.getStatsWithAggregation([
         { $match: baseFilters },
         {
           $group: {
@@ -3643,22 +3644,29 @@ export class ContractService {
       ]);
 
       // Contratos recientes
-      const recentContracts = await this.contractRepository.find(baseFilters, {
-        limit: 10,
-        sort: "-createdAt",
-        populate: [
-          { path: "contractType", select: "name" },
-          { path: "currentPhase", select: "name" },
-          { path: "requestingDepartment", select: "name" },
-        ],
-      });
-
+      const recentContracts = await this.contractRepository.findAdvanced(
+        baseFilters,
+        {
+          limit: 10,
+          sort: "-createdAt",
+          populate: [
+            { path: "contractType", select: "name" },
+            { path: "currentPhase", select: "name" },
+            { path: "requestingDepartment", select: "name" },
+          ],
+        }
+      );
+      console.log(
+        "🏠 Service: Datos recientes de contratos:",
+        recentContracts.totalDocs
+      );
       // Contratos por estado
-      const statusDistribution = await this.contractRepository.aggregate([
-        { $match: baseFilters },
-        { $group: { _id: "$generalStatus", count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-      ]);
+      const statusDistribution =
+        await this.contractRepository.getStatsWithAggregation([
+          { $match: baseFilters },
+          { $group: { _id: "$generalStatus", count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+        ]);
 
       // Acciones pendientes (básico)
       const pendingActions = await this.getPendingActions({
@@ -3674,7 +3682,7 @@ export class ContractService {
           completed: 0,
           totalBudget: 0,
         },
-        recentContracts: recentContracts.map((contract) => ({
+        recentContracts: recentContracts.docs.map((contract) => ({
           _id: contract._id,
           contractNumber: contract.contractNumber,
           contractualObject: contract.contractualObject,
@@ -3738,7 +3746,7 @@ export class ContractService {
         }
       }
 
-      const actions = await this.contractRepository.paginate(filters, {
+      const actions = await this.contractRepository.findAdvanced(filters, {
         page: options.page || 1,
         limit: options.limit || 20,
         sort: "timeline.expectedCompletion",

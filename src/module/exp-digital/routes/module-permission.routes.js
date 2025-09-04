@@ -25,12 +25,12 @@ router.use(verifyModuleAccess);
  */
 router.post(
   "/accesses",
-  requirePermission({
+  /*requirePermission({
     category: "contracts",
     permission: "canCreate",
     departmentParam: "department",
     errorMessage: "No tiene permisos para crear accesos en este departamento",
-  }),
+  }),*/
   ModulePermissionController.createUserDepartmentAccess
 );
 

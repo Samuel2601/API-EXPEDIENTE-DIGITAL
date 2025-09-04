@@ -66,6 +66,139 @@ router.get(
   controller.getAllContracts
 );
 
+// =============================================================================
+// ESTADÍSTICAS Y REPORTES
+// =============================================================================
+
+/**
+ * GET /contracts/statistics/overview
+ * Obtener estadísticas generales de contratos
+ * Query params: period, department, includeFinancial
+ * Permisos: contracts.canViewOwn/canViewDepartment/canViewAll
+ */
+router.get("/statistics/overview", controller.getContractStatistics);
+
+/**
+ * GET /contracts/statistics/department/:departmentId
+ * Estadísticas específicas por departamento
+ * Permisos: contracts.canViewDepartment/canViewAll
+ */
+router.get(
+  "/statistics/department/:departmentId",
+  controller.getDepartmentStatistics
+);
+
+/**
+ * GET /contracts/statistics/phases
+ * Estadísticas por fases de contratación
+ * Query params: contractType, period
+ * Permisos: contracts.canViewOwn/canViewDepartment/canViewAll
+ */
+router.get("/statistics/phases", controller.getPhaseStatistics);
+
+/**
+ * GET /contracts/statistics/financial
+ * Estadísticas financieras
+ * Query params: period, groupBy
+ * Permisos: special.canViewFinancialData
+ */
+router.get("/statistics/financial", controller.getFinancialStatistics);
+
+// =============================================================================
+// REPORTES Y EXPORTACIÓN
+// =============================================================================
+
+/**
+ * GET /contracts/reports/export
+ * Exportar reporte de contratos
+ * Query params: format, filters, fields
+ * Permisos: special.canExportData
+ */
+router.get(
+  "/reports/export",
+  requirePermission({
+    category: "special",
+    permission: "canExportData",
+    errorMessage: "No tiene permisos para exportar datos",
+  }),
+  controller.exportContracts
+);
+
+/**
+ * GET /contracts/reports/compliance
+ * Reporte de cumplimiento legal
+ * Query params: period, contractType
+ * Permisos: special.canViewFinancialData
+ */
+router.get("/reports/compliance", controller.getComplianceReport);
+
+/**
+ * GET /contracts/reports/performance
+ * Reporte de rendimiento de contratos
+ * Query params: period, department
+ * Permisos: contracts.canViewDepartment/canViewAll
+ */
+router.get("/reports/performance", controller.getPerformanceReport);
+
+// =============================================================================
+// CONFIGURACIÓN Y UTILIDADES
+// =============================================================================
+
+/**
+ * GET /contracts/configuration
+ * Obtener configuración de tipos y fases
+ * Query params: includeInactive
+ * Permisos: Acceso básico al módulo
+ */
+router.get("/configuration", controller.getContractsConfiguration);
+
+/**
+ * Obtener estadísticas de contratos
+ * GET /contracts/statistics
+ * Permisos: Acceso básico al módulo
+ */
+router.get("/statistics", controller.getContractsStatistics);
+
+/**
+ * GET /contracts/dashboard
+ * Obtener datos para dashboard del usuario
+ * Permisos: Acceso básico al módulo
+ */
+router.get("/dashboard", controller.getContractsDashboard);
+
+/**
+ * GET /contracts/pending-actions
+ * Obtener contratos que requieren acción del usuario
+ * Permisos: contracts.canViewOwn/canViewDepartment
+ */
+router.get("/pending-actions", controller.getPendingActions);
+
+// =============================================================================
+// ENDPOINTS ESPECIALES
+// =============================================================================
+
+/**
+ * POST /contracts/:contractId/duplicate
+ * Duplicar contrato existente
+ * Body: newContractData
+ * Permisos: contracts.canCreate
+ */
+router.post("/:contractId/duplicate", controller.duplicateContract);
+
+/**
+ * POST /contracts/:contractId/archive
+ * Archivar contrato completado
+ * Permisos: contracts.canEdit + validaciones de estado
+ */
+router.post("/:contractId/archive", controller.archiveContract);
+
+/**
+ * POST /contracts/:contractId/restore
+ * Restaurar contrato archivado
+ * Permisos: contracts.canEdit + special permissions
+ */
+router.post("/:contractId/restore", controller.restoreContract);
+
 /**
  * GET /contracts/:contractId
  * Obtener contrato específico con detalles completos
@@ -317,137 +450,5 @@ router.put(
   }),
   controller.updateContractPhase
 );
-// =============================================================================
-// ESTADÍSTICAS Y REPORTES
-// =============================================================================
-
-/**
- * GET /contracts/statistics/overview
- * Obtener estadísticas generales de contratos
- * Query params: period, department, includeFinancial
- * Permisos: contracts.canViewOwn/canViewDepartment/canViewAll
- */
-router.get("/statistics/overview", controller.getContractStatistics);
-
-/**
- * GET /contracts/statistics/department/:departmentId
- * Estadísticas específicas por departamento
- * Permisos: contracts.canViewDepartment/canViewAll
- */
-router.get(
-  "/statistics/department/:departmentId",
-  controller.getDepartmentStatistics
-);
-
-/**
- * GET /contracts/statistics/phases
- * Estadísticas por fases de contratación
- * Query params: contractType, period
- * Permisos: contracts.canViewOwn/canViewDepartment/canViewAll
- */
-router.get("/statistics/phases", controller.getPhaseStatistics);
-
-/**
- * GET /contracts/statistics/financial
- * Estadísticas financieras
- * Query params: period, groupBy
- * Permisos: special.canViewFinancialData
- */
-router.get("/statistics/financial", controller.getFinancialStatistics);
-
-// =============================================================================
-// REPORTES Y EXPORTACIÓN
-// =============================================================================
-
-/**
- * GET /contracts/reports/export
- * Exportar reporte de contratos
- * Query params: format, filters, fields
- * Permisos: special.canExportData
- */
-router.get(
-  "/reports/export",
-  requirePermission({
-    category: "special",
-    permission: "canExportData",
-    errorMessage: "No tiene permisos para exportar datos",
-  }),
-  controller.exportContracts
-);
-
-/**
- * GET /contracts/reports/compliance
- * Reporte de cumplimiento legal
- * Query params: period, contractType
- * Permisos: special.canViewFinancialData
- */
-router.get("/reports/compliance", controller.getComplianceReport);
-
-/**
- * GET /contracts/reports/performance
- * Reporte de rendimiento de contratos
- * Query params: period, department
- * Permisos: contracts.canViewDepartment/canViewAll
- */
-router.get("/reports/performance", controller.getPerformanceReport);
-
-// =============================================================================
-// CONFIGURACIÓN Y UTILIDADES
-// =============================================================================
-
-/**
- * GET /contracts/configuration
- * Obtener configuración de tipos y fases
- * Query params: includeInactive
- * Permisos: Acceso básico al módulo
- */
-router.get("/configuration", controller.getContractsConfiguration);
-
-/**
- * Obtener estadísticas de contratos
- * GET /contracts/statistics
- * Permisos: Acceso básico al módulo
- */
-router.get("/statistics", controller.getContractsStatistics);
-
-/**
- * GET /contracts/dashboard
- * Obtener datos para dashboard del usuario
- * Permisos: Acceso básico al módulo
- */
-router.get("/dashboard", controller.getContractsDashboard);
-
-/**
- * GET /contracts/pending-actions
- * Obtener contratos que requieren acción del usuario
- * Permisos: contracts.canViewOwn/canViewDepartment
- */
-router.get("/pending-actions", controller.getPendingActions);
-
-// =============================================================================
-// ENDPOINTS ESPECIALES
-// =============================================================================
-
-/**
- * POST /contracts/:contractId/duplicate
- * Duplicar contrato existente
- * Body: newContractData
- * Permisos: contracts.canCreate
- */
-router.post("/:contractId/duplicate", controller.duplicateContract);
-
-/**
- * POST /contracts/:contractId/archive
- * Archivar contrato completado
- * Permisos: contracts.canEdit + validaciones de estado
- */
-router.post("/:contractId/archive", controller.archiveContract);
-
-/**
- * POST /contracts/:contractId/restore
- * Restaurar contrato archivado
- * Permisos: contracts.canEdit + special permissions
- */
-router.post("/:contractId/restore", controller.restoreContract);
 
 export default router;
