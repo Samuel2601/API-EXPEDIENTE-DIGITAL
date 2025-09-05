@@ -56,7 +56,7 @@ router.get(
  */
 router.get(
   "/users/:userId/dashboard",
-  (req, res, next) => {
+  /*(req, res, next) => {
     // Permitir que los usuarios vean solo su propio dashboard, a menos que tengan permisos globales
     if (req.user.sub !== req.params.userId) {
       return requireFlexiblePermissions(
@@ -65,7 +65,7 @@ router.get(
       )(req, res, next);
     }
     next();
-  },
+  },*/
   ModulePermissionController.getUserDashboard
 );
 

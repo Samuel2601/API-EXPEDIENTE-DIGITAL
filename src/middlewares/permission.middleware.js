@@ -369,7 +369,10 @@ export const requireFlexiblePermissions = (permissions = [], options = {}) => {
       // Si no hay departmentId y allowGlobal es true, verificar permisos globales
       if (allowGlobal) {
         const userAccesses = await UserDepartmentAccess.getUserAccesses(userId);
-
+        console.log(
+          `🎯 Accesos globales para usuario ${userId}:`,
+          userAccesses
+        );
         if (!userAccesses || userAccesses.length === 0) {
           return res.status(403).json({
             success: false,

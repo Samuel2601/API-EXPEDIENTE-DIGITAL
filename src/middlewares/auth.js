@@ -8,10 +8,20 @@ import path from "path";
 
 var secret = "labella";
 import { fileURLToPath } from "url";
+import mongoose from "mongoose";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ===== MIDDLEWARE DE VERIFICACIÓN DE MÓDULO =====
+
+export const mongooseContextMiddleware = (req, res, next) => {
+  // Guardar el usuario autenticado en el request para uso posterior
+  if (req.user) {
+    // Establecer el contexto de usuario para todas las operaciones Mongoose
+    mongoose.set("user", req.user.userId);
+  }
+  next();
+};
 
 /**
  * Middleware para verificar acceso al módulo
@@ -83,7 +93,7 @@ export const auth = (req, res, next) => {
       req.user = payload;
       req.user.userId = req.user.sub;
       //console.log("Usuario autenticado:", req.user);
-
+      mongooseContextMiddleware(req, res, next);
       // ✅ CORREGIDO: Solo llamar next() aquí, no al final
       return next();
     } catch (error) {

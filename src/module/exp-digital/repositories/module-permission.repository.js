@@ -40,7 +40,14 @@ export class ModulePermissionRepository extends BaseRepository {
         data.crossDepartmentAccess.hasGlobalAccess = true;
       }
 
-      return await this.create(data, userData, options);
+      const newAccess = await this.create(data, userData, options);
+
+      return await this.findById(newAccess._id, {
+        populate: [
+          { path: "user", select: "name last_name email telf id" },
+          { path: "department", select: "code name shortName tags id" },
+        ],
+      });
     } catch (error) {
       console.error("Error creando acceso de usuario:", error);
       throw new Error(`Error creando acceso de usuario: ${error.message}`);

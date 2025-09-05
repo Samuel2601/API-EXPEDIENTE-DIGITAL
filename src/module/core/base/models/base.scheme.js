@@ -77,16 +77,28 @@ export const addTimestampMiddleware = (schema) => {
   // Pre-save para documentos nuevos y actualizados
   schema.pre("save", function (next) {
     const now = new Date();
+    const currentUser = this.$__?.user || this.user; // Obtener usuario del contexto
 
     if (this.isNew) {
       this.createdAt = now;
       this.version = 1;
+
+      // Solo establecer createdBy si no existe y hay usuario en contexto
+      if (!this.createdBy && currentUser) {
+        this.createdBy = currentUser._id || currentUser;
+      }
     } else {
       // Incrementar versión en cada actualización
       this.version = (this.version || 1) + 1;
     }
 
     this.updatedAt = now;
+
+    // Actualizar updatedBy si hay usuario en contexto
+    if (currentUser && !this.updatedBy) {
+      this.updatedBy = currentUser._id || currentUser;
+    }
+
     next();
   });
 
@@ -94,6 +106,7 @@ export const addTimestampMiddleware = (schema) => {
   schema.pre(["findOneAndUpdate", "updateOne", "updateMany"], function (next) {
     const update = this.getUpdate();
     const now = new Date();
+    const currentUser = this.options?.user || this.user; // Obtener usuario del contexto
 
     // Asegurar que existe el objeto $set
     if (!update.$set) {
@@ -102,6 +115,11 @@ export const addTimestampMiddleware = (schema) => {
 
     // Actualizar timestamp
     update.$set.updatedAt = now;
+
+    // Actualizar updatedBy si hay usuario en contexto
+    if (currentUser) {
+      update.$set.updatedBy = currentUser._id || currentUser;
+    }
 
     // Incrementar versión
     if (!update.$inc) {
@@ -178,23 +196,27 @@ export const addCommonVirtuals = (schema) => {
  */
 export const addCommonMethods = (schema) => {
   // Método para realizar soft delete
-  schema.methods.softDelete = function (deletedBy, reason = null) {
+  schema.methods.softDelete = function (deletedBy = null, reason = null) {
+    const userToUse = deletedBy || this.$__?.user || this.user;
+
     this.isDeleted = true;
     this.deletedAt = new Date();
-    this.deletedBy = deletedBy;
+    this.deletedBy = userToUse?._id || userToUse;
     this.deletionReason = reason;
-    this.updatedBy = deletedBy;
+    this.updatedBy = userToUse?._id || userToUse;
 
     return this.save();
   };
 
   // Método para restaurar documento eliminado
-  schema.methods.restore = function (restoredBy, reason = null) {
+  schema.methods.restore = function (restoredBy = null, reason = null) {
+    const userToUse = restoredBy || this.$__?.user || this.user;
+
     this.isDeleted = false;
     this.deletedAt = null;
     this.deletedBy = null;
     this.deletionReason = null;
-    this.updatedBy = restoredBy;
+    this.updatedBy = userToUse?._id || userToUse;
     this.lastChangeReason = reason || "Documento restaurado";
 
     return this.save();

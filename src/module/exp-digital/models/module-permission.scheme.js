@@ -4,7 +4,7 @@
 // GADM Cantón Esmeraldas - Ecuador
 // =============================================================================
 
-import mongoose from "mongoose";
+import mongoose, { Types } from "mongoose";
 import mongoosePaginate from "mongoose-paginate-v2";
 import { setupBaseSchema } from "../../core/base/models/base.scheme.js";
 import { stripMetaFields } from "../../../../utils/meta-field.js";
@@ -986,13 +986,15 @@ UserDepartmentAccessSchema.statics.getUserAccesses = function (
   userId,
   status = "ACTIVE"
 ) {
+  console.log("Obteniendo accesos para el usuario:", userId, status);
   return this.find({
-    user: userId,
+    user: new Types.ObjectId(userId),
     status: status,
     isActive: true,
   })
-    .populate("department", "code name shortName")
+    .populate("department", "code name shortName contactInfo")
     .sort({ "assignment.isPrimary": -1, "assignment.assignmentDate": -1 });
+  // REMOVER .lean() para mantener los métodos de instancia
 };
 
 // Verificar si un usuario puede realizar una acción específica
