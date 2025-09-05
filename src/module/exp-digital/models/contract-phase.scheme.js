@@ -291,15 +291,7 @@ const ContractPhaseSchema = new Schema(stripMetaFields(ContractPhaseJSON), {
 });
 
 // Aplicar configuración base
-setupBaseSchema(ContractPhaseSchema, {
-  addTimestamps: true,
-  addIndexes: true,
-  addVirtuals: true,
-  addMethods: true,
-  addStatics: true,
-  addHelpers: true,
-  addBaseFields: true,
-});
+setupBaseSchema(ContractPhaseSchema);
 
 // === MIDDLEWARES PERSONALIZADOS ===
 

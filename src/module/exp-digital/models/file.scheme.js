@@ -802,15 +802,7 @@ const FileSchema = new Schema(stripMetaFields(FileJSON), {
 });
 
 // Aplicar configuración base
-setupBaseSchema(FileSchema, {
-  addTimestamps: true,
-  addIndexes: true,
-  addVirtuals: true,
-  addMethods: true,
-  addStatics: true,
-  addHelpers: true,
-  addBaseFields: true,
-});
+setupBaseSchema(FileSchema);
 
 // === MIDDLEWARES PERSONALIZADOS EXTENDIDOS PARA RSYNC ===
 

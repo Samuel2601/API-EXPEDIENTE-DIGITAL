@@ -266,15 +266,7 @@ const ContractTypeSchema = new Schema(stripMetaFields(ContractTypeJSON), {
 });
 
 // Aplicar configuración base
-setupBaseSchema(ContractTypeSchema, {
-  addTimestamps: true,
-  addIndexes: true,
-  addVirtuals: true,
-  addMethods: true,
-  addStatics: true,
-  addHelpers: true,
-  addBaseFields: true,
-});
+setupBaseSchema(ContractTypeSchema);
 
 // === MÉTODOS DE INSTANCIA ===
 

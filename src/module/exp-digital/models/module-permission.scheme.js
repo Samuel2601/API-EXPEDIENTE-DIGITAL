@@ -718,25 +718,9 @@ const PermissionHistorySchema = new Schema(
 
 // ===== APLICAR CONFIGURACIÓN BASE =====
 
-setupBaseSchema(UserDepartmentAccessSchema, {
-  addTimestamps: true,
-  addIndexes: true,
-  addVirtuals: true,
-  addMethods: true,
-  addStatics: true,
-  addHelpers: true,
-  addBaseFields: false,
-});
+setupBaseSchema(UserDepartmentAccessSchema);
 
-setupBaseSchema(PermissionTemplateSchema, {
-  addTimestamps: true,
-  addIndexes: true,
-  addVirtuals: true,
-  addMethods: true,
-  addStatics: true,
-  addHelpers: true,
-  addBaseFields: false,
-});
+setupBaseSchema(PermissionTemplateSchema);
 
 setupBaseSchema(PermissionHistorySchema, {
   addTimestamps: false, // Ya tiene changeDate
@@ -745,7 +729,6 @@ setupBaseSchema(PermissionHistorySchema, {
   addMethods: true,
   addStatics: true,
   addHelpers: true,
-  addBaseFields: false,
 });
 
 // ===== MIDDLEWARES =====

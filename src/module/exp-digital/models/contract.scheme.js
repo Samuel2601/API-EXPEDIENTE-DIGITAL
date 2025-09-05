@@ -403,15 +403,7 @@ const ContractSchema = new Schema(stripMetaFields(ContractJSON), {
   collection: "contracts",
 });
 
-setupBaseSchema(ContractSchema, {
-  addTimestamps: true,
-  addIndexes: true,
-  addVirtuals: true,
-  addMethods: true,
-  addStatics: true,
-  addHelpers: true,
-  addBaseFields: true,
-});
+setupBaseSchema(ContractSchema);
 
 // === QUERY HELPERS ===
 // ✅ MANTENIDOS: Para que el repositorio los utilice

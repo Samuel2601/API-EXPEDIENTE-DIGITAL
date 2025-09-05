@@ -348,15 +348,7 @@ const DepartmentSchema = new Schema(stripMetaFields(DepartmentJSON), {
 });
 
 // 3. AHORA aplica la configuración base
-setupBaseSchema(DepartmentSchema, {
-  addTimestamps: true,
-  addIndexes: true,
-  addVirtuals: true,
-  addMethods: true,
-  addStatics: true,
-  addHelpers: true,
-  addBaseFields: true,
-});
+setupBaseSchema(DepartmentSchema);
 
 // === VIRTUALES ===
 
