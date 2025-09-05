@@ -610,7 +610,17 @@ export class ContractRepository extends BaseRepository {
       await this.validateBeforeCreate(data);
       return await super.create(data, userData, options);
     } catch (error) {
-      throw new Error(`Error creando contrato: ${error.message}`);
+      throw new Error(`Repositorio Error creando contrato: ${error.message}`);
+    }
+  }
+
+  async countDocuments(filter = {}) {
+    try {
+      return await this.model.countDocuments(filter);
+    } catch (error) {
+      throw new Error(
+        `Repositorio Error contando documentos: ${error.message}`
+      );
     }
   }
 }

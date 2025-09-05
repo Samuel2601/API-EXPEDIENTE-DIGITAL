@@ -2,7 +2,7 @@
 // src/module/core/base/models/base.scheme.js - Versión mejorada
 // =============================================================================
 import mongoose from "mongoose";
-import { userContext } from "#utils/user-context.js";
+import { userContext } from "../../../../../utils/user-context.js";
 
 /**
  * Campos base para todos los esquemas con auditoría y soft delete
@@ -75,6 +75,7 @@ export const BaseSchemeFields = {
  */
 const getCurrentUserId = () => {
   const userId = userContext.getCurrentUserId();
+  console.log("Obteniendo ID del usuario actual:", userId);
   if (userId) {
     return new mongoose.Types.ObjectId(userId);
   }
@@ -90,7 +91,7 @@ export const addTimestampMiddleware = (schema) => {
   schema.pre("save", function (next) {
     const now = new Date();
     const currentUserId = getCurrentUserId();
-
+    console.log("Actualizando timestamps de documento:", this._id);
     if (this.isNew) {
       this.createdAt = now;
       this.version = 1;

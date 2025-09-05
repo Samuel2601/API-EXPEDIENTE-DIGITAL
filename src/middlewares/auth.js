@@ -23,6 +23,7 @@ const __dirname = path.dirname(__filename);
  */
 export const mongooseContextMiddleware = (req, res, next) => {
   if (req.user) {
+    console.log("Estableciendo contexto de usuario:", req.user);
     // Ejecutar el resto de la cadena de middlewares/controladores dentro del contexto
     userContext.run(req.user, () => {
       next();

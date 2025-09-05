@@ -44,16 +44,16 @@ export const requirePermission = (options = {}) => {
     departmentParam = "departmentId",
     errorMessage = "No tiene permisos para realizar esta acción",
   } = options;
-
   return async (req, res, next) => {
+    console.log("Configurando middleware de permisos:", options);
     try {
       // Obtener información del usuario autenticado
-      const userId = req.user._id;
+      const userId = req.user.userId;
 
       // Determinar el departamento objetivo
       let departmentId =
         req.params[departmentParam] || req.body[departmentParam];
-
+      console.log("🔍 Verificando permisos de usuario:", userId, departmentId);
       // Si no se proporciona departmentId, intentar obtenerlo del contrato
       if (!departmentId && requireContractAccess) {
         const contractId = req.params[contractParam] || req.body[contractParam];

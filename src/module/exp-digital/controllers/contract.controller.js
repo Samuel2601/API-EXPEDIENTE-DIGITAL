@@ -104,7 +104,7 @@ export class ContractController {
         },
       });
     } catch (error) {
-      console.error(`❌ Error creando contrato: ${error.message}`);
+      console.error(`❌ Controller Error creando contrato: ${error}`);
 
       res.status(error.statusCode || 500).json({
         success: false,

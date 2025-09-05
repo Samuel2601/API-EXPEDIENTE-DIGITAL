@@ -133,7 +133,7 @@ export class ContractService {
     } catch (error) {
       console.error(`❌ Service: Error creando contrato: ${error.message}`);
       throw createError(
-        ERROR_CODES.CREATION_ERROR,
+        ERROR_CODES.CREATE_ERROR,
         `Error al crear contrato: ${error.message}`,
         400
       );
@@ -969,10 +969,7 @@ export class ContractService {
     }
 
     // Validar presupuesto
-    if (
-      !contractData.budget.totalAmount ||
-      contractData.budget.totalAmount <= 0
-    ) {
+    if (!contractData.budget.amount || contractData.budget.amount <= 0) {
       throw createValidationError(
         "El monto total del presupuesto debe ser mayor a 0"
       );
@@ -991,8 +988,8 @@ export class ContractService {
 
     // Obtener información del departamento y tipo de contrato
     const [department, contractType] = await Promise.all([
-      this.contractRepository.findById(departmentId), // Asumiendo que hay un departmentRepository
-      this.contractTypeRepository.findById(contractTypeId),
+      this.contractRepository.findByDepartment(departmentId), // Asumiendo que hay un departmentRepository
+      this.contractRepository.findByContractType(contractTypeId),
     ]);
 
     // Generar secuencial
@@ -4134,35 +4131,41 @@ export class ContractService {
    * Generar número de contrato único
    * @private
    */
-  async _generateContractNumber(departmentId, contractTypeId) {
+  /*  async _generateContractNumber(departmentId, contractTypeId) {
     const year = new Date().getFullYear();
-    const department = await this.contractRepository.findById(departmentId, {
-      select: "code",
-    });
-    const contractType = await this.contractTypeRepository.findById(
+    const department = await this.contractRepository.findByDepartment(
+      departmentId,
+      {
+        select: "code",
+      }
+    );
+    const contractType = await this.contractRepository.findByContractType(
       contractTypeId,
       { select: "code" }
     );
 
     // Obtener último número secuencial
-    const lastContract = await this.contractRepository.findOne(
+    const lastContract = await this.contractRepository.getStatsWithAggregation([
       {
-        contractNumber: {
-          $regex: `^${department.code}-${contractType.code}-${year}`,
+        $match: {
+          contractNumber: {
+            $regex: `^${department.code}-${contractType.code}-${year}`,
+          },
         },
       },
-      { sort: { contractNumber: -1 } }
-    );
-
+      { $sort: { contractNumber: -1 } }, // ✅ CORRECTO: con el signo $
+      { $limit: 1 }, // También deberías agregar un limit para obtener solo el último
+    ]);
+    console.log("Último contrato encontrado:", lastContract);
     let sequence = 1;
-    if (lastContract) {
+    if (lastContract.length > 0) {
       const lastSequence =
-        parseInt(lastContract.contractNumber.split("-").pop()) || 0;
+        parseInt(lastContract[0].contractNumber.split("-").pop()) || 0;
       sequence = lastSequence + 1;
     }
 
     return `${department.code}-${contractType.code}-${year}-${sequence.toString().padStart(4, "0")}`;
-  }
+  }*/
 
   /**
    * Calcular progreso de una fase
