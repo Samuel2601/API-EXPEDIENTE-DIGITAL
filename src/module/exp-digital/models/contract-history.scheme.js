@@ -227,62 +227,12 @@ export const ContractHistoryJSON = {
 
   // Usuario responsable del cambio
   user: {
-    userId: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      meta: {
-        validation: { isMongoId: true, optional: true },
-        messages: {
-          isMongoId: "El ID de usuario no es válido",
-        },
-      },
-    },
-
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 150,
-      meta: {
-        validation: {
-          isString: true,
-          required: true,
-          notEmpty: true,
-          isLength: { min: 2, max: 150 },
-        },
-        messages: {
-          required: "El nombre del usuario es obligatorio",
-          isString: "El nombre del usuario debe ser un texto válido",
-          notEmpty: "El nombre del usuario no puede estar vacío",
-          isLength: "El nombre del usuario debe tener entre 2 y 150 caracteres",
-        },
-      },
-    },
-
-    email: {
-      type: String,
-      trim: true,
-      lowercase: true,
-      maxlength: 100,
-      validate: CommonValidators.email,
-      meta: {
-        validation: { isEmail: true, optional: true },
-        messages: {
-          isEmail: "El email del usuario no es válido",
-        },
-      },
-    },
-
-    role: {
-      type: String,
-      trim: true,
-      maxlength: 50,
-      meta: {
-        validation: { isString: true, optional: true, isLength: { max: 50 } },
-        messages: {
-          isString: "El rol debe ser un texto válido",
-          isLength: "El rol no puede exceder 50 caracteres",
-        },
+    type: Schema.Types.ObjectId,
+    ref: "User",
+    meta: {
+      validation: { isMongoId: true, optional: true },
+      messages: {
+        isMongoId: "El ID de usuario no es válido",
       },
     },
   },

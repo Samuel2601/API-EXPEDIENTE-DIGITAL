@@ -48,7 +48,7 @@ export class ContractService {
    * @param {Object} options - Opciones adicionales
    * @returns {Promise<Object>} Contrato creado
    */
-  async createContract(contractData, options = {}) {
+  async createContract(contractData, options = {}, userData = {}) {
     try {
       console.log("📝 Service: Iniciando creación de contrato");
 
@@ -100,29 +100,35 @@ export class ContractService {
       };
 
       // Crear contrato usando el repositorio
-      const newContract =
-        await this.contractRepository.create(contractToCreate);
+      const newContract = await this.contractRepository.create(
+        contractToCreate,
+        userData
+      );
 
       // Crear entrada en el historial si está habilitado
       if (options.createHistory) {
-        await this._createHistoryEntry(newContract._id, {
-          eventType: "CREATION",
-          description: "Contrato creado en estado BORRADOR",
-          user: {
-            userId: contractData.createdBy,
-            name: contractData.createdByName || "Usuario",
-            email: contractData.createdByEmail || "",
+        await this._createHistoryEntry(
+          newContract._id,
+          {
+            eventType: "CREATION",
+            description: "Contrato creado en estado BORRADOR",
+            user: {
+              userId: contractData.createdBy,
+              name: contractData.createdByName || "Usuario",
+              email: contractData.createdByEmail || "",
+            },
+            changeDetails: {
+              newStatus: "DRAFT",
+              phase: initialPhase
+                ? {
+                    phaseId: initialPhase._id,
+                    phaseName: initialPhase.name,
+                  }
+                : null,
+            },
           },
-          changeDetails: {
-            newStatus: "DRAFT",
-            phase: initialPhase
-              ? {
-                  phaseId: initialPhase._id,
-                  phaseName: initialPhase.name,
-                }
-              : null,
-          },
-        });
+          userData
+        );
       }
 
       console.log(
@@ -413,7 +419,7 @@ export class ContractService {
           contractId,
           currentContract,
           updatedContract,
-          userData?.userId
+          userData
         );
       }
 
@@ -440,7 +446,7 @@ export class ContractService {
    * @param {Object} options - Opciones de eliminación
    * @returns {Promise<Object>} Resultado de la eliminación
    */
-  async deleteContract(contractId, options = {}) {
+  async deleteContract(contractId, options = {}, userData = {}) {
     try {
       validateObjectId(contractId, "ID del contrato");
 
@@ -478,7 +484,7 @@ export class ContractService {
           deletedAt: new Date(),
           deletionReason: reason,
           generalStatus: "CANCELLED",
-          "audit.deletedBy": deletedBy,
+          "audit.deletedBy": userData?.userId || deletedBy,
           "audit.deletedAt": new Date(),
         });
       } else {
@@ -488,18 +494,22 @@ export class ContractService {
 
       // Crear entrada en historial
       if (createHistory && softDelete) {
-        await this._createHistoryEntry(contractId, {
-          eventType: "DELETION",
-          description: `Contrato eliminado. Razón: ${reason}`,
-          user: {
-            userId: deletedBy,
+        await this._createHistoryEntry(
+          contractId,
+          {
+            eventType: "DELETION",
+            description: `Contrato eliminado. Razón: ${reason}`,
+            user: {
+              userId: deletedBy,
+            },
+            changeDetails: {
+              previousStatus: contract.generalStatus,
+              newStatus: "CANCELLED",
+              reason,
+            },
           },
-          changeDetails: {
-            previousStatus: contract.generalStatus,
-            newStatus: "CANCELLED",
-            reason,
-          },
-        });
+          userData
+        );
       }
 
       console.log(`✅ Service: Contrato eliminado: ${contract.contractNumber}`);
@@ -530,14 +540,13 @@ export class ContractService {
    * @param {Object} options - Opciones para el avance
    * @returns {Promise<Object>} Resultado del avance de fase
    */
-  async advanceContractPhase(contractId, options = {}) {
+  async advanceContractPhase(contractId, options = {}, userData = {}) {
     try {
       validateObjectId(contractId, "ID del contrato");
 
       console.log(`➡️ Service: Avanzando fase del contrato: ${contractId}`);
 
       const {
-        userId,
         observations,
         skipValidations = false,
         createHistory = true,
@@ -596,7 +605,7 @@ export class ContractService {
         phase: nextPhase._id,
         status: "IN_PROGRESS",
         startDate: new Date(),
-        assignedTo: userId,
+        assignedTo: userData?.userId,
         documents: [],
         observations: observations ? [observations] : [],
         completedAt: null,
@@ -611,28 +620,32 @@ export class ContractService {
           phases: updatedPhases,
           "timeline.lastStatusChange": new Date(),
           "audit.lastModifiedAt": new Date(),
-          "audit.lastModifiedBy": userId,
+          "audit.lastModifiedBy": userData?.userId,
         }
       );
 
       // Crear entrada en historial
       if (createHistory) {
-        await this._createHistoryEntry(contractId, {
-          eventType: "PHASE_ADVANCEMENT",
-          description: `Contrato avanzado de ${contract.currentPhase.name} a ${nextPhase.name}`,
-          user: { userId },
-          changeDetails: {
-            previousPhase: {
-              id: contract.currentPhase._id,
-              name: contract.currentPhase.name,
+        await this._createHistoryEntry(
+          contractId,
+          {
+            eventType: "PHASE_ADVANCEMENT",
+            description: `Contrato avanzado de ${contract.currentPhase.name} a ${nextPhase.name}`,
+            user: { userId: userData?.userId },
+            changeDetails: {
+              previousPhase: {
+                id: contract.currentPhase._id,
+                name: contract.currentPhase.name,
+              },
+              newPhase: {
+                id: nextPhase._id,
+                name: nextPhase.name,
+              },
+              observations,
             },
-            newPhase: {
-              id: nextPhase._id,
-              name: nextPhase.name,
-            },
-            observations,
           },
-        });
+          userData
+        );
       }
 
       console.log(
@@ -672,7 +685,7 @@ export class ContractService {
         `📝 Service: Actualizando fase ${phaseId} del contrato: ${contractId}`
       );
 
-      const { userId, createHistory = true } = options;
+      const { createHistory = true } = options;
 
       // Obtener contrato
       const contract = await this.contractRepository.findById(contractId);
@@ -687,7 +700,7 @@ export class ContractService {
             ...phaseEntry,
             ...updateData,
             lastUpdated: new Date(),
-            lastUpdatedBy: userId,
+            lastUpdatedBy: updateData?.userId,
           };
         }
         return phaseEntry;
@@ -697,7 +710,7 @@ export class ContractService {
       await this.contractRepository.updateById(contractId, {
         phases: updatedPhases,
         "audit.lastModifiedAt": new Date(),
-        "audit.lastModifiedBy": userId,
+        "audit.lastModifiedBy": updateData?.userId,
       });
 
       // Encontrar la fase actualizada
@@ -707,15 +720,19 @@ export class ContractService {
 
       // Crear entrada en historial
       if (createHistory) {
-        await this._createHistoryEntry(contractId, {
-          eventType: "PHASE_UPDATE",
-          description: `Fase actualizada`,
-          user: { userId },
-          changeDetails: {
-            phaseId,
-            updates: updateData,
+        await this._createHistoryEntry(
+          contractId,
+          {
+            eventType: "PHASE_UPDATE",
+            description: `Fase actualizada`,
+            user: { userId: updateData?.userId },
+            changeDetails: {
+              phaseId,
+              updates: updateData,
+            },
           },
-        });
+          updateData
+        );
       }
 
       console.log(`✅ Service: Fase actualizada exitosamente`);
@@ -938,14 +955,20 @@ export class ContractService {
   async _validateContractData(contractData) {
     // Validar campos requeridos
     const requiredFields = [
+      // "contractNumber",
       "contractualObject",
       "contractType",
       "requestingDepartment",
-      "budget",
+      "budget.estimatedValue",
     ];
-    const missingFields = requiredFields.filter(
-      (field) => !contractData[field]
-    );
+
+    const missingFields = requiredFields.filter((field) => {
+      const value = field.includes(".")
+        ? field.split(".").reduce((obj, key) => obj && obj[key], contractData)
+        : contractData[field];
+
+      return value === undefined || value === null || value === "";
+    });
 
     if (missingFields.length > 0) {
       throw createValidationError(
@@ -968,11 +991,135 @@ export class ContractService {
       throw createValidationError("Tipo de contrato no encontrado o inactivo");
     }
 
+    // Validar formato del número de contrato
+    if (contractData.contractNumber) {
+      const contractNumberRegex = /^[A-Z0-9-]{5,50}$/;
+      if (!contractNumberRegex.test(contractData.contractNumber)) {
+        throw createValidationError(
+          "El número de contrato debe tener un formato válido (solo mayúsculas, números y guiones, 5-50 caracteres)"
+        );
+      }
+    }
+
     // Validar presupuesto
-    if (!contractData.budget.amount || contractData.budget.amount <= 0) {
+    if (contractData.budget) {
+      // Validar valor estimado
+      if (contractData.budget.estimatedValue <= 0) {
+        throw createValidationError(
+          "El valor estimado del presupuesto debe ser mayor a 0"
+        );
+      }
+
+      // Validar que el valor adjudicado no sea negativo si existe
+      if (
+        contractData.budget.awardedValue !== undefined &&
+        contractData.budget.awardedValue < 0
+      ) {
+        throw createValidationError(
+          "El valor adjudicado no puede ser negativo"
+        );
+      }
+
+      // Validar que el valor pagado no sea negativo si existe
+      if (
+        contractData.budget.paidValue !== undefined &&
+        contractData.budget.paidValue < 0
+      ) {
+        throw createValidationError("El valor pagado no puede ser negativo");
+      }
+
+      // Validar que el valor pagado no exceda el adjudicado/estimado
+      const maxAllowed =
+        contractData.budget.awardedValue || contractData.budget.estimatedValue;
+      if (contractData.budget.paidValue > maxAllowed) {
+        throw createValidationError(
+          "El valor pagado no puede exceder el valor adjudicado o estimado"
+        );
+      }
+    }
+
+    // Validar longitud de campos de texto
+    if (
+      contractData.contractualObject &&
+      contractData.contractualObject.length > 500
+    ) {
       throw createValidationError(
-        "El monto total del presupuesto debe ser mayor a 0"
+        "El objeto contractual no puede exceder 500 caracteres"
       );
+    }
+
+    if (
+      contractData.detailedDescription &&
+      contractData.detailedDescription.length > 2000
+    ) {
+      throw createValidationError(
+        "La descripción detallada no puede exceder 2000 caracteres"
+      );
+    }
+
+    if (contractData.observations && contractData.observations.length > 2000) {
+      throw createValidationError(
+        "Las observaciones no pueden exceder 2000 caracteres"
+      );
+    }
+
+    // Validar estado general si se proporciona
+    if (contractData.generalStatus) {
+      const validStatuses = [
+        "DRAFT",
+        "PREPARATION",
+        "CALL",
+        "EVALUATION",
+        "AWARD",
+        "CONTRACTING",
+        "EXECUTION",
+        "FINISHED",
+        "LIQUIDATED",
+        "CANCELLED",
+        "SUSPENDED",
+      ];
+
+      if (!validStatuses.includes(contractData.generalStatus.toUpperCase())) {
+        throw createValidationError(
+          "Estado general no válido. Debe ser uno de: " +
+            validStatuses.join(", ")
+        );
+      }
+    }
+
+    // Validar fechas si se proporcionan
+    if (contractData.timeline) {
+      if (
+        contractData.timeline.executionStartDate &&
+        contractData.timeline.executionEndDate
+      ) {
+        const startDate = new Date(contractData.timeline.executionStartDate);
+        const endDate = new Date(contractData.timeline.executionEndDate);
+
+        if (startDate >= endDate) {
+          throw createValidationError(
+            "La fecha de inicio de ejecución debe ser anterior a la fecha de fin"
+          );
+        }
+      }
+
+      if (
+        contractData.timeline.questionsDeadline &&
+        contractData.timeline.submissionDeadline
+      ) {
+        const questionsDeadline = new Date(
+          contractData.timeline.questionsDeadline
+        );
+        const submissionDeadline = new Date(
+          contractData.timeline.submissionDeadline
+        );
+
+        if (questionsDeadline >= submissionDeadline) {
+          throw createValidationError(
+            "La fecha límite de preguntas debe ser anterior a la de presentación"
+          );
+        }
+      }
     }
   }
 
@@ -1135,10 +1282,29 @@ export class ContractService {
   async _populateContractData(contract) {
     return await this.contractRepository.findById(contract._id, {
       populate: [
-        { path: "contractType", select: "code name category" },
-        { path: "requestingDepartment", select: "code name shortName" },
-        { path: "currentPhase", select: "code name shortName order category" },
-        { path: "createdBy", select: "firstName lastName email" },
+        { path: "contractType", select: "code name category description" },
+        {
+          path: "requestingDepartment",
+          select: "code name shortName parentDepartment",
+        },
+        {
+          path: "currentPhase",
+          select: "code name shortName order category description",
+        },
+        {
+          path: "phases.phase",
+          select: "code name shortName order category description requirements",
+        },
+        {
+          path: "createdBy",
+          select: "firstName lastName email position avatar",
+          model: "user", // Especificar explícitamente el modelo
+        },
+        {
+          path: "updatedBy",
+          select: "firstName lastName email position avatar",
+          model: "user", // Especificar explícitamente el modelo
+        },
       ],
     });
   }
@@ -1274,51 +1440,37 @@ export class ContractService {
   }
 
   /**
-   * Crear entrada en el historial
-   * @param {String} contractId - ID del contrato
-   * @param {Object} eventData - Datos del evento
-   * @private
-   */
-  async _createHistoryEntry(contractId, eventData) {
-    try {
-      await this.contractHistoryRepository.create({
-        contract: contractId,
-        ...eventData,
-        createdAt: new Date(),
-      });
-    } catch (error) {
-      console.warn(`⚠️ Error creando entrada en historial: ${error.message}`);
-    }
-  }
-
-  /**
    * Crear entrada de historial para actualización
    * @param {String} contractId - ID del contrato
    * @param {Object} oldContract - Contrato anterior
    * @param {Object} newContract - Contrato actualizado
-   * @param {String} userId - ID del usuario
+   * @param {Object} userData - Objeto con información del usuario
    * @private
    */
   async _createUpdateHistoryEntry(
     contractId,
     oldContract,
     newContract,
-    userId
+    userData
   ) {
     try {
       const changes = this._detectChanges(oldContract, newContract);
 
       if (changes.length === 0) return;
 
-      await this._createHistoryEntry(contractId, {
-        eventType: "UPDATE",
-        description: `Contrato actualizado - ${changes.length} cambio(s)`,
-        user: { userId },
-        changeDetails: {
-          changes,
-          version: newContract.audit?.version || 1,
+      await this._createHistoryEntry(
+        contractId,
+        {
+          eventType: "UPDATE",
+          description: `Contrato actualizado - ${changes.length} cambio(s)`,
+          user: { ...userData },
+          changeDetails: {
+            changes,
+            version: newContract.audit?.version || 1,
+          },
         },
-      });
+        userData
+      );
     } catch (error) {
       console.warn(
         `⚠️ Error creando entrada de actualización: ${error.message}`
@@ -1504,7 +1656,12 @@ export class ContractService {
    * @param {Object} updateData - Datos a actualizar
    * @param {Object} options - Opciones de la operación
    */
-  async bulkUpdateContracts(contractIds, updateData, options = {}) {
+  async bulkUpdateContracts(
+    contractIds,
+    updateData,
+    options = {},
+    userData = {}
+  ) {
     try {
       console.log(
         `📝 Service: Actualizando ${contractIds.length} contratos masivamente`
@@ -1549,26 +1706,31 @@ export class ContractService {
           // Preparar datos de actualización
           const dataToUpdate = {
             ...updateData,
-            updatedBy: options.userId,
+            updatedBy: userData.userId,
             updatedAt: new Date(),
           };
 
           // Actualizar contrato
-          const updated = await this.contractRepository.updateById(
+          const updated = await this.contractRepository.update(
             contractId,
             dataToUpdate,
+            userData,
             { new: true }
           );
 
           // Registrar en historial
-          await this._createHistoryEntry(contractId, {
-            eventType: "BULK_UPDATE",
-            description: "Actualización masiva de contrato",
-            user: {
-              userId: options.userId,
+          await this._createHistoryEntry(
+            contractId,
+            {
+              eventType: "BULK_UPDATE",
+              description: "Actualización masiva de contrato",
+              user: {
+                userId: userData.userId,
+              },
+              changeDetails: updateData,
             },
-            changeDetails: updateData,
-          });
+            userData
+          );
 
           results.successful.push({
             contractId,
@@ -1755,7 +1917,7 @@ export class ContractService {
    * @param {string} contractId - ID del contrato
    * @param {Object} phaseData - Datos del cambio de fase
    */
-  async changeContractPhase(contractId, phaseData) {
+  async changeContractPhase(contractId, phaseData, userData = {}) {
     try {
       console.log(`🔄 Service: Cambiando fase del contrato ${contractId}`);
 
@@ -1838,20 +2000,24 @@ export class ContractService {
       );
 
       // Registrar en historial
-      await this._createHistoryEntry(contractId, {
-        eventType: "PHASE_CHANGE",
-        description: `Cambio de fase a ${newPhase.name}`,
-        user: {
-          userId: phaseData.userId,
-          name: phaseData.userInfo?.name,
-          email: phaseData.userInfo?.email,
+      await this._createHistoryEntry(
+        contractId,
+        {
+          eventType: "PHASE_CHANGE",
+          description: `Cambio de fase a ${newPhase.name}`,
+          user: {
+            userId: phaseData.userId,
+            name: phaseData.userInfo?.name,
+            email: phaseData.userInfo?.email,
+          },
+          changeDetails: {
+            previousPhase: contract.currentPhase?.name || null,
+            newPhase: newPhase.name,
+            observations: phaseData.observations,
+          },
         },
-        changeDetails: {
-          previousPhase: contract.currentPhase?.name || null,
-          newPhase: newPhase.name,
-          observations: phaseData.observations,
-        },
-      });
+        userData
+      );
 
       return updatedContract;
     } catch (error) {
@@ -1865,7 +2031,7 @@ export class ContractService {
    * @param {string} contractId - ID del contrato
    * @param {Object} statusData - Datos del cambio de estado
    */
-  async changeContractStatus(contractId, statusData) {
+  async changeContractStatus(contractId, statusData, userData = {}) {
     try {
       console.log(`🔄 Service: Cambiando estado del contrato ${contractId}`);
 
@@ -1913,21 +2079,25 @@ export class ContractService {
       }
 
       // Registrar en historial
-      await this._createHistoryEntry(contractId, {
-        eventType: "STATUS_CHANGE",
-        description: `Cambio de estado de ${previousStatus} a ${statusData.newStatus}`,
-        user: {
-          userId: statusData.userId,
-          name: statusData.userInfo?.name,
-          email: statusData.userInfo?.email,
+      await this._createHistoryEntry(
+        contractId,
+        {
+          eventType: "STATUS_CHANGE",
+          description: `Cambio de estado de ${previousStatus} a ${statusData.newStatus}`,
+          user: {
+            userId: statusData.userId,
+            name: statusData.userInfo?.name,
+            email: statusData.userInfo?.email,
+          },
+          changeDetails: {
+            previousStatus,
+            newStatus: statusData.newStatus,
+            reason: statusData.reason,
+            observations: statusData.observations,
+          },
         },
-        changeDetails: {
-          previousStatus,
-          newStatus: statusData.newStatus,
-          reason: statusData.reason,
-          observations: statusData.observations,
-        },
-      });
+        userData
+      );
 
       return updatedContract;
     } catch (error) {
@@ -2061,7 +2231,7 @@ export class ContractService {
    * @param {string} contractId - ID del contrato
    * @param {Object} documentData - Datos de los documentos
    */
-  async uploadContractDocuments(contractId, documentData) {
+  async uploadContractDocuments(contractId, documentData, userData = {}) {
     try {
       console.log(`📄 Service: Subiendo documentos al contrato ${contractId}`);
 
@@ -2129,20 +2299,24 @@ export class ContractService {
         });
 
         // Registrar en historial
-        await this._createHistoryEntry(contractId, {
-          eventType: "DOCUMENT_UPLOAD",
-          description: `${results.successful.length} documento(s) subido(s)`,
-          user: {
-            userId: documentData.userId,
-            name: documentData.userInfo?.name,
-            email: documentData.userInfo?.email,
+        await this._createHistoryEntry(
+          contractId,
+          {
+            eventType: "DOCUMENT_UPLOAD",
+            description: `${results.successful.length} documento(s) subido(s)`,
+            user: {
+              userId: documentData.userId,
+              name: documentData.userInfo?.name,
+              email: documentData.userInfo?.email,
+            },
+            changeDetails: {
+              documentCount: results.successful.length,
+              phase: documentData.phase,
+              documentType: documentData.documentType,
+            },
           },
-          changeDetails: {
-            documentCount: results.successful.length,
-            phase: documentData.phase,
-            documentType: documentData.documentType,
-          },
-        });
+          userData
+        );
       }
 
       return results;
@@ -2294,29 +2468,34 @@ export class ContractService {
       }
 
       // Guardar cambios
-      const updatedContract = await this.contractRepository.updateById(
+      const updatedContract = await this.contractRepository.update(
         contractId,
         {
           phases: contract.phases,
           updatedBy: updateData.userId,
           updatedAt: new Date(),
         },
+        updateData,
         { new: true }
       );
 
       // Registrar en historial
-      await this._createHistoryEntry(contractId, {
-        eventType: "DOCUMENT_UPDATE",
-        description: "Documento actualizado",
-        user: {
-          userId: updateData.userId,
+      await this._createHistoryEntry(
+        contractId,
+        {
+          eventType: "DOCUMENT_UPDATE",
+          description: "Documento actualizado",
+          user: {
+            userId: updateData.userId,
+          },
+          changeDetails: {
+            documentId,
+            phase: phaseUpdated,
+            changes: updateData,
+          },
         },
-        changeDetails: {
-          documentId,
-          phase: phaseUpdated,
-          changes: updateData,
-        },
-      });
+        updateData
+      );
 
       return updatedContract;
     } catch (error) {
@@ -2331,7 +2510,7 @@ export class ContractService {
    * @param {string} documentId - ID del documento
    * @param {Object} options - Opciones de eliminación
    */
-  async deleteContractDocument(contractId, documentId, options) {
+  async deleteContractDocument(contractId, documentId, options, userData = {}) {
     try {
       const contract = await this.contractRepository.findById(contractId);
       if (!contract) {
@@ -2364,26 +2543,34 @@ export class ContractService {
       }
 
       // Guardar cambios
-      await this.contractRepository.updateById(contractId, {
-        phases: contract.phases,
-        updatedBy: options.userId,
-        updatedAt: new Date(),
-      });
+      await this.contractRepository.update(
+        contractId,
+        {
+          phases: contract.phases,
+          updatedBy: options.userId,
+          updatedAt: new Date(),
+        },
+        userData
+      );
 
       // Registrar en historial
-      await this._createHistoryEntry(contractId, {
-        eventType: "DOCUMENT_DELETE",
-        description: "Documento eliminado",
-        user: {
-          userId: options.userId,
-          name: options.userInfo?.name,
-          email: options.userInfo?.email,
+      await this._createHistoryEntry(
+        contractId,
+        {
+          eventType: "DOCUMENT_DELETE",
+          description: "Documento eliminado",
+          user: {
+            userId: options.userId,
+            name: options.userInfo?.name,
+            email: options.userInfo?.email,
+          },
+          changeDetails: {
+            documentId,
+            reason: options.reason,
+          },
         },
-        changeDetails: {
-          documentId,
-          reason: options.reason,
-        },
-      });
+        userData
+      );
     } catch (error) {
       console.error("❌ Service error en deleteContractDocument:", error);
       throw error;
@@ -2598,7 +2785,7 @@ export class ContractService {
    * @param {string} contractId - ID del contrato
    * @param {Object} observationData - Datos de la observación
    */
-  async addContractObservation(contractId, observationData) {
+  async addContractObservation(contractId, observationData, userData = {}) {
     try {
       const contract = await this.contractRepository.findById(contractId);
       if (!contract) {
@@ -2634,27 +2821,35 @@ export class ContractService {
       }
 
       // Actualizar contrato
-      await this.contractRepository.updateById(contractId, {
-        phases: contract.phases,
-        observations: contract.observations,
-        updatedBy: observationData.userId,
-        updatedAt: new Date(),
-      });
+      await this.contractRepository.update(
+        contractId,
+        {
+          phases: contract.phases,
+          observations: contract.observations,
+          updatedBy: observationData.userId,
+          updatedAt: new Date(),
+        },
+        userData
+      );
 
       // Registrar en historial
-      await this._createHistoryEntry(contractId, {
-        eventType: "OBSERVATION_ADDED",
-        description: "Se agregó una observación",
-        user: {
-          userId: observationData.userId,
-          name: observationData.userInfo?.name,
-          email: observationData.userInfo?.email,
+      await this._createHistoryEntry(
+        contractId,
+        {
+          eventType: "OBSERVATION_ADDED",
+          description: "Se agregó una observación",
+          user: {
+            userId: observationData.userId,
+            name: observationData.userInfo?.name,
+            email: observationData.userInfo?.email,
+          },
+          changeDetails: {
+            observationType: observation.type,
+            phase: observationData.phase,
+          },
         },
-        changeDetails: {
-          observationType: observation.type,
-          phase: observationData.phase,
-        },
-      });
+        userData
+      );
 
       return observation;
     } catch (error) {
@@ -3794,7 +3989,7 @@ export class ContractService {
    * @param {string} contractId - ID del contrato a duplicar
    * @param {Object} newContractData - Datos para el nuevo contrato
    */
-  async duplicateContract(contractId, newContractData) {
+  async duplicateContract(contractId, newContractData, userData = {}) {
     try {
       console.log(`📋 Service: Duplicando contrato ${contractId}`);
 
@@ -3871,19 +4066,23 @@ export class ContractService {
       );
 
       // Registrar en historial
-      await this._createHistoryEntry(duplicatedContract._id, {
-        eventType: "CONTRACT_DUPLICATED",
-        description: `Contrato duplicado desde ${originalContract.contractNumber}`,
-        user: {
-          userId: newContractData.createdBy,
-          name: newContractData.createdByInfo?.name,
-          email: newContractData.createdByInfo?.email,
+      await this._createHistoryEntry(
+        duplicatedContract._id,
+        {
+          eventType: "CONTRACT_DUPLICATED",
+          description: `Contrato duplicado desde ${originalContract.contractNumber}`,
+          user: {
+            userId: newContractData.createdBy,
+            name: newContractData.createdByInfo?.name,
+            email: newContractData.createdByInfo?.email,
+          },
+          changeDetails: {
+            originalContractId: originalContract._id,
+            originalContractNumber: originalContract.contractNumber,
+          },
         },
-        changeDetails: {
-          originalContractId: originalContract._id,
-          originalContractNumber: originalContract.contractNumber,
-        },
-      });
+        userData
+      );
 
       return duplicatedContract;
     } catch (error) {
@@ -3939,19 +4138,25 @@ export class ContractService {
       }
 
       // Registrar en historial
-      await this._createHistoryEntry(contractId, {
-        eventType: "CONTRACT_ARCHIVED",
-        description: "Contrato archivado",
-        user: {
+      await this._createHistoryEntry(
+        contractId,
+        {
+          eventType: "CONTRACT_ARCHIVED",
+          description: "Contrato archivado",
+          user: {
+            userId: archiveOptions.userId,
+            name: archiveOptions.userInfo?.name,
+            email: archiveOptions.userInfo?.email,
+          },
+          changeDetails: {
+            reason: archiveOptions.reason,
+            documentsArchived: archiveOptions.archiveDocuments,
+          },
+        },
+        {
           userId: archiveOptions.userId,
-          name: archiveOptions.userInfo?.name,
-          email: archiveOptions.userInfo?.email,
-        },
-        changeDetails: {
-          reason: archiveOptions.reason,
-          documentsArchived: archiveOptions.archiveDocuments,
-        },
-      });
+        }
+      );
 
       return archivedContract;
     } catch (error) {
@@ -4000,20 +4205,26 @@ export class ContractService {
       );
 
       // Registrar en historial
-      await this._createHistoryEntry(contractId, {
-        eventType: "CONTRACT_RESTORED",
-        description: "Contrato restaurado desde archivo",
-        user: {
+      await this._createHistoryEntry(
+        contractId,
+        {
+          eventType: "CONTRACT_RESTORED",
+          description: "Contrato restaurado desde archivo",
+          user: {
+            userId: restoreOptions.userId,
+            name: restoreOptions.userInfo?.name,
+            email: restoreOptions.userInfo?.email,
+          },
+          changeDetails: {
+            reason: restoreOptions.reason,
+            previousStatus: "ARCHIVED",
+            newStatus: restoredContract.generalStatus,
+          },
+        },
+        {
           userId: restoreOptions.userId,
-          name: restoreOptions.userInfo?.name,
-          email: restoreOptions.userInfo?.email,
-        },
-        changeDetails: {
-          reason: restoreOptions.reason,
-          previousStatus: "ARCHIVED",
-          newStatus: restoredContract.generalStatus,
-        },
-      });
+        }
+      );
 
       return restoredContract;
     } catch (error) {
@@ -4111,16 +4322,22 @@ export class ContractService {
    * Crear entrada en el historial del contrato
    * @private
    */
-  async _createHistoryEntry(contractId, historyData) {
+  async _createHistoryEntry(contractId, historyData, userData) {
     try {
-      await this.contractHistoryRepository.create({
-        contractId: new Types.ObjectId(contractId),
-        eventType: historyData.eventType,
-        description: historyData.description,
-        user: historyData.user,
-        changeDetails: historyData.changeDetails,
-        createdAt: new Date(),
-      });
+      console.log(
+        `📝 Service: Creando entrada de historial para contrato ${contractId}, Data: ${JSON.stringify(historyData)}`
+      );
+      await this.contractHistoryRepository.create(
+        {
+          contract: new Types.ObjectId(contractId),
+          eventType: historyData.eventType,
+          description: historyData.description,
+          user: historyData.user.userId || userData.userId,
+          changeDetails: historyData.changeDetails,
+          createdAt: new Date(),
+        },
+        userData
+      );
     } catch (error) {
       console.error("⚠️ Error creando entrada de historial:", error);
       // No lanzar error para no interrumpir la operación principal

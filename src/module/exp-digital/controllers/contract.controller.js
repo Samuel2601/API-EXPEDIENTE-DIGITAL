@@ -77,9 +77,9 @@ export class ContractController {
       const newContract = await this.contractService.createContract(
         contractData,
         {
-          userId: user.userId,
           createHistory: true,
-        }
+        },
+        user
       );
 
       console.log(
