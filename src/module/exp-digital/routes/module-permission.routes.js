@@ -83,13 +83,13 @@ router.get(
  */
 router.get(
   "/accesses/search",
-  requireFlexiblePermissions(
+  /*requireFlexiblePermissions(
     [
       { category: "special", permission: "canViewCrossDepartment" },
       { category: "special", permission: "canManagePermissions" },
     ],
     { allowGlobal: true }
-  ),
+  ),*/
   ModulePermissionController.searchAccesses
 );
 

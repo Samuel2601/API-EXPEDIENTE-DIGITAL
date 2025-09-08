@@ -347,14 +347,67 @@ export const addCommonMethods = (schema) => {
 };
 
 export const addCommonStatics = (schema) => {
-  schema.statics.findByCreator = function (userId, options = {}) {
-    return this.find({ createdBy: userId, ...options });
+  // Método para encontrar solo documentos activos (no eliminados)
+  schema.statics.findActive = function (filter = {}) {
+    return this.find({
+      ...filter,
+      $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }],
+    });
   };
 
-  schema.statics.findRecent = function (days = 7) {
-    const date = new Date();
-    date.setDate(date.getDate() - days);
-    return this.find({ createdAt: { $gte: date } });
+  // Método para encontrar solo documentos eliminados
+  schema.statics.findDeleted = function (filter = {}) {
+    return this.find({
+      ...filter,
+      isDeleted: true,
+    });
+  };
+
+  // Método para contar documentos activos
+  schema.statics.countActive = function (filter = {}) {
+    return this.countDocuments({
+      ...filter,
+      $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }],
+    });
+  };
+
+  // Método para encontrar por ID solo si está activo
+  schema.statics.findActiveById = function (id) {
+    return this.findOne({
+      _id: id,
+      $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }],
+    });
+  };
+
+  // Método para soft delete múltiples documentos
+  schema.statics.softDeleteMany = function (filter, deletedBy, reason = null) {
+    return this.updateMany(filter, {
+      $set: {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: deletedBy,
+        deletionReason: reason,
+        updatedBy: deletedBy,
+        updatedAt: new Date(),
+      },
+      $inc: { version: 1 },
+    });
+  };
+
+  // Método para restaurar múltiples documentos
+  schema.statics.restoreMany = function (filter, restoredBy, reason = null) {
+    return this.updateMany(filter, {
+      $set: {
+        isDeleted: false,
+        deletedAt: null,
+        deletedBy: null,
+        deletionReason: null,
+        updatedBy: restoredBy,
+        updatedAt: new Date(),
+        lastChangeReason: reason || "Documentos restaurados",
+      },
+      $inc: { version: 1 },
+    });
   };
 };
 

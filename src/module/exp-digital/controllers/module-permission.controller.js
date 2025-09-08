@@ -158,8 +158,7 @@ export class ModulePermissionController {
    */
   searchAccesses = async (req, res) => {
     try {
-      const filters = req.query;
-      const { page, limit, sort } = req.query;
+      const { filters, page, limit, sort } = req.query;
 
       const options = {
         page: parseInt(page) || 1,
@@ -167,7 +166,24 @@ export class ModulePermissionController {
         sort: sort || "-createdAt",
       };
 
-      const result = await this.service.searchAccesses(filters, options);
+      // Manejo seguro de filters
+      let parsedFilters = {};
+      if (filters && typeof filters === "string") {
+        try {
+          parsedFilters = JSON.parse(filters);
+        } catch (parseError) {
+          console.warn(
+            "Error parsing filters JSON, using empty object:",
+            parseError.message
+          );
+          parsedFilters = {};
+        }
+      }
+
+      console.log("options", options);
+      console.log("filters", parsedFilters);
+
+      const result = await this.service.searchAccesses(parsedFilters, options);
 
       res.status(200).json({
         success: true,
