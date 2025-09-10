@@ -384,6 +384,7 @@ export class BaseRepository {
     const {
       search,
       text,
+      searchTerm,
       dateFrom,
       dateTo,
       createdBy,
@@ -394,7 +395,7 @@ export class BaseRepository {
 
     // Búsqueda de texto genérica
     if (search || text) {
-      const searchText = search || text;
+      const searchText = search || text || searchTerm;
       const textFields = this.getTextSearchFields();
 
       if (textFields.length > 0) {
