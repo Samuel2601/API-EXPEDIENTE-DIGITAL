@@ -138,16 +138,8 @@ export class DepartmentController {
 
         res.status(200).json({
           success: true,
-          data: {
-            departments: result.departments,
-            pagination: result.pagination,
-            summary: {
-              total: result.pagination.totalDepartments,
-              showing: result.departments.length,
-              page: result.pagination.currentPage,
-              pages: result.pagination.totalPages,
-            },
-          },
+          data: result,
+          message: "Departamentos obtenidos exitosamente",
           filters: result.appliedFilters,
           metadata: {
             requestedBy: user.userId,

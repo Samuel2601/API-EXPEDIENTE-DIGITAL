@@ -159,7 +159,7 @@ export class ModulePermissionController {
   searchAccesses = async (req, res) => {
     try {
       const { filters, page, limit, sort } = req.query;
-
+      const { user } = req;
       const options = {
         page: parseInt(page) || 1,
         limit: parseInt(limit) || 10,
@@ -189,6 +189,11 @@ export class ModulePermissionController {
         success: true,
         data: result,
         message: "Búsqueda de accesos completada exitosamente",
+        filters: result.appliedFilters,
+        metadata: {
+          requestedBy: user.userId,
+          requestedAt: new Date(),
+        },
       });
     } catch (error) {
       console.error("Error en controlador buscando accesos:", error);
