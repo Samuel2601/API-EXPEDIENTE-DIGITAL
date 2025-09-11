@@ -126,7 +126,7 @@ export class ContractController {
       const { query, user, permissions } = req;
 
       console.log(`📋 Usuario ${user.userId} consultando contratos.`);
-
+      console.log("📋 Permisos de usuario:", permissions);
       // Extraer y procesar parámetros de consulta
       const {
         page = 1,
@@ -148,11 +148,30 @@ export class ContractController {
       let departmentAccess = { type: "all" };
 
       if (!permissions.hasGlobalAccess) {
-        if (permissions.departmentId) {
-          departmentAccess = {
-            type: "specific",
-            departmentIds: [permissions.departmentId],
-          };
+        // Verificar si el usuario tiene accesos a departamentos
+        if (permissions.accesses && permissions.accesses.length > 0) {
+          const departmentIds = [];
+
+          // Recorrer todos los accesos y extraer los departmentId
+          permissions.accesses.forEach((access) => {
+            if (access.departmentId) {
+              departmentIds.push(access.departmentId);
+            }
+          });
+
+          if (departmentIds.length > 0) {
+            departmentAccess = {
+              type: "specific",
+              departmentIds: departmentIds,
+            };
+          } else {
+            return res.status(403).json({
+              success: false,
+              message:
+                "No tiene acceso a ningún departamento para consultar contratos",
+              code: "INSUFFICIENT_PERMISSIONS",
+            });
+          }
         } else {
           return res.status(403).json({
             success: false,

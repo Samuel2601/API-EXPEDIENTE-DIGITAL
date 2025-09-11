@@ -391,6 +391,12 @@ export const requireFlexiblePermissions = (permissions = [], options = {}) => {
 
         for (const access of userAccesses) {
           for (const { category, permission } of permissions) {
+            console.log("Consultando permiso en la categoria de:" + category);
+            console.log("Consultando permiso en la categoria de:" + permission);
+            console.log(
+              "El acceso tiene permiso:" +
+                access.hasPermission(category, permission)
+            );
             if (access.hasPermission(category, permission)) {
               hasValidAccess = true;
 
