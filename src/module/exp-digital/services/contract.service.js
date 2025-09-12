@@ -177,7 +177,7 @@ export class ContractService {
 
       // Filtro de eliminados
       if (!includeDeleted) {
-        mongoQuery.isActive = true;
+        mongoQuery.isDeleted = false;
       }
 
       // Filtros de estado
@@ -226,11 +226,12 @@ export class ContractService {
       };
 
       // Ejecutar consulta usando el repositorio
+      console.log("MongoQuery: ", mongoQuery, "QueryOptions: ", queryOptions);
       const result = await this.contractRepository.findAll(
         mongoQuery,
         queryOptions
       );
-
+      console.log(`Total contratos encontrados: ${result}`);
       // Enriquecer contratos con información adicional
       const enrichedContracts = await Promise.all(
         result.docs.map((contract) => this._enrichContractSummary(contract))
@@ -1323,7 +1324,8 @@ export class ContractService {
       },
       createdBy: {
         path: "createdBy",
-        select: "firstName lastName email",
+        select: "name last_name email",
+        model: "user",
       },
       contractType: {
         path: "contractType",
