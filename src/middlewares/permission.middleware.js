@@ -61,12 +61,13 @@ export const requirePermission = (options = {}) => {
           const contract = await Contract.findById(contractId).select(
             "requestingDepartment"
           );
+          console.log("contract", contract);
           if (contract) {
             departmentId = contract.requestingDepartment;
           }
         }
       }
-
+      console.log("departmentId", departmentId);
       if (!departmentId) {
         return res.status(400).json({
           success: false,
@@ -84,7 +85,7 @@ export const requirePermission = (options = {}) => {
           ? req.params[contractParam] || req.body[contractParam]
           : null
       );
-
+      console.log("permissionCheck", permissionCheck);
       if (!permissionCheck.allowed) {
         return res.status(403).json({
           success: false,
@@ -99,6 +100,14 @@ export const requirePermission = (options = {}) => {
         ...permissionCheck,
         departmentId,
         userId,
+        // Añadir el método hasPermission
+        hasPermission: (cat, perm) => {
+          if (!permissionCheck.permissions) return false;
+          return (
+            permissionCheck.permissions[cat] &&
+            permissionCheck.permissions[cat][perm]
+          );
+        },
       };
 
       next();
@@ -157,7 +166,16 @@ export const requireContractAccess = (contractParam = "contractId") => {
           message: "No tiene acceso a este contrato",
         });
       }
-
+      req.permissions = {
+        ...userAccesses[0].permissions,
+        hasPermission: (cat, perm) => {
+          if (!userAccesses[0].permissions) return false;
+          return (
+            userAccesses[0].permissions[cat] &&
+            userAccesses[0].permissions[cat][perm]
+          );
+        },
+      };
       // Almacenar información del contrato para uso posterior
       req.contract = contract;
       next();

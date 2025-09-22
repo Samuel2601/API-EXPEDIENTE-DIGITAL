@@ -999,6 +999,14 @@ UserDepartmentAccessSchema.statics.checkUserPermission = async function (
   permission,
   contractId = null
 ) {
+  console.log(
+    "checkUserPermission",
+    userId,
+    departmentId,
+    category,
+    permission,
+    contractId
+  );
   const access = await this.findOne({
     user: userId,
     department: departmentId,

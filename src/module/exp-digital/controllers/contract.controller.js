@@ -328,7 +328,10 @@ export class ContractController {
           code: "CONTRACT_NOT_FOUND",
         });
       }
-
+      console.log(
+        "Permissions",
+        req.permissions?.hasPermission("contracts", "canEdit")
+      );
       // Verificar permisos específicos para este contrato
       const userPermissions = {
         canEdit:
