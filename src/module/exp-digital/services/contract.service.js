@@ -3982,7 +3982,381 @@ export class ContractService {
     }
   }
 
-  _determineRequiredAction(contract, userId) {}
+  /**
+   * Determinar la acción requerida para un contrato específico
+   * @param {Object} contract - Contrato poblado con sus relaciones
+   * @param {String} userId - ID del usuario que consulta
+   * @returns {Object} Objeto con type, description, priority, daysRemaining
+   * @private
+   */
+  _determineRequiredAction(contract, userId) {
+    try {
+      // Obtener información base del contrato
+      const daysRemaining = contract.getDaysRemaining
+        ? contract.getDaysRemaining()
+        : null;
+      const isOverdue = contract.isOverdue ? contract.isOverdue() : false;
+      const currentPhaseInfo = contract.getCurrentPhaseInfo
+        ? contract.getCurrentPhaseInfo()
+        : null;
+      const canAdvance = contract.canAdvanceToNextPhase
+        ? contract.canAdvanceToNextPhase()
+        : false;
+
+      // === PRIORIDAD 1: ALERTAS DE VENCIMIENTO ===
+      if (isOverdue) {
+        return {
+          type: "DEADLINE_ALERT",
+          description: `Contrato vencido hace ${Math.abs(daysRemaining)} días. Requiere atención urgente.`,
+          priority: "CRITICAL",
+          daysRemaining: daysRemaining,
+        };
+      }
+
+      if (daysRemaining !== null && daysRemaining <= 3) {
+        return {
+          type: "DEADLINE_ALERT",
+          description: `Contrato vence en ${daysRemaining} días. Acelerar gestión.`,
+          priority: "HIGH",
+          daysRemaining: daysRemaining,
+        };
+      }
+
+      // === PRIORIDAD 2: ESTADOS ESPECÍFICOS QUE REQUIEREN ACCIÓN ===
+      switch (contract.generalStatus) {
+        case "PENDING_DOCUMENTS":
+          return this._getDocumentUploadAction(contract, currentPhaseInfo);
+
+        case "PENDING_REVIEW":
+          return this._getReviewAction(contract, currentPhaseInfo, userId);
+
+        case "PENDING_APPROVAL":
+          return this._getApprovalAction(contract, currentPhaseInfo, userId);
+
+        case "VALIDATION_REQUIRED":
+          return this._getValidationAction(contract, currentPhaseInfo);
+      }
+
+      // === PRIORIDAD 3: TRANSICIONES DE FASE ===
+      if (canAdvance && currentPhaseInfo?.status === "COMPLETED") {
+        return {
+          type: "PHASE_TRANSITION",
+          description: `Fase "${contract.currentPhase?.name}" completada. Avanzar a siguiente fase.`,
+          priority: "HIGH",
+          daysRemaining: daysRemaining,
+        };
+      }
+
+      // === PRIORIDAD 4: ACCIONES SEGÚN FASE ACTUAL ===
+      const phaseAction = this._getPhaseSpecificAction(
+        contract,
+        currentPhaseInfo,
+        userId
+      );
+      if (phaseAction) {
+        return phaseAction;
+      }
+
+      // === PRIORIDAD 5: ACCIONES SEGÚN ESTADO GENERAL ===
+      const statusAction = this._getStatusSpecificAction(
+        contract,
+        daysRemaining
+      );
+      if (statusAction) {
+        return statusAction;
+      }
+
+      // === PRIORIDAD 6: SEGUIMIENTO RUTINARIO ===
+      if (daysRemaining !== null && daysRemaining <= 7) {
+        return {
+          type: "REVIEW",
+          description: `Seguimiento de progreso. Vence en ${daysRemaining} días.`,
+          priority: "MEDIUM",
+          daysRemaining: daysRemaining,
+        };
+      }
+
+      // === ACCIÓN POR DEFECTO ===
+      return {
+        type: "REVIEW",
+        description: "Revisar estado y progreso del contrato.",
+        priority: "LOW",
+        daysRemaining: daysRemaining,
+      };
+    } catch (error) {
+      console.error("❌ Error determinando acción requerida:", error);
+      return {
+        type: "REVIEW",
+        description: "Error determinando acción. Revisar manualmente.",
+        priority: "MEDIUM",
+        daysRemaining: null,
+      };
+    }
+  }
+
+  /**
+   * Determinar acción de carga de documentos
+   * @param {Object} contract - Contrato
+   * @param {Object} currentPhaseInfo - Información de la fase actual
+   * @returns {Object} Acción requerida
+   * @private
+   */
+  _getDocumentUploadAction(contract, currentPhaseInfo) {
+    const phaseName = contract.currentPhase?.name || "Fase actual";
+    const missingDocsCount = currentPhaseInfo?.missingDocuments?.length || 0;
+
+    if (missingDocsCount > 0) {
+      return {
+        type: "UPLOAD",
+        description: `Cargar ${missingDocsCount} documento(s) pendiente(s) en fase ${phaseName}.`,
+        priority: "HIGH",
+        daysRemaining: contract.getDaysRemaining
+          ? contract.getDaysRemaining()
+          : null,
+      };
+    }
+
+    return {
+      type: "UPLOAD",
+      description: `Completar documentación requerida para ${phaseName}.`,
+      priority: "HIGH",
+      daysRemaining: contract.getDaysRemaining
+        ? contract.getDaysRemaining()
+        : null,
+    };
+  }
+
+  /**
+   * Determinar acción de revisión
+   * @param {Object} contract - Contrato
+   * @param {Object} currentPhaseInfo - Información de la fase actual
+   * @param {String} userId - ID del usuario
+   * @returns {Object} Acción requerida
+   * @private
+   */
+  _getReviewAction(contract, currentPhaseInfo, userId) {
+    const phaseName = contract.currentPhase?.name || "Fase actual";
+
+    // Verificar si el usuario está asignado a la fase
+    const isAssigned = currentPhaseInfo?.assignedTo?.some(
+      (id) => id.toString() === userId.toString()
+    );
+
+    if (isAssigned) {
+      return {
+        type: "REVIEW",
+        description: `Revisar y validar documentos en ${phaseName}. Asignado a ti.`,
+        priority: "HIGH",
+        daysRemaining: contract.getDaysRemaining
+          ? contract.getDaysRemaining()
+          : null,
+      };
+    }
+
+    return {
+      type: "REVIEW",
+      description: `Documentos pendientes de revisión en ${phaseName}.`,
+      priority: "MEDIUM",
+      daysRemaining: contract.getDaysRemaining
+        ? contract.getDaysRemaining()
+        : null,
+    };
+  }
+
+  /**
+   * Determinar acción de aprobación
+   * @param {Object} contract - Contrato
+   * @param {Object} currentPhaseInfo - Información de la fase actual
+   * @param {String} userId - ID del usuario
+   * @returns {Object} Acción requerida
+   * @private
+   */
+  _getApprovalAction(contract, currentPhaseInfo, userId) {
+    const phaseName = contract.currentPhase?.name || "Fase actual";
+
+    // Verificar si el usuario tiene permisos de aprobación
+    const canApprove = currentPhaseInfo?.approvers?.some(
+      (id) => id.toString() === userId.toString()
+    );
+
+    if (canApprove) {
+      return {
+        type: "APPROVAL",
+        description: `Aprobar documentos de ${phaseName}. Tu aprobación es requerida.`,
+        priority: "CRITICAL",
+        daysRemaining: contract.getDaysRemaining
+          ? contract.getDaysRemaining()
+          : null,
+      };
+    }
+
+    return {
+      type: "APPROVAL",
+      description: `Esperando aprobación en ${phaseName}.`,
+      priority: "HIGH",
+      daysRemaining: contract.getDaysRemaining
+        ? contract.getDaysRemaining()
+        : null,
+    };
+  }
+
+  /**
+   * Determinar acción de validación técnica
+   * @param {Object} contract - Contrato
+   * @param {Object} currentPhaseInfo - Información de la fase actual
+   * @returns {Object} Acción requerida
+   * @private
+   */
+  _getValidationAction(contract, currentPhaseInfo) {
+    const phaseName = contract.currentPhase?.name || "Fase actual";
+
+    return {
+      type: "VALIDATION",
+      description: `Validación técnica pendiente en ${phaseName}.`,
+      priority: "HIGH",
+      daysRemaining: contract.getDaysRemaining
+        ? contract.getDaysRemaining()
+        : null,
+    };
+  }
+
+  /**
+   * Determinar acciones específicas por fase
+   * @param {Object} contract - Contrato
+   * @param {Object} currentPhaseInfo - Información de la fase actual
+   * @param {String} userId - ID del usuario
+   * @returns {Object|null} Acción requerida o null
+   * @private
+   */
+  _getPhaseSpecificAction(contract, currentPhaseInfo, userId) {
+    const phaseCode = contract.currentPhase?.code;
+    const phaseName = contract.currentPhase?.name || "Fase actual";
+    const daysRemaining = contract.getDaysRemaining
+      ? contract.getDaysRemaining()
+      : null;
+
+    switch (phaseCode) {
+      case "PREPARATORIA":
+        if (currentPhaseInfo?.status === "IN_PROGRESS") {
+          return {
+            type: "UPLOAD",
+            description: `Completar PAC, TDR y estudios de mercado para ${phaseName}.`,
+            priority: "HIGH",
+            daysRemaining: daysRemaining,
+          };
+        }
+        break;
+
+      case "PRECONTRACTUAL":
+        if (currentPhaseInfo?.status === "IN_PROGRESS") {
+          return {
+            type: "REVIEW",
+            description: `Revisar pliegos y ofertas en ${phaseName}.`,
+            priority: "HIGH",
+            daysRemaining: daysRemaining,
+          };
+        }
+        break;
+
+      case "CONTRACTUAL":
+        if (currentPhaseInfo?.status === "IN_PROGRESS") {
+          return {
+            type: "VALIDATION",
+            description: `Supervisar ejecución contractual en ${phaseName}.`,
+            priority: "MEDIUM",
+            daysRemaining: daysRemaining,
+          };
+        }
+        break;
+
+      case "PAGO":
+        if (currentPhaseInfo?.status === "IN_PROGRESS") {
+          return {
+            type: "APPROVAL",
+            description: `Validar facturas y aprobar pagos en ${phaseName}.`,
+            priority: "HIGH",
+            daysRemaining: daysRemaining,
+          };
+        }
+        break;
+
+      case "RECEPCION":
+        if (currentPhaseInfo?.status === "IN_PROGRESS") {
+          return {
+            type: "VALIDATION",
+            description: `Completar acta de recepción y liquidación en ${phaseName}.`,
+            priority: "HIGH",
+            daysRemaining: daysRemaining,
+          };
+        }
+        break;
+    }
+
+    return null;
+  }
+
+  /**
+   * Determinar acciones específicas por estado general
+   * @param {Object} contract - Contrato
+   * @param {Number} daysRemaining - Días restantes
+   * @returns {Object|null} Acción requerida o null
+   * @private
+   */
+  _getStatusSpecificAction(contract, daysRemaining) {
+    switch (contract.generalStatus) {
+      case "DRAFT":
+        return {
+          type: "REVIEW",
+          description: "Completar información del contrato y activar proceso.",
+          priority: "MEDIUM",
+          daysRemaining: daysRemaining,
+        };
+
+      case "IN_PROCESS":
+        if (daysRemaining !== null && daysRemaining <= 14) {
+          return {
+            type: "REVIEW",
+            description: `Acelerar proceso. Vence en ${daysRemaining} días.`,
+            priority: "HIGH",
+            daysRemaining: daysRemaining,
+          };
+        }
+        return {
+          type: "REVIEW",
+          description: "Monitorear progreso del proceso.",
+          priority: "LOW",
+          daysRemaining: daysRemaining,
+        };
+
+      case "EXECUTION":
+        return {
+          type: "VALIDATION",
+          description: "Supervisar ejecución contractual.",
+          priority: "MEDIUM",
+          daysRemaining: daysRemaining,
+        };
+
+      case "ON_HOLD":
+        return {
+          type: "REVIEW",
+          description:
+            "Proceso suspendido. Verificar condiciones para reactivar.",
+          priority: "HIGH",
+          daysRemaining: daysRemaining,
+        };
+
+      case "CANCELLED":
+      case "FINISHED":
+        return {
+          type: "REVIEW",
+          description: "Proceso finalizado. Solo consulta disponible.",
+          priority: "LOW",
+          daysRemaining: daysRemaining,
+        };
+    }
+
+    return null;
+  }
 
   // =============================================================================
   // OPERACIONES ESPECIALES
