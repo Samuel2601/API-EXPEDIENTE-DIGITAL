@@ -2124,7 +2124,7 @@ export class ContractService {
             path: "phases.phase",
             select: "name code description requiredDocuments",
           },
-          { path: "phases.assignedTo", select: "name email" },
+          { path: "phases.assignedTo", select: "name email", model: "user" },
         ],
       });
 
