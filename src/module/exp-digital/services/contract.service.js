@@ -306,7 +306,11 @@ export class ContractService {
             path: "currentPhase",
             select: "code name shortName order category",
           },
-          { path: "createdBy", select: "firstName lastName email" },
+          {
+            path: "createdBy",
+            select: "firstName lastName email",
+            model: "user",
+          },
         ],
       });
 
@@ -320,7 +324,7 @@ export class ContractService {
 
       // Incluir historial si se solicita
       if (includeHistory) {
-        result.history = await this.contractHistoryRepository.findByContractId(
+        result.history = await this.contractHistoryRepository.findByContract(
           contractId,
           { limit: 50, sort: { createdAt: -1 } }
         );

@@ -529,6 +529,7 @@ ContractHistorySchema.statics.isProtected = function (method) {
   return protectedMethods.includes(method);
 };
 
+// ✅ CORRECCIÓN: En métodos estáticos usar `this` directamente
 ContractHistorySchema.statics.findByContract = function (
   contractId,
   options = {}
@@ -547,7 +548,8 @@ ContractHistorySchema.statics.findByContract = function (
     if (dateTo) query.eventDate.$lte = new Date(dateTo);
   }
 
-  return this.model.paginate(query, {
+  // ✅ USAR: this.paginate() directamente
+  return this.paginate(query, {
     page,
     limit,
     sort: { eventDate: -1 },

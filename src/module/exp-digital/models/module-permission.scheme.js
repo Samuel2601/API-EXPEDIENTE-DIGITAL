@@ -923,14 +923,21 @@ UserDepartmentAccessSchema.methods.isExpired = function () {
 };
 
 // Verificar si puede acceder a un contrato específico
+// ✅ CORRECCIÓN: Manejar department poblado o no poblado
 UserDepartmentAccessSchema.methods.canAccessContract = function (contract) {
   if (!this.isActive || this.status !== "ACTIVE" || this.isExpired()) {
     return false;
   }
 
+  // ✅ OBTENER EL ID correcto del departamento
+  const departmentId = this.department._id || this.department;
+
   // Si es del mismo departamento
-  if (contract.requestingDepartment.toString() === this.department.toString()) {
-    return this.hasPermission("contracts", "canViewDepartment");
+  if (contract.requestingDepartment.toString() === departmentId.toString()) {
+    console.log("✅ Mismo departamento, verificando permiso canViewDepartment");
+    const hasPermission = this.hasPermission("contracts", "canViewDepartment");
+    console.log("Resultado hasPermission:", hasPermission);
+    return hasPermission;
   }
 
   // Si tiene acceso global (REPOSITORY)
@@ -943,8 +950,12 @@ UserDepartmentAccessSchema.methods.canAccessContract = function (contract) {
 
   // Si tiene acceso específico a otros departamentos
   const crossAccess = this.crossDepartmentAccess.viewableDepartments.find(
-    (vd) =>
-      vd.department.toString() === contract.requestingDepartment.toString()
+    (vd) => {
+      const crossDeptId = vd.department._id || vd.department;
+      return (
+        crossDeptId.toString() === contract.requestingDepartment.toString()
+      );
+    }
   );
 
   return !!crossAccess;

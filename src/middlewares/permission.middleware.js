@@ -120,7 +120,7 @@ export const requirePermission = (options = {}) => {
 export const requireContractAccess = (contractParam = "contractId") => {
   return async (req, res, next) => {
     try {
-      const userId = req.user._id;
+      const userId = req.user.sub;
       const contractId = req.params[contractParam] || req.body[contractParam];
 
       if (!contractId) {
@@ -144,12 +144,13 @@ export const requireContractAccess = (contractParam = "contractId") => {
           message: "Contrato no encontrado",
         });
       }
-
+      console.log("contract", contract);
+      console.log("userAccesses", userAccesses);
       // Verificar si el usuario tiene acceso al departamento del contrato
       const hasAccess = userAccesses.some((access) =>
         access.canAccessContract(contract)
       );
-
+      console.log(hasAccess);
       if (!hasAccess) {
         return res.status(403).json({
           success: false,

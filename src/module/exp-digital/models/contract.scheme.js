@@ -320,6 +320,7 @@ export const ContractJSON = {
   },
 
   // Fases del contrato
+  // ✅ CORRECCIÓN: Solo información dinámica del contrato
   phases: {
     type: [
       {
@@ -336,16 +337,26 @@ export const ContractJSON = {
         },
         startDate: Date,
         endDate: Date,
-        order: Number,
+
+        // ✅ OPCIONAL: Información específica de esta instancia
+        actualStartDate: Date, // Fecha real de inicio (vs estimada)
+        actualEndDate: Date, // Fecha real de fin (vs estimada)
+        assignedTo: {
+          // Usuario asignado a esta fase
+          type: Schema.Types.ObjectId,
+          ref: "User",
+        },
+        notes: String, // Notas específicas de esta fase en este contrato
+        completionPercentage: {
+          // Progreso granular de la fase
+          type: Number,
+          min: 0,
+          max: 100,
+          default: 0,
+        },
       },
     ],
     default: [],
-    meta: {
-      validation: { isArray: true, optional: true },
-      messages: {
-        isArray: "Las fases deben ser una lista válida",
-      },
-    },
   },
 
   // Metadatos adicionales
@@ -456,13 +467,39 @@ ContractSchema.methods.toJSON = function () {
 };
 
 // ✅ MÉTODO SIMPLE: Calcular progreso basado en fases completadas
+// ✅ MÉTODO MEJORADO
 ContractSchema.methods.calculateProgress = function () {
   if (this.phases.length === 0) return 0;
 
+  // Opción 1: Por fases completadas (actual)
   const completedPhases = this.phases.filter(
     (p) => p.status === "COMPLETED"
   ).length;
-  return Math.round((completedPhases / this.phases.length) * 100);
+  const basicProgress = Math.round(
+    (completedPhases / this.phases.length) * 100
+  );
+
+  // Opción 2: Considerar progreso granular de fases
+  const totalProgress = this.phases.reduce((sum, phase) => {
+    if (phase.status === "COMPLETED") return sum + 100;
+    if (phase.status === "IN_PROGRESS")
+      return sum + (phase.completionPercentage || 0);
+    return sum;
+  }, 0);
+
+  const granularProgress = Math.round(totalProgress / this.phases.length);
+
+  return granularProgress; // o basicProgress, según prefieras
+};
+
+ContractSchema.methods.getOrderedPhases = async function () {
+  await this.populate({
+    path: "phases.phase",
+    select: "code name category order",
+    options: { sort: { order: 1 } },
+  });
+
+  return this.phases.sort((a, b) => a.phase.order - b.phase.order);
 };
 
 // ✅ MÉTODO SIMPLE: Obtener información de la fase actual
@@ -580,21 +617,40 @@ ContractSchema.statics.getStatsByStatus = function () {
 // === VIRTUALES ===
 
 ContractSchema.virtual("progress").get(function () {
-  return this.calculateProgress();
+  try {
+    return this.calculateProgress();
+  } catch (error) {
+    return 0;
+  }
 });
 
 ContractSchema.virtual("daysRemaining").get(function () {
-  return this.getDaysRemaining();
+  try {
+    return this.getDaysRemaining();
+  } catch (error) {
+    return null;
+  }
 });
 
 ContractSchema.virtual("budgetUtilization").get(function () {
-  return this.getBudgetUtilization();
+  try {
+    return this.getBudgetUtilization();
+  } catch (error) {
+    return 0;
+  }
 });
 
 ContractSchema.virtual("displayName").get(function () {
-  return `${this.contractNumber} - ${this.contractualObject.substring(0, 50)}${
-    this.contractualObject.length > 50 ? "..." : ""
-  }`;
+  try {
+    if (!this.contractNumber || !this.contractualObject) {
+      return this.contractNumber || "Sin número";
+    }
+    return `${this.contractNumber} - ${this.contractualObject.substring(0, 50)}${
+      this.contractualObject.length > 50 ? "..." : ""
+    }`;
+  } catch (error) {
+    return "Error en displayName";
+  }
 });
 
 // === MIDDLEWARES MEJORADOS ===
