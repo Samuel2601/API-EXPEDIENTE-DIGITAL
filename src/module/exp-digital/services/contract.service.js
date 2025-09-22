@@ -3982,6 +3982,8 @@ export class ContractService {
     }
   }
 
+  _determineRequiredAction(contract, userId) {}
+
   // =============================================================================
   // OPERACIONES ESPECIALES
   // =============================================================================
