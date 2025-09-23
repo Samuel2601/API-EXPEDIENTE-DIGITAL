@@ -30,7 +30,7 @@ export class FileController {
     this.uploadMiddleware = crearMiddlewareArchivos({
       destino: "expediente-digital",
       maxTamaño: 50, // 50MB para documentos
-      campoNombre: "documents",
+      campoNombre: "files",
       maxArchivos: 10,
       tiposPermitidos: [
         ".pdf",

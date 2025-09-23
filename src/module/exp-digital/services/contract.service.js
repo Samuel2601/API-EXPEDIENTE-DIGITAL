@@ -2254,18 +2254,21 @@ export class ContractService {
       for (const file of documentData.files) {
         try {
           // Crear registro del archivo
-          const fileRecord = await this.fileRepository.create({
-            originalName: file.originalname,
-            filename: file.filename,
-            path: file.path,
-            size: file.size,
-            mimeType: file.mimetype,
-            uploadedBy: documentData.userId,
-            contractId: contractId,
-            documentType: documentData.documentType,
-            phase: documentData.phase,
-            rsyncStatus: "pending",
-          });
+          const fileRecord = await this.fileRepository.create(
+            {
+              originalName: file.originalname,
+              filename: file.filename,
+              path: file.path,
+              size: file.size,
+              mimeType: file.mimetype,
+              uploadedBy: documentData.userId,
+              contractId: contractId,
+              documentType: documentData.documentType,
+              phase: documentData.phase,
+              rsyncStatus: "pending",
+            },
+            userData
+          );
 
           // Agregar documento a la fase correspondiente del contrato
           const phaseIndex = contract.phases.findIndex(

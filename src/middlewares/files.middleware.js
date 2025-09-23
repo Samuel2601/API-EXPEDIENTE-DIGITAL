@@ -34,7 +34,7 @@ export const crearMiddlewareArchivos = (opciones = {}) => {
     destino = "expediente-digital",
     maxTamaño = 50, // 50MB para documentos del expediente digital
     campos,
-    campoNombre = "documents",
+    campoNombre = "files",
     maxArchivos = 10,
     tiposPermitidos = [
       // Documentos de oficina
