@@ -24,7 +24,9 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { FileRepository } from "../repositories/file.repository.js";
-import { Types } from "mongoose";
+import mongoose, { Types } from "mongoose";
+
+import crypto from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -2236,14 +2238,35 @@ export class ContractService {
    * Subir documentos a un contrato
    * @param {string} contractId - ID del contrato
    * @param {Object} documentData - Datos de los documentos
+   * @param {Object} userData - Datos del usuario
    */
   async uploadContractDocuments(contractId, documentData, userData = {}) {
     try {
       console.log(`📄 Service: Subiendo documentos al contrato ${contractId}`);
 
+      // Verificar que el contrato existe
       const contract = await this.contractRepository.findById(contractId);
       if (!contract) {
         throw createError("Contrato no encontrado", 404);
+      }
+
+      // Buscar la fase por código si se proporciona código en lugar de ObjectId
+      let phaseId = documentData.phase;
+      if (
+        documentData.phase &&
+        !mongoose.Types.ObjectId.isValid(documentData.phase)
+      ) {
+        // Es un código, necesitamos buscar la fase
+        const phase = await this.contractPhaseRepository.findOne({
+          code: documentData.phase.toUpperCase(),
+        });
+        if (!phase) {
+          throw createError(
+            `Fase con código "${documentData.phase}" no encontrada`,
+            404
+          );
+        }
+        phaseId = phase._id;
       }
 
       const results = {
@@ -2251,88 +2274,202 @@ export class ContractService {
         failed: [],
       };
 
-      for (const file of documentData.files) {
+      // Procesar cada archivo
+      for (const file of documentData.files || []) {
         try {
-          // Crear registro del archivo
+          // Generar nombre único para el sistema
+          const timestamp = Date.now();
+          const randomStr = Math.random().toString(36).substring(7);
+          const extension = path.extname(
+            file.originalname || file.originalName
+          );
+          const systemName = `${timestamp}_${randomStr}${extension}`;
+
+          // Generar hash del archivo si está disponible
+          const hash = file.buffer
+            ? crypto.createHash("sha256").update(file.buffer).digest("hex")
+            : crypto
+                .createHash("sha256")
+                .update(file.originalname + timestamp)
+                .digest("hex");
+
+          // Determinar tipo de archivo
+          const fileType = this._getFileTypeFromMime(file.mimetype);
+
+          // Construir ruta de almacenamiento
+          const storagePath = path.join(
+            "expediente-digital",
+            "contracts",
+            contractId,
+            "documents",
+            systemName
+          );
+
+          // Crear registro del archivo con TODOS los campos requeridos
           const fileRecord = await this.fileRepository.create(
             {
-              originalName: file.originalname,
-              filename: file.filename,
-              path: file.path,
-              size: file.size,
-              mimeType: file.mimetype,
-              uploadedBy: documentData.userId,
-              contractId: contractId,
-              documentType: documentData.documentType,
-              phase: documentData.phase,
-              rsyncStatus: "pending",
+              // Información básica
+              originalName: file.originalname || file.originalName,
+              systemName: systemName,
+
+              // Información del archivo
+              fileInfo: {
+                size: file.size,
+                mimeType: file.mimetype,
+                hash: hash,
+                fileType: fileType,
+                encoding: file.encoding || "binary",
+              },
+
+              // Almacenamiento
+              storage: {
+                path: storagePath,
+                diskUsage: file.size,
+                storageType: "LOCAL",
+                rsyncStatus: "PENDING",
+              },
+
+              // Relaciones
+              contract: contractId,
+              phase: phaseId, // ObjectId de la fase
+              documentType: (
+                documentData.documentType || "OTROS"
+              ).toUpperCase(),
+
+              // Auditoría
+              audit: {
+                uploadedBy: documentData.userId || userData.userId,
+                uploadDate: new Date(),
+                ipAddress: userData.ipAddress,
+                userAgent: userData.userAgent,
+              },
+
+              // Metadatos adicionales
+              description:
+                documentData.description ||
+                `Documento para la fase ${documentData.phase}`,
+              tags: documentData.tags ? documentData.tags.split(",") : [],
+
+              // Versioning
+              versionInfo: {
+                version: 1,
+                isCurrentVersion: true,
+              },
+
+              // Estado inicial
+              status: "DRAFT",
+
+              // Usuario creador
+              createdBy: documentData.userId || userData.userId,
             },
             userData
           );
 
           // Agregar documento a la fase correspondiente del contrato
           const phaseIndex = contract.phases.findIndex(
-            (p) => p.phase.toString() === documentData.phase
+            (p) => p.phase.toString() === phaseId.toString()
           );
 
           if (phaseIndex >= 0) {
             contract.phases[phaseIndex].documents.push({
+              _id: new mongoose.Types.ObjectId(),
               file: fileRecord._id,
-              documentType: documentData.documentType,
-              uploadedBy: documentData.userId,
+              documentType: (
+                documentData.documentType || "OTROS"
+              ).toUpperCase(),
+              uploadedBy: documentData.userId || userData.userId,
               uploadedAt: new Date(),
-              observations: documentData.observations,
+              observations: documentData.observations || "",
               version: 1,
               status: "active",
+              isRequired:
+                documentData.isRequired === "true" ||
+                documentData.isRequired === true,
             });
           }
 
           results.successful.push({
-            file: fileRecord,
+            fileId: fileRecord._id,
+            filename: file.originalname || file.originalName,
             documentType: documentData.documentType,
+            size: file.size,
+            hash: hash,
           });
         } catch (error) {
+          console.error(
+            `❌ Error procesando archivo ${file.originalname}:`,
+            error
+          );
           results.failed.push({
-            filename: file.originalname,
-            error: error.message,
+            filename: file.originalname || file.originalName,
+            error: `Error creando File: ${error.message}`,
           });
         }
       }
 
-      // Actualizar contrato
+      // Actualizar contrato si hay archivos exitosos
       if (results.successful.length > 0) {
-        await this.contractRepository.updateById(contractId, {
-          phases: contract.phases,
-          updatedBy: documentData.userId,
-          updatedAt: new Date(),
-        });
+        await this.contractRepository.update(
+          contractId,
+          {
+            phases: contract.phases,
+            updatedBy: documentData.userId || userData.userId,
+            updatedAt: new Date(),
+          },
+          userData
+        );
 
         // Registrar en historial
         await this._createHistoryEntry(
           contractId,
           {
             eventType: "DOCUMENT_UPLOAD",
-            description: `${results.successful.length} documento(s) subido(s)`,
+            description: `${results.successful.length} documento(s) subido(s) a la fase ${documentData.phase}`,
             user: {
-              userId: documentData.userId,
-              name: documentData.userInfo?.name,
-              email: documentData.userInfo?.email,
+              userId: documentData.userId || userData.userId,
+              name: userData.name,
+              email: userData.email,
             },
             changeDetails: {
               documentCount: results.successful.length,
               phase: documentData.phase,
               documentType: documentData.documentType,
+              fileIds: results.successful.map((f) => f.fileId),
             },
           },
           userData
         );
       }
 
+      console.log("Subidos", results);
       return results;
     } catch (error) {
       console.error("❌ Service error en uploadContractDocuments:", error);
       throw error;
     }
+  }
+
+  /**
+   * Determinar tipo de archivo basado en MIME type
+   * @private
+   */
+  _getFileTypeFromMime(mimeType) {
+    if (mimeType.startsWith("image/")) return "IMAGE";
+    if (mimeType === "application/pdf") return "PDF";
+    if (mimeType.includes("word") || mimeType.includes("document"))
+      return "DOCUMENT";
+    if (mimeType.includes("sheet") || mimeType.includes("excel"))
+      return "SPREADSHEET";
+    if (mimeType.includes("presentation") || mimeType.includes("powerpoint"))
+      return "PRESENTATION";
+    if (mimeType.startsWith("text/")) return "TEXT";
+    if (
+      mimeType.includes("zip") ||
+      mimeType.includes("rar") ||
+      mimeType.includes("compressed")
+    )
+      return "ARCHIVE";
+    return "OTHER";
   }
 
   /**

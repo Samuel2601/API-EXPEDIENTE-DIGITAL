@@ -39,6 +39,17 @@ export class ContractPhaseRepository extends BaseRepository {
     };
   }
 
+  async findOne(query, options = {}) {
+    try {
+      console.log("🔍 FindOne en fases:", query);
+      const result = await this.model.findOne(query, options);
+      return result;
+    } catch (error) {
+      console.error("❌ Error en findOne:", error);
+      throw new Error(`Error en findOne: ${error.message}`);
+    }
+  }
+
   // ===== MÉTODOS USANDO QUERY HELPERS DEL ESQUEMA =====
 
   /**

@@ -1092,44 +1092,81 @@ export class ContractController {
   uploadContractDocument = async (req, res) => {
     try {
       const { contractId } = req.params;
-      const { files } = req;
-      const { documentType, phase, observations } = req.body;
-      const { user } = req;
+      const { user, body } = req;
 
-      validateObjectId(contractId, "ID del contrato");
-      console.log("Recibido archivos", files.length);
+      // Los archivos vienen del middleware en req.files
+      const files = req.files;
+
       if (!files || files.length === 0) {
         return res.status(400).json({
           success: false,
-          message: "No se encontraron archivos para subir",
+          message: "No se recibieron archivos para subir",
+          code: "NO_FILES_UPLOADED",
         });
       }
 
+      console.log(
+        `📤 Controller: Usuario ${user.userId} subiendo ${files.length} archivo(s) al contrato ${contractId}`
+      );
+      console.log(`📋 Metadata recibida:`, body);
+
+      // Estructura de datos para el servicio
+      const documentData = {
+        files: files, // Array de archivos del middleware
+        userId: user.userId,
+        contractId: contractId,
+        phase: body.phase, // Puede ser código o ObjectId
+        documentType: body.documentType || "OTROS",
+        description: body.description || "",
+        observations: body.observations || "",
+        isRequired: body.isRequired,
+        version: body.version || "1",
+        tags: body.tags || "",
+      };
+
+      // Datos del usuario para auditoría
+      const userData = {
+        userId: user.userId,
+        name: user.name,
+        email: user.email,
+        ipAddress: req.ip,
+        userAgent: req.get("User-Agent"),
+      };
+
+      // Llamar al servicio
       const result = await this.contractService.uploadContractDocuments(
         contractId,
-        {
-          files,
-          documentType,
-          phase,
-          observations,
-          userId: user.userId,
-          userInfo: {
-            name: user.name,
-            email: user.email,
-          },
-        }
+        documentData,
+        userData
       );
-      console.log("Subidos", result);
-      res.json({
+
+      // Respuesta exitosa
+      res.status(200).json({
         success: true,
-        message: `${result.successful.length} documentos subidos exitosamente`,
-        data: result,
+        message: `${result.successful.length} archivo(s) subido(s) correctamente`,
+        data: {
+          uploaded: result.successful,
+          failed: result.failed,
+          summary: {
+            total: documentData.files.length,
+            successful: result.successful.length,
+            failed: result.failed.length,
+          },
+        },
       });
     } catch (error) {
-      console.error("❌ Error en uploadContractDocument:", error);
-      res.status(error.statusCode || 500).json({
+      console.error(`❌ Controller error en uploadContractDocument:`, error);
+
+      res.status(error.status || 500).json({
         success: false,
-        message: error.message || "Error al subir documentos",
+        message: error.message || "Error interno del servidor",
+        code: error.code || "INTERNAL_ERROR",
+        ...(process.env.NODE_ENV === "development" && {
+          debug: {
+            stack: error.stack?.split("\n").slice(0, 5),
+            timestamp: new Date().toISOString(),
+          },
+        }),
       });
     }
   };
