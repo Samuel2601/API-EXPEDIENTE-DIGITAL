@@ -48,15 +48,7 @@ router.post(
  * Obtener todos los archivos con filtros
  * Permisos: documents.canView
  */
-router.get(
-  "/",
-  requirePermission({
-    category: "documents",
-    permission: "canView",
-    errorMessage: "No tiene permisos para ver archivos",
-  }),
-  controller.getAllFiles
-);
+router.get("/", controller.getAllFiles);
 
 /**
  * GET /files/:id

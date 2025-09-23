@@ -1097,7 +1097,7 @@ export class ContractController {
       const { user } = req;
 
       validateObjectId(contractId, "ID del contrato");
-
+      console.log("Recibido archivos", files.length);
       if (!files || files.length === 0) {
         return res.status(400).json({
           success: false,
@@ -1119,7 +1119,7 @@ export class ContractController {
           },
         }
       );
-
+      console.log("Subidos", result);
       res.json({
         success: true,
         message: `${result.successful.length} documentos subidos exitosamente`,

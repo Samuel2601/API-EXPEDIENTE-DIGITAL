@@ -12,9 +12,11 @@ import {
   requirePermission,
 } from "#src/middlewares/permission.middleware.js";
 import { auth, verifyModuleAccess } from "#src/middlewares/auth.js";
+import { FileController } from "../controllers/file.controller.js";
 
 const router = Router();
 const controller = new ContractController();
+const file = new FileController();
 
 // =============================================================================
 // MIDDLEWARES DE AUTENTICACIÓN Y PERMISOS
@@ -320,7 +322,11 @@ router.get("/:contractId/transitions", controller.getAvailableTransitions);
  * Subir documento al contrato
  * Permisos: documents.canUpload + acceso al contrato
  */
-router.post("/:contractId/documents", controller.uploadContractDocument);
+router.post(
+  "/:contractId/documents",
+  file.uploadMiddleware,
+  controller.uploadContractDocument
+);
 
 /**
  * GET /contracts/:contractId/documents
