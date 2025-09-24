@@ -91,11 +91,11 @@ class RsyncClient {
       console.warn(`⚠️ No se pudo crear directorio temporal: ${error.message}`);
     });
 
-    this.testConnection().catch((error) => {
+    /* this.testConnection().catch((error) => {
       console.warn(
         `⚠️ Advertencia: No se pudo conectar al servidor rsync al inicio: ${error.message}`
       );
-    });
+    });*/
   }
 
   /**

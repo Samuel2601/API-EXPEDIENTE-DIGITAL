@@ -14,6 +14,11 @@ import {
 import { auth, verifyModuleAccess } from "#src/middlewares/auth.js";
 import { FileController } from "../controllers/file.controller.js";
 
+import {
+  rsyncContractDocuments,
+  autoAddRsyncResponse,
+} from "#src/middlewares/rsync.middleware.js";
+
 const router = Router();
 const controller = new ContractController();
 const file = new FileController();
@@ -25,6 +30,8 @@ const file = new FileController();
 // Middleware de autenticación para todas las rutas
 router.use(auth);
 router.use(verifyModuleAccess);
+// ✨ Agregar automáticamente información de rsync a todas las respuestas JSON
+router.use(autoAddRsyncResponse);
 
 // =============================================================================
 // OPERACIONES CRUD DE CONTRATOS
@@ -325,6 +332,7 @@ router.get("/:contractId/transitions", controller.getAvailableTransitions);
 router.post(
   "/:contractId/documents",
   file.uploadMiddleware,
+  rsyncContractDocuments,
   controller.uploadContractDocument
 );
 
