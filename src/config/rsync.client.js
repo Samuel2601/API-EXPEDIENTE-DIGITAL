@@ -59,7 +59,8 @@ class RsyncClient {
 
       // Opciones de rsync desde .env
       options:
-        process.env.RSYNC_OPTIONS || "-avz --partial --progress --timeout=300",
+        process.env.RSYNC_OPTIONS ||
+        "-avz --partial --mkpath --progress --timeout=300",
       deleteAfter: process.env.RSYNC_DELETE_AFTER === "true",
       compress: process.env.RSYNC_COMPRESS !== "false", // true por defecto
       verbose: process.env.RSYNC_VERBOSE === "true",
