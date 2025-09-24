@@ -16,3 +16,4 @@ pnpm-lock.yaml
 /data/*
 !/data/.gitkeep
 /logs
+/temp
