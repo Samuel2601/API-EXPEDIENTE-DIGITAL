@@ -22,11 +22,13 @@ import {
   validateObjectId,
   validateRequiredFields,
 } from "../../../../utils/validation.util.js";
+import { FileService } from "../services/file.service.js";
 
 export class ContractController {
   constructor() {
     this.contractService = new ContractService();
     this.configService = new ContractConfigurationService();
+    this.fileService = new FileService();
   }
 
   // =============================================================================
@@ -1086,65 +1088,91 @@ export class ContractController {
   // =============================================================================
 
   /**
-   * Subir documento a un contrato
-   * POST /contracts/:contractId/documents/upload
+   * Subir documentos a un contrato específico
+   * POST /contracts/:contractId/documents
+   * Permisos: documents.canUpload + acceso al contrato
    */
   uploadContractDocument = async (req, res) => {
     try {
       const { contractId } = req.params;
-      const { user, body } = req;
+      const { user, body, files } = req;
 
-      // Los archivos vienen del middleware en req.files
-      const files = req.files;
+      console.log(
+        `📤 Subiendo ${files?.length || 0} documento(s) al contrato ${contractId}`
+      );
 
+      // Validaciones básicas
+      validateObjectId(contractId, "ID del contrato");
       if (!files || files.length === 0) {
         return res.status(400).json({
           success: false,
           message: "No se recibieron archivos para subir",
-          code: "NO_FILES_UPLOADED",
+          code: "NO_FILES_PROVIDED",
         });
       }
 
-      console.log(
-        `📤 Controller: Usuario ${user.userId} subiendo ${files.length} archivo(s) al contrato ${contractId}`
-      );
-      console.log(`📋 Metadata recibida:`, body);
+      // Validar acceso al contrato
+      const hasContractAccess =
+        await this.contractService.validateContractAccess(
+          contractId,
+          user.userId,
+          user.role
+        );
 
-      // Estructura de datos para el servicio
+      if (!hasContractAccess) {
+        return res.status(403).json({
+          success: false,
+          message: "No tiene permisos para subir documentos a este contrato",
+          code: "CONTRACT_ACCESS_DENIED",
+        });
+      }
+
+      // Extraer y validar datos del documento
       const documentData = {
-        files: files, // Array de archivos del middleware
-        userId: user.userId,
-        contractId: contractId,
-        phase: body.phase, // Puede ser código o ObjectId
+        contractId,
+        phase: body.phase,
         documentType: body.documentType || "OTROS",
         description: body.description || "",
-        observations: body.observations || "",
-        isRequired: body.isRequired,
-        version: body.version || "1",
-        tags: body.tags || "",
+        isPublic: body.isPublic === "true",
+        allowedRoles: body.allowedRoles ? JSON.parse(body.allowedRoles) : [],
+        allowedUsers: body.allowedUsers ? JSON.parse(body.allowedUsers) : [],
+        files,
       };
 
-      // Datos del usuario para auditoría
       const userData = {
         userId: user.userId,
-        name: user.name,
-        email: user.email,
         ipAddress: req.ip,
         userAgent: req.get("User-Agent"),
       };
 
-      // Llamar al servicio
+      // Procesar archivos con el service
       const result = await this.contractService.uploadContractDocuments(
-        contractId,
         documentData,
         userData
       );
 
-      // Respuesta exitosa
-      res.status(200).json({
+      console.log(
+        `✅ Documentos procesados: ${result.successful.length} exitosos, ${result.failed.length} fallidos`
+      );
+
+      // NUEVA FUNCIONALIDAD: Sincronizar nombres con resultados de rsync
+      if (
+        req.rsyncResults &&
+        req.rsyncResults.enabled &&
+        req.rsyncResults.results
+      ) {
+        await this.synchronizeFileNamesWithRsync(
+          result.successful,
+          req.rsyncResults.results
+        );
+      }
+
+      res.status(201).json({
         success: true,
-        message: `${result.successful.length} archivo(s) subido(s) correctamente`,
+        message: `Documentos procesados exitosamente`,
         data: {
+          documents: result.successful,
+          errors: result.failed,
           uploaded: result.successful,
           failed: result.failed,
           summary: {
@@ -1153,6 +1181,14 @@ export class ContractController {
             failed: result.failed.length,
           },
         },
+        // Incluir información de rsync si está disponible
+        ...(req.rsyncResults && {
+          rsync: {
+            enabled: req.rsyncResults.enabled,
+            summary: req.rsyncResults.summary,
+            remotePath: req.rsyncResults.remotePath,
+          },
+        }),
       });
     } catch (error) {
       console.error(`❌ Controller error en uploadContractDocument:`, error);
@@ -1170,6 +1206,67 @@ export class ContractController {
       });
     }
   };
+
+  /**
+   * Sincronizar nombres de archivos entre BD y resultados de rsync
+   * @private
+   */
+  async synchronizeFileNamesWithRsync(successfulFiles, rsyncResults) {
+    try {
+      console.log(
+        `🔄 Sincronizando nombres de ${successfulFiles.length} archivos con rsync`
+      );
+
+      for (let i = 0; i < successfulFiles.length; i++) {
+        const fileRecord = successfulFiles[i];
+        const rsyncResult = rsyncResults.find(
+          (r) => r.file === fileRecord.originalName && r.success
+        );
+
+        if (rsyncResult) {
+          // Actualizar el registro del archivo con información de rsync
+          await this.fileService.updateFileRsyncInfo(fileRecord._id, {
+            remoteFileName:
+              rsyncResult.systemName || rsyncResult.remoteFileName,
+            remotePath: rsyncResult.remotePath,
+            syncStatus: "SYNCED",
+            lastSyncSuccess: new Date(),
+            syncError: null,
+            syncRetries: 0,
+          });
+
+          // Actualizar el systemName en la BD para que coincida con rsync
+          if (
+            rsyncResult.systemName &&
+            rsyncResult.systemName !== fileRecord.systemName
+          ) {
+            await this.fileService.updateFileName(fileRecord._id, {
+              systemName: rsyncResult.systemName,
+            });
+
+            console.log(
+              `✅ Archivo sincronizado: ${fileRecord.originalName} -> ${rsyncResult.systemName}`
+            );
+          }
+        } else {
+          console.warn(
+            `⚠️ No se encontró resultado de rsync para: ${fileRecord.originalName}`
+          );
+
+          // Marcar como pendiente de sincronización si no se encontró
+          await this.fileService.updateFileRsyncInfo(fileRecord._id, {
+            syncStatus: "PENDING",
+            syncError: "No se encontró resultado de transferencia",
+          });
+        }
+      }
+
+      console.log(`✅ Sincronización de nombres completada`);
+    } catch (error) {
+      console.error(`❌ Error sincronizando nombres con rsync:`, error);
+      // No lanzar error - esto es complementario
+    }
+  }
 
   /**
    * Obtener documentos de un contrato

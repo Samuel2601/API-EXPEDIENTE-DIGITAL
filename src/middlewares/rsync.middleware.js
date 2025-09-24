@@ -22,15 +22,21 @@ import path from "path";
  * @param {boolean} [options.keepTempFiles=false] - Mantener archivos temporales para debug
  * @returns {Function} Middleware configurado
  */
+/**
+ * Middleware configurable para sincronización automática con RSync
+ * @param {Object} options - Opciones de configuración
+ * @param {Function} [options.fileNameBuilder] - Función para generar nombres de archivos consistentes
+ */
 export const createRsyncMiddleware = (options = {}) => {
   const {
     remoteBasePath,
     pathBuilder,
+    fileNameBuilder, // Nueva opción para nombres consistentes
     priority = "NORMAL",
     createRemoteDir = true,
     verifyTransfer = true,
     failOnError = false,
-    enabled = process.env.RSYNC_ENABLED !== "false", // Habilitado por defecto
+    enabled = process.env.RSYNC_ENABLED !== "false",
     onSuccess,
     onError,
     keepTempFiles = process.env.NODE_ENV === "development" &&
@@ -70,8 +76,8 @@ export const createRsyncMiddleware = (options = {}) => {
       );
       console.log(`📂 Ruta remota determinada: ${remotePath}`);
 
-      // Procesar archivos
-      const rsyncResults = await processFiles(
+      // Procesar archivos con nombres consistentes
+      const rsyncResults = await processFilesWithConsistentNames(
         req.files,
         remotePath,
         rsyncClient,
@@ -80,6 +86,7 @@ export const createRsyncMiddleware = (options = {}) => {
           createRemoteDir,
           verifyTransfer,
           keepTempFiles,
+          fileNameBuilder, // Pasar función de nombres consistentes
         }
       );
 
@@ -167,6 +174,124 @@ export const createRsyncMiddleware = (options = {}) => {
     }
   };
 };
+
+/**
+ * Procesar archivos individuales con nombres consistentes
+ * @private
+ */
+async function processFilesWithConsistentNames(
+  files,
+  remotePath,
+  rsyncClient,
+  options
+) {
+  const {
+    priority,
+    createRemoteDir,
+    verifyTransfer,
+    keepTempFiles,
+    fileNameBuilder,
+  } = options;
+  const results = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    let tempFilePath = null;
+
+    try {
+      console.log(
+        `📤 Procesando archivo ${i + 1}/${files.length}: ${file.originalname}`
+      );
+
+      // Generar nombre consistente si se proporciona función
+      const consistentFileName = fileNameBuilder
+        ? fileNameBuilder(file, i)
+        : `${Date.now()}_${Math.random().toString(36).substring(7)}_${file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+
+      // Crear archivo temporal con nombre consistente
+      tempFilePath = await createTempFileWithConsistentName(
+        file,
+        rsyncClient.config.tempDir,
+        consistentFileName
+      );
+
+      // Transferir archivo con el nombre consistente
+      const transferResult = await rsyncClient.transferFile(
+        tempFilePath,
+        remotePath,
+        {
+          priority,
+          createRemoteDir,
+          verifyTransfer,
+          destinationFileName: consistentFileName, // Usar nombre consistente en destino
+        }
+      );
+
+      results.push({
+        file: file.originalname,
+        systemName: consistentFileName, // Incluir nombre del sistema
+        success: transferResult.success,
+        remotePath: transferResult.remotePath,
+        remoteFileName: consistentFileName,
+        size: file.size,
+        mimeType: file.mimetype,
+        transferTime: transferResult.transferTime,
+        verified: transferResult.verified,
+      });
+
+      console.log(
+        `✅ ${file.originalname} -> ${consistentFileName} sincronizado exitosamente`
+      );
+    } catch (error) {
+      console.error(`❌ Error procesando ${file.originalname}:`, error);
+
+      results.push({
+        file: file.originalname,
+        systemName: fileNameBuilder ? fileNameBuilder(file, i) : null,
+        success: false,
+        error: error.message,
+        size: file.size,
+        mimeType: file.mimetype,
+      });
+    } finally {
+      // Limpiar archivo temporal
+      if (tempFilePath && !keepTempFiles) {
+        try {
+          await fs.unlink(tempFilePath);
+        } catch (cleanupError) {
+          console.warn(
+            `⚠️ No se pudo eliminar archivo temporal ${tempFilePath}:`,
+            cleanupError
+          );
+        }
+      } else if (tempFilePath && keepTempFiles) {
+        console.log(`🗂️ Archivo temporal conservado: ${tempFilePath}`);
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Crear archivo temporal con nombre consistente
+ * @private
+ */
+async function createTempFileWithConsistentName(
+  file,
+  tempDir,
+  consistentFileName
+) {
+  const tempFilePath = path.join(tempDir, consistentFileName);
+
+  // Escribir contenido del archivo
+  await fs.writeFile(tempFilePath, file.buffer);
+
+  console.log(
+    `📝 Archivo temporal creado con nombre consistente: ${consistentFileName}`
+  );
+  return tempFilePath;
+}
 
 /**
  * Construir ruta remota basada en el request
@@ -287,26 +412,146 @@ async function createTempFile(file, tempDir) {
 }
 
 // =============================================================================
-// MIDDLEWARES PRECONFIGURADOS PARA CASOS COMUNES
+// MIDDLEWARE RSYNC MEJORADO PARA DOCUMENTOS DE CONTRATOS
 // =============================================================================
 
 /**
  * Middleware preconfigurado para documentos de contratos
+ * Corrige la nomenclatura y estructura de archivos
  */
 export const rsyncContractDocuments = createRsyncMiddleware({
-  pathBuilder: (req) => {
+  pathBuilder: async (req) => {
     const contractId = req.params.contractId;
     const year = new Date().getFullYear();
-    const phase = req.body.phase || "general";
-    return `contratos/${contractId}/${year}/${phase}`;
+
+    // Obtener información de la fase desde la BD
+    let phaseName = "general";
+    let documentType = "OTROS";
+
+    if (req.body.phase) {
+      try {
+        // Si phase es un ObjectId, buscar el nombre de la fase
+        if (
+          typeof req.body.phase === "string" &&
+          req.body.phase.match(/^[0-9a-fA-F]{24}$/)
+        ) {
+          const { ContractPhaseService } = await import(
+            "../services/contract-phase.service.js"
+          );
+          const phaseService = new ContractPhaseService();
+          const phase = await phaseService.getPhaseById(req.body.phase);
+          phaseName = phase?.code || phase?.name || "general";
+        } else {
+          // Si es un string, usarlo directamente pero sanitizado
+          phaseName = req.body.phase.toString().replace(/[^a-zA-Z0-9-_]/g, "_");
+        }
+      } catch (error) {
+        console.warn(
+          `⚠️ No se pudo obtener información de la fase: ${error.message}`
+        );
+        phaseName =
+          req.body.phase?.toString()?.replace(/[^a-zA-Z0-9-_]/g, "_") ||
+          "general";
+      }
+    }
+
+    if (req.body.documentType) {
+      documentType = req.body.documentType
+        .toString()
+        .replace(/[^a-zA-Z0-9-_]/g, "_");
+    }
+
+    // Estructura mejorada: contratos/{contractId}/{year}/{phase}/{documentType}
+    return `expediente_data/expedientes/contratos/${contractId}/${year}/${phaseName}/${documentType}`;
   },
+
   priority: "HIGH",
+
+  // Función personalizada para generar nombres de archivos consistentes
+  fileNameBuilder: (file, index) => {
+    const timestamp = Date.now();
+    const randomStr = Math.random().toString(36).substring(2, 8);
+    const extension = path.extname(file.originalname);
+    const baseName = path
+      .basename(file.originalname, extension)
+      .replace(/[^a-zA-Z0-9-_]/g, "_")
+      .substring(0, 50); // Limitar longitud
+
+    // Formato consistente: {timestamp}_{random}_{baseName}{extension}
+    return `${timestamp}_${randomStr}_${baseName}${extension}`;
+  },
+
+  // Callback después de sincronización exitosa
   onSuccess: async (req, successfulFiles) => {
     console.log(
       `📋 Documentos de contrato ${req.params.contractId} sincronizados: ${successfulFiles.length} archivos`
     );
+
+    // Opcional: Actualizar registros en BD con información de rsync
+    try {
+      for (const fileResult of successfulFiles) {
+        // Aquí podrías actualizar el registro del archivo con la información de rsync
+        console.log(
+          `✅ Archivo sincronizado: ${fileResult.file} -> ${fileResult.remotePath}`
+        );
+      }
+    } catch (error) {
+      console.warn("⚠️ Error actualizando información de rsync en BD:", error);
+    }
   },
+
+  // Callback en caso de error
+  onError: async (req, error) => {
+    console.error(
+      `❌ Error sincronizando documentos del contrato ${req.params.contractId}:`,
+      error.message
+    );
+
+    // Opcional: Registrar error en auditoría
+    // await auditService.logError('RSYNC_FAILURE', { contractId: req.params.contractId, error: error.message });
+  },
+
+  // Configuraciones adicionales
+  verifyTransfer: true,
+  createRemoteDir: true,
+  failOnError: false, // No fallar el request si rsync falla
 });
+
+/**
+ * Función auxiliar para crear archivo temporal con nombre consistente
+ * Esta función se integra con createTempFile del middleware base
+ */
+async function createConsistentTempFile(file, tempDir, customFileName) {
+  const tempFilePath = path.join(tempDir, customFileName);
+
+  // Escribir contenido del archivo
+  await fs.writeFile(tempFilePath, file.buffer);
+
+  console.log(
+    `📝 Archivo temporal creado con nombre consistente: ${customFileName}`
+  );
+  return tempFilePath;
+}
+
+/**
+ * Función para sincronizar nombres entre rsync y base de datos
+ * Esta función debe llamarse desde el controller después de subir el archivo
+ */
+export const syncFileNamesWithRsync = async (fileRecord, rsyncResult) => {
+  if (rsyncResult && rsyncResult.success) {
+    // Actualizar registro del archivo con información de rsync
+    await fileRecord.updateOne({
+      "rsyncInfo.remoteFileName": rsyncResult.remoteFileName,
+      "rsyncInfo.remotePath": rsyncResult.remotePath,
+      "rsyncInfo.syncStatus": "SYNCED",
+      "rsyncInfo.lastSyncSuccess": new Date(),
+    });
+
+    console.log(
+      `🔄 Registro actualizado con información de rsync para: ${fileRecord.originalName}`
+    );
+  }
+};
 
 /**
  * Middleware preconfigurado para archivos generales
