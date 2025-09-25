@@ -96,40 +96,51 @@ const VersionInfoJSON = {
 
 // Sub-esquema específico para rsync
 const RsyncInfoJSON = {
+  // Información de ubicación remota
   remoteHost: {
     type: String,
     trim: true,
     maxlength: 255,
+    default: null,
   },
 
   remotePath: {
     type: String,
     trim: true,
-    maxlength: 500,
+    maxlength: 1000, // Aumentado para rutas más largas
+    default: null,
   },
 
+  // CAMPO CRÍTICO: Nombre del archivo en el servidor remoto
   remoteFileName: {
     type: String,
     trim: true,
     maxlength: 255,
+    default: null,
+    index: true, // Indexar para búsquedas rápidas
   },
 
+  // Estado de sincronización
   syncStatus: {
     type: String,
-    enum: ["PENDING", "SYNCING", "SYNCED", "FAILED", "PARTIAL"],
+    enum: ["PENDING", "SYNCING", "SYNCED", "FAILED", "PARTIAL", "SKIPPED"],
     default: "PENDING",
     index: true,
   },
 
+  // Timestamps de sincronización
   lastSyncAttempt: {
     type: Date,
+    default: null,
   },
 
   lastSyncSuccess: {
     type: Date,
+    default: null,
     index: true,
   },
 
+  // Control de reintentos
   syncRetries: {
     type: Number,
     default: 0,
@@ -144,33 +155,39 @@ const RsyncInfoJSON = {
     max: 10,
   },
 
+  // Error de sincronización
   syncError: {
     type: String,
     trim: true,
-    maxlength: 1000,
+    maxlength: 2000, // Aumentado para errores más detallados
+    default: null,
   },
 
   // Verificación de integridad
   remoteHash: {
     type: String,
     trim: true,
-    maxlength: 64,
+    maxlength: 128, // Soporte para diferentes tipos de hash
+    default: null,
   },
 
   remoteSize: {
     type: Number,
     min: 0,
+    default: null,
   },
 
   verificationDate: {
     type: Date,
+    default: null,
   },
 
-  // Configuración específica
+  // Configuración de sincronización
   priority: {
     type: String,
     enum: ["LOW", "NORMAL", "HIGH", "URGENT"],
     default: "NORMAL",
+    index: true,
   },
 
   autoSync: {
@@ -180,7 +197,54 @@ const RsyncInfoJSON = {
 
   keepLocal: {
     type: Boolean,
-    default: false,
+    default: true, // Para expedientes legales, mantener copia local
+  },
+
+  // Configuración específica del middleware
+  middlewareConfig: {
+    pathBuilder: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: null,
+    },
+
+    customNaming: {
+      type: Boolean,
+      default: false,
+    },
+
+    verifyTransfer: {
+      type: Boolean,
+      default: true,
+    },
+  },
+
+  // Estadísticas de transferencia
+  transferStats: {
+    totalTransfers: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    successfulTransfers: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    avgTransferTime: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    lastTransferDuration: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
 };
 
