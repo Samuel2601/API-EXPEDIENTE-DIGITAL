@@ -1111,22 +1111,6 @@ export class ContractController {
         });
       }
 
-      // Validar acceso al contrato
-      const hasContractAccess =
-        await this.contractService.validateContractAccess(
-          contractId,
-          user.userId,
-          user.role
-        );
-
-      if (!hasContractAccess) {
-        return res.status(403).json({
-          success: false,
-          message: "No tiene permisos para subir documentos a este contrato",
-          code: "CONTRACT_ACCESS_DENIED",
-        });
-      }
-
       // Extraer y validar datos del documento
       const documentData = {
         contractId,
@@ -1147,6 +1131,7 @@ export class ContractController {
 
       // Procesar archivos con el service
       const result = await this.contractService.uploadContractDocuments(
+        contractId,
         documentData,
         userData
       );
@@ -1217,6 +1202,9 @@ export class ContractController {
         `🔄 Sincronizando nombres de ${successfulFiles.length} archivos con rsync`
       );
 
+      console.log("rsyncResults", JSON.stringify(rsyncResults, null, 2));
+      console.log("successfulFiles", JSON.stringify(successfulFiles, null, 2));
+
       for (let i = 0; i < successfulFiles.length; i++) {
         const fileRecord = successfulFiles[i];
         const rsyncResult = rsyncResults.find(
@@ -1252,12 +1240,6 @@ export class ContractController {
           console.warn(
             `⚠️ No se encontró resultado de rsync para: ${fileRecord.originalName}`
           );
-
-          // Marcar como pendiente de sincronización si no se encontró
-          await this.fileService.updateFileRsyncInfo(fileRecord._id, {
-            syncStatus: "PENDING",
-            syncError: "No se encontró resultado de transferencia",
-          });
         }
       }
 

@@ -462,7 +462,7 @@ export const rsyncContractDocuments = createRsyncMiddleware({
     }
 
     // Estructura mejorada: contratos/{contractId}/{year}/{phase}/{documentType}
-    return `expediente_data/expedientes/contratos/${contractId}/${year}/${phaseName}/${documentType}`;
+    return `contratos/${contractId}/${year}/${phaseName}/${documentType}`; //expediente_data/expedientes/
   },
 
   priority: "HIGH",

@@ -248,16 +248,17 @@ export class FileService {
         sort: { [sortBy]: sortOrder === "desc" ? -1 : 1 },
         populate: [
           {
-            path: "documentInfo.contractId",
+            path: "contract",
             select: "contractNumber contractualObject generalStatus",
           },
           {
-            path: "documentInfo.phaseId",
+            path: "phase",
             select: "code name category",
           },
           {
             path: "audit.uploadedBy",
-            select: "firstName lastName email",
+            select: "name last_name email",
+            model: "user",
           },
         ],
       };
@@ -1202,23 +1203,23 @@ export class FileService {
     }
 
     if (filters.contractId) {
-      query["documentInfo.contractId"] = filters.contractId;
+      query["contract"] = filters.contractId;
     }
 
     if (filters.phaseId) {
-      query["documentInfo.phaseId"] = filters.phaseId;
+      query["phase"] = filters.phaseId;
     }
 
     if (filters.documentType) {
-      query["documentInfo.documentType"] = filters.documentType;
+      query["documentType"] = filters.documentType;
     }
 
     if (filters.category) {
       query["documentInfo.category"] = filters.category;
     }
 
-    if (filters.syncStatus) {
-      query["rsyncInfo.syncStatus"] = filters.syncStatus;
+    if (filters.systemName) {
+      query["systemName"] = filters.systemName;
     }
 
     if (filters.uploadedBy) {
