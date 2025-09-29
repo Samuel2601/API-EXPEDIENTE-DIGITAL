@@ -87,8 +87,57 @@ export const validateAuth = (ModelMongoose, method, path) => {
   };
 };
 
+export const authFile = (options = {}) => {
+  return (req, res, next) => {
+    console.log("Headers:", req.headers);
+    console.log("Query params:", req.query);
+
+    let token = "";
+
+    // Si la ruta está configurada para aceptar token por query, buscarlo ahí primero
+    if (options.allowQueryToken && req.query.token) {
+      token = req.query.token.replace(/['"]+/g, "");
+      console.log("Token obtenido de query parameters");
+    }
+    // Si no, buscar en headers como siempre
+    else if (req.headers.authorization) {
+      const token1 = req.headers.authorization.replace(/^Bearer\s/, "");
+      token = token1.replace(/['"]+/g, "");
+      console.log("Token obtenido de headers");
+    }
+    // Si no hay token
+    else {
+      console.log("No hay token disponible");
+      return res.status(401).send({ message: "NoHeadersError" });
+    }
+
+    const segment = token.split(".");
+
+    if (segment.length !== 3) {
+      return res.status(402).send({ message: "InvalidToken" });
+    }
+
+    try {
+      const payload = pkg.decode(token, secret);
+
+      if (payload.exp <= moment().unix()) {
+        return res.status(403).send({ message: "TokenExpirado" });
+      }
+
+      req.user = payload;
+      req.user.userId = req.user.sub;
+
+      return next();
+    } catch (error) {
+      console.error(error);
+      return res.status(402).send({ message: "InvalidToken" });
+    }
+  };
+};
+
 export const auth = (req, res, next) => {
   if (!req.headers.authorization) {
+    console.log("No hay token en la cabecera");
     return res.status(401).send({ message: "NoHeadersError" });
   }
 

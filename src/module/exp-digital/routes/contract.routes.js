@@ -222,7 +222,7 @@ router.get(
     permission: "canViewDepartment",
     errorMessage: "No tiene permisos para ver contratos de este departamento",
   }),*/
-  requireContractAccess("contractId"),
+  //requireContractAccess("contractId"),
   controller.getContractById
 );
 

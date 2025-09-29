@@ -6,7 +6,11 @@
 
 import { Router } from "express";
 import { FileController } from "../controllers/file.controller.js";
-import { auth, verifyModuleAccess } from "../../../middlewares/auth.js";
+import {
+  auth,
+  authFile,
+  verifyModuleAccess,
+} from "../../../middlewares/auth.js";
 import {
   requirePermission,
   requireFlexiblePermissions,
@@ -20,8 +24,21 @@ const controller = new FileController();
 // =============================================================================
 
 // Middleware de autenticación para todas las rutas
-router.use(auth);
-router.use(verifyModuleAccess);
+router.use((req, res, next) => {
+  // Excluir la ruta de download del auth global
+  if (req.path.includes("/download") || req.path.includes("/preview")) {
+    return next();
+  }
+  auth(req, res, next);
+});
+
+router.use((req, res, next) => {
+  // Excluir la ruta de download del verifyModuleAccess global
+  if (req.path.includes("/download") || req.path.includes("/preview")) {
+    return next();
+  }
+  verifyModuleAccess(req, res, next);
+});
 
 // =============================================================================
 // OPERACIONES PRINCIPALES DE ARCHIVOS
@@ -106,6 +123,7 @@ router.delete(
  */
 router.get(
   "/:id/download",
+  authFile({ allowQueryToken: true }),
   requirePermission({
     category: "documents",
     permission: "canDownload",
@@ -121,6 +139,7 @@ router.get(
  */
 router.get(
   "/:id/preview",
+  authFile({ allowQueryToken: true }),
   requirePermission({
     category: "documents",
     permission: "canView",

@@ -19,6 +19,7 @@ import {
   validateObjectId,
   validateRequiredFields,
 } from "../../../../utils/validation.util.js";
+import { tempFileService } from "./temp-file.service.js";
 
 export class FileService {
   constructor() {
@@ -549,6 +550,8 @@ export class FileService {
         source = "auto", // "auto", "local", "remote"
         userId = null,
         trackDownload = true,
+        useCache = true, // Usar caché de archivos temporales
+        cacheTimeout = 3600000, // 1 hora en ms
       } = options;
 
       // Obtener archivo
@@ -569,33 +572,20 @@ export class FileService {
       // Determinar fuente de descarga
       const downloadSource = this._determineDownloadSource(file, source);
 
-      let filePath;
       let fileStream;
+      let tempFileInfo = null;
 
       switch (downloadSource) {
         case "local":
-          filePath = file.storage.localPath;
-
-          // Verificar que existe localmente
-          try {
-            await fs.access(filePath);
-            fileStream = await fs.readFile(filePath);
-          } catch (error) {
-            throw createError(
-              ERROR_CODES.FILE_NOT_FOUND,
-              "Archivo no encontrado en almacenamiento local",
-              404
-            );
-          }
+          fileStream = await this._downloadFromLocal(file);
           break;
 
         case "remote":
-          // TODO: Implementar descarga desde servidor remoto
-          throw createError(
-            ERROR_CODES.NOT_IMPLEMENTED,
-            "Descarga desde servidor remoto no implementada aún",
-            501
-          );
+          fileStream = await this._downloadFromRemote(file, {
+            useCache,
+            cacheTimeout,
+          });
+          break;
 
         default:
           throw createError(
@@ -611,7 +601,7 @@ export class FileService {
       }
 
       console.log(
-        `✅ Service: Archivo preparado para descarga: ${file.systemName}`
+        `✅ Service: Archivo preparado para descarga: ${file.systemName} desde ${downloadSource}`
       );
 
       return {
@@ -623,11 +613,248 @@ export class FileService {
           size: file.fileInfo.size,
           checksum: file.fileInfo.checksum,
           source: downloadSource,
+          tempFile: tempFileInfo,
         },
       };
     } catch (error) {
       console.error(`❌ Service: Error descargando archivo: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Descargar desde almacenamiento local
+   */
+  async _downloadFromLocal(file) {
+    const filePath = file.storage.path;
+
+    // Verificar que existe localmente
+    try {
+      await fs.access(filePath);
+      return await fs.readFile(filePath);
+    } catch (error) {
+      throw createError(
+        ERROR_CODES.FILE_NOT_FOUND,
+        "Archivo no encontrado en almacenamiento local",
+        404
+      );
+    }
+  }
+
+  /**
+   * Descargar desde servidor remoto via RSync
+   */
+  async _downloadFromRemote(file, options = {}) {
+    const { useCache = true, cacheTimeout = 3600000 } = options;
+
+    console.log(
+      `🌐 Service: Descargando desde servidor remoto: ${file.systemName}`
+    );
+
+    // Verificar si tenemos información de almacenamiento remoto
+    if (!file.storage?.path) {
+      throw createError(
+        ERROR_CODES.CONFIG_ERROR,
+        "El archivo no tiene configuración de almacenamiento remoto",
+        500
+      );
+    }
+
+    try {
+      // Primero verificar si existe en caché temporal
+      if (useCache) {
+        const cachedFile = await this._getCachedFile(file);
+        if (cachedFile) {
+          console.log(
+            `♻️ Service: Usando archivo en caché: ${file.systemName}`
+          );
+          return cachedFile;
+        }
+      }
+
+      // Si no está en caché, descargar desde remoto
+      console.log(
+        `⬇️ Service: Iniciando descarga remota: ${file.storage.remotePath}`
+      );
+
+      // Crear directorio temporal para la descarga
+      const tempDir = path.join(process.cwd(), "temp", "rsync-downloads");
+      await fs.mkdir(tempDir, { recursive: true });
+
+      const localTempPath = path.join(
+        tempDir,
+        `temp_${Date.now()}_${file.systemName}`
+      );
+      const remotePath = file.storage.remotePath;
+
+      // Ejecutar rsync para descargar el archivo
+      const result = await this._executeRsyncDownload(
+        remotePath,
+        localTempPath
+      );
+
+      if (!result.success) {
+        throw new Error(`Error en rsync: ${result.error}`);
+      }
+
+      // Leer el archivo descargado
+      const fileBuffer = await fs.readFile(localTempPath);
+
+      // Guardar en caché si está habilitado
+      if (useCache) {
+        await this._cacheFile(file, fileBuffer);
+      }
+
+      // Limpiar archivo temporal de rsync
+      await fs.unlink(localTempPath).catch(() => {
+        console.warn(
+          `⚠️ No se pudo eliminar archivo temporal: ${localTempPath}`
+        );
+      });
+
+      console.log(`✅ Service: Descarga remota completada: ${file.systemName}`);
+      return fileBuffer;
+    } catch (error) {
+      console.error(`❌ Service: Error en descarga remota: ${error.message}`);
+
+      // Mapear errores específicos de rsync
+      if (error.message.includes("No such file or directory")) {
+        throw createError(
+          ERROR_CODES.FILE_NOT_FOUND,
+          "Archivo no encontrado en el servidor remoto",
+          404
+        );
+      } else if (error.message.includes("Permission denied")) {
+        throw createError(
+          ERROR_CODES.PERMISSION_DENIED,
+          "Sin permisos para acceder al archivo remoto",
+          403
+        );
+      } else if (
+        error.message.includes("Connection refused") ||
+        error.message.includes("Network is unreachable")
+      ) {
+        throw createError(
+          ERROR_CODES.SERVICE_UNAVAILABLE,
+          "No se puede conectar al servidor remoto",
+          503
+        );
+      } else {
+        throw createError(
+          ERROR_CODES.INTERNAL_ERROR,
+          `Error descargando archivo remoto: ${error.message}`,
+          500
+        );
+      }
+    }
+  }
+
+  /**
+   * Ejecutar rsync para descargar archivo
+   */
+  async _executeRsyncDownload(remotePath, localPath) {
+    try {
+      console.log(
+        `🔄 Service: Ejecutando rsync download: ${remotePath} -> ${localPath}`
+      );
+
+      // Para descargar, invertimos el orden: remoto -> local
+      const { host, user, module, port } = rsyncClient.config;
+
+      // Construir URL remota
+      const remoteUrl = `rsync://${user}@${host}:${port}/${module}/${remotePath}`;
+      const formattedLocalPath = rsyncClient.formatPathForRsync(localPath);
+
+      console.log(`🔗 Service: URL remota: ${remoteUrl}`);
+      console.log(`📁 Service: Ruta local: ${formattedLocalPath}`);
+
+      // Ejecutar rsync para descargar
+      const result = await rsyncClient.executeRsync(
+        remoteUrl,
+        formattedLocalPath
+      );
+
+      return {
+        success: true,
+        result,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Obtener archivo desde caché temporal
+   */
+  async _getCachedFile(file) {
+    try {
+      const cacheKey = this._getCacheKey(file);
+      const tempFile = await tempFileService.getTempFile(cacheKey);
+
+      if (tempFile) {
+        // Verificar que no esté expirado
+        const fileAge = Date.now() - tempFile.createdAt.getTime();
+        if (fileAge < options.cacheTimeout) {
+          return tempFile.buffer;
+        } else {
+          // Eliminar si está expirado
+          await tempFileService.deleteTempFile(cacheKey);
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.warn(`⚠️ Service: Error accediendo a caché: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Guardar archivo en caché temporal
+   */
+  async _cacheFile(file, fileBuffer) {
+    try {
+      const cacheKey = this._getCacheKey(file);
+      await tempFileService.createTempFile(fileBuffer, cacheKey);
+      console.log(`💾 Service: Archivo guardado en caché: ${file.systemName}`);
+    } catch (error) {
+      console.warn(`⚠️ Service: Error guardando en caché: ${error.message}`);
+      // No lanzar error, la caché es opcional
+    }
+  }
+
+  /**
+   * Generar clave única para caché
+   */
+  _getCacheKey(file) {
+    return `cache_${file._id}_${file.fileInfo.checksum}`;
+  }
+
+  /**
+   * Determinar fuente de descarga
+   */
+  _determineDownloadSource(file, preferredSource) {
+    if (preferredSource !== "auto") {
+      return preferredSource;
+    }
+
+    // Lógica automática para determinar la mejor fuente
+    const hasLocal = file.storage?.storageProvider === "LOCAL";
+    const hasRemote = file.storage?.storageProvider === "REMOTE";
+
+    if (hasLocal) {
+      return "local";
+    } else if (hasRemote) {
+      return "remote";
+    } else {
+      throw createError(
+        ERROR_CODES.CONFIG_ERROR,
+        "El archivo no tiene fuentes de descarga configuradas",
+        500
+      );
     }
   }
 
@@ -1305,35 +1532,6 @@ export class FileService {
         );
       }
     }, 1000); // Delay de 1 segundo para no bloquear la respuesta
-  }
-
-  /**
-   * Determinar fuente de descarga
-   * @param {Object} file - Archivo
-   * @param {String} preferredSource - Fuente preferida
-   * @returns {String} Fuente de descarga
-   * @private
-   */
-  _determineDownloadSource(file, preferredSource) {
-    if (preferredSource === "local" || !this.config.rsyncEnabled) {
-      return "local";
-    }
-
-    if (
-      preferredSource === "remote" &&
-      file.rsyncInfo?.syncStatus === "SYNCED"
-    ) {
-      return "remote";
-    }
-
-    // Auto: preferir local si está disponible, sino remoto
-    if (file.rsyncInfo?.keepLocal) {
-      return "local";
-    } else if (file.rsyncInfo?.syncStatus === "SYNCED") {
-      return "remote";
-    } else {
-      return "local";
-    }
   }
 
   /**

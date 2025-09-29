@@ -1,4 +1,5 @@
 import { Contract } from "#src/module/exp-digital/models/contract.scheme.js";
+import { File } from "#src/module/exp-digital/models/file.scheme.js";
 import { UserDepartmentAccess } from "#src/module/exp-digital/models/module-permission.scheme.js";
 import mongoose from "mongoose";
 
@@ -54,6 +55,23 @@ export const requirePermission = (options = {}) => {
       let departmentId =
         req.params[departmentParam] || req.body[departmentParam];
       console.log("🔍 Verificando permisos de usuario:", userId, departmentId);
+      if (category === "documents" && permission === "canDownload") {
+        console.log(
+          "🔍 Verificando permisos de usuario:",
+          userId,
+          req.params.id
+        );
+        const file = await File.findById(req.params.id).populate("contract");
+        // console.log("file", file);
+        if (!file) {
+          return res.status(404).json({
+            success: false,
+            message: "Archivo no encontrado",
+          });
+        }
+
+        departmentId = file.contract.requestingDepartment;
+      }
       // Si no se proporciona departmentId, intentar obtenerlo del contrato
       if (!departmentId && requireContractAccess) {
         const contractId = req.params[contractParam] || req.body[contractParam];
