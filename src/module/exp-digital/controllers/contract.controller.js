@@ -1148,7 +1148,8 @@ export class ContractController {
       ) {
         await this.synchronizeFileNamesWithRsync(
           result.successful,
-          req.rsyncResults.results
+          req.rsyncResults.results,
+          userData
         );
       }
 
@@ -1196,7 +1197,12 @@ export class ContractController {
    * Sincronizar nombres de archivos entre BD y resultados de rsync
    * @private
    */
-  async synchronizeFileNamesWithRsync(successfulFiles, rsyncResults) {
+
+  /**
+   * Sincronizar nombres de archivos entre BD y resultados de rsync
+   * @private
+   */
+  async synchronizeFileNamesWithRsync(successfulFiles, rsyncResults, userData) {
     try {
       console.log(
         `🔄 Sincronizando nombres de ${successfulFiles.length} archivos con rsync`
@@ -1207,30 +1213,56 @@ export class ContractController {
 
       for (let i = 0; i < successfulFiles.length; i++) {
         const fileRecord = successfulFiles[i];
+        console.log("fileRecord", fileRecord.fileId);
         const rsyncResult = rsyncResults.find(
-          (r) => r.file === fileRecord.originalName && r.success
+          (r) => r.file === fileRecord.filename && r.success === true
         );
-
+        console.log("rsyncResult", JSON.stringify(rsyncResult, null, 2));
         if (rsyncResult) {
+          // CORREGIDO: Estructura correcta del objeto de actualización
           // Actualizar el registro del archivo con información de rsync
-          await this.fileService.updateFileRsyncInfo(fileRecord._id, {
-            remoteFileName:
-              rsyncResult.systemName || rsyncResult.remoteFileName,
-            remotePath: rsyncResult.remotePath,
-            syncStatus: "SYNCED",
-            lastSyncSuccess: new Date(),
-            syncError: null,
-            syncRetries: 0,
-          });
+          await this.fileService.updateFile(
+            fileRecord.fileId,
+            {
+              storage: {
+                storageProvider: "RSYNC",
+                path: rsyncResult.remotePath,
+              },
+            },
+            userData
+          );
+
+          const updateData = {
+            rsyncInfo: {
+              remoteFileName:
+                rsyncResult.systemName || rsyncResult.remoteFileName,
+              remotePath: rsyncResult.remotePath,
+              syncStatus: "SYNCED",
+              lastSyncSuccess: new Date(),
+              syncError: null,
+              syncRetries: 0,
+            },
+          };
+          console.log("updateData", JSON.stringify(updateData, null, 2));
+          // Actualizar el registro del archivo con información de rsync
+          await this.fileService.updateFile(
+            fileRecord.fileId,
+            updateData,
+            userData
+          );
 
           // Actualizar el systemName en la BD para que coincida con rsync
           if (
             rsyncResult.systemName &&
             rsyncResult.systemName !== fileRecord.systemName
           ) {
-            await this.fileService.updateFileName(fileRecord._id, {
-              systemName: rsyncResult.systemName,
-            });
+            await this.fileService.updateFile(
+              fileRecord.fileId,
+              {
+                systemName: rsyncResult.systemName,
+              },
+              userData
+            );
 
             console.log(
               `✅ Archivo sincronizado: ${fileRecord.originalName} -> ${rsyncResult.systemName}`

@@ -381,10 +381,10 @@ export class FileService {
    * Actualizar metadatos del archivo
    * @param {String} fileId - ID del archivo
    * @param {Object} updateData - Datos a actualizar
-   * @param {Object} options - Opciones adicionales
+   * @param {Object} userData - Datos del usuario
    * @returns {Promise<Object>} Archivo actualizado
    */
-  async updateFile(fileId, updateData, options = {}) {
+  async updateFile(fileId, updateData, userData = {}) {
     try {
       validateObjectId(fileId, "ID del archivo");
 
@@ -424,9 +424,10 @@ export class FileService {
       }
 
       // Actualizar archivo
-      const updatedFile = await this.fileRepository.updateById(
+      const updatedFile = await this.fileRepository.update(
         fileId,
-        filteredUpdate
+        filteredUpdate,
+        userData
       );
 
       console.log(`✅ Service: Archivo actualizado: ${updatedFile.systemName}`);
@@ -1544,16 +1545,17 @@ export class FileService {
     return await this.fileRepository.findById(file._id, {
       populate: [
         {
-          path: "documentInfo.contractId",
+          path: "contract",
           select: "contractNumber contractualObject generalStatus",
         },
         {
-          path: "documentInfo.phaseId",
+          path: "phase",
           select: "code name category order",
         },
         {
           path: "audit.uploadedBy",
-          select: "firstName lastName email",
+          select: "name last_name email",
+          model: "user",
         },
       ],
     });
