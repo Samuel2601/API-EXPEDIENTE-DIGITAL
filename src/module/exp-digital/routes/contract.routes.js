@@ -215,14 +215,14 @@ router.post("/:contractId/restore", controller.restoreContract);
  */
 router.get(
   "/:contractId",
-  /*requirePermission({
+  requirePermission({
     contractParam: "contractId",
     requireContractAccess: true,
     category: "contracts",
     permission: "canViewDepartment",
     errorMessage: "No tiene permisos para ver contratos de este departamento",
-  }),*/
-  //requireContractAccess("contractId"),
+  }),
+  requireContractAccess("contractId"),
   controller.getContractById
 );
 
