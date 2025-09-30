@@ -70,6 +70,19 @@ export class FileService {
         OTROS: "Otros Documentos",
       },
     };
+    // Crear directorio temporal si no existe
+    this._ensureTempDir();
+  }
+
+  /**
+   * Asegurar que existe el directorio temporal
+   * @private
+   */
+  _ensureTempDir() {
+    if (!fs.existsSync(this.TEMP_DIR)) {
+      fs.mkdirSync(this.TEMP_DIR, { recursive: true });
+      console.log(`📁 Directorio temporal creado: ${this.TEMP_DIR}`);
+    }
   }
 
   // =============================================================================
@@ -501,11 +514,11 @@ export class FileService {
         }
       }
 
-      if (deleteRemote && this.config.rsyncEnabled && file.storage.remotePath) {
+      if (deleteRemote && this.config.rsyncEnabled && file.storage.path) {
         try {
           // TODO: Implementar eliminación remota via SSH/rsync
           console.log(
-            `🗑️ Solicitud de eliminación remota: ${file.storage.remotePath}`
+            `🗑️ Solicitud de eliminación remota: ${file.storage.path}`
           );
         } catch (error) {
           console.warn(`⚠️ Error eliminando archivo remoto: ${error.message}`);
@@ -675,7 +688,7 @@ export class FileService {
 
       // Si no está en caché, descargar desde remoto
       console.log(
-        `⬇️ Service: Iniciando descarga remota: ${file.storage.remotePath}`
+        `⬇️ Service: Iniciando descarga remota: ${file.storage.path}`
       );
 
       // Crear directorio temporal para la descarga
@@ -686,7 +699,7 @@ export class FileService {
         tempDir,
         `temp_${Date.now()}_${file.systemName}`
       );
-      const remotePath = file.storage.remotePath;
+      const remotePath = file.storage.path;
 
       // Ejecutar rsync para descargar el archivo
       const result = await this._executeRsyncDownload(
@@ -844,7 +857,7 @@ export class FileService {
 
     // Lógica automática para determinar la mejor fuente
     const hasLocal = file.storage?.storageProvider === "LOCAL";
-    const hasRemote = file.storage?.storageProvider === "REMOTE";
+    const hasRemote = file.storage?.storageProvider === "RSYNC";
 
     if (hasLocal) {
       return "local";
