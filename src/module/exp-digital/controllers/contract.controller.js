@@ -1233,15 +1233,13 @@ export class ContractController {
           );
 
           const updateData = {
-            rsyncInfo: {
-              remoteFileName:
-                rsyncResult.systemName || rsyncResult.remoteFileName,
-              remotePath: rsyncResult.remotePath,
-              syncStatus: "SYNCED",
-              lastSyncSuccess: new Date(),
-              syncError: null,
-              syncRetries: 0,
-            },
+            "storage.storageProvider": "RSYNC",
+            "rsyncInfo.remoteFileName": rsyncResult.remoteFileName,
+            "rsyncInfo.remotePath": rsyncResult.remotePath,
+            "rsyncInfo.syncStatus": "SYNCED",
+            "rsyncInfo.lastSyncSuccess": new Date(),
+            "rsyncInfo.syncError": null,
+            "rsyncInfo.syncRetries": 0,
           };
           console.log("updateData", JSON.stringify(updateData, null, 2));
           // Actualizar el registro del archivo con información de rsync

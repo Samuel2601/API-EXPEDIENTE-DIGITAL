@@ -404,9 +404,7 @@ export const FileJSON = {
   // Información específica de rsync (NUEVO)
   rsyncInfo: {
     type: RsyncInfoJSON,
-    default: function () {
-      return this.storage.storageProvider === "RSYNC" ? {} : undefined;
-    },
+    default: () => ({}),
     meta: {
       validation: { optional: true },
       messages: {
