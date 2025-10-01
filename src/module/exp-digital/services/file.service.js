@@ -70,6 +70,7 @@ export class FileService {
         OTROS: "Otros Documentos",
       },
     };
+    this.TEMP_DIR = path.join(process.env.RSYNC_TEMP_DIR || "./temp");
     // Crear directorio temporal si no existe
     this._ensureTempDir();
   }
@@ -78,9 +79,12 @@ export class FileService {
    * Asegurar que existe el directorio temporal
    * @private
    */
-  _ensureTempDir() {
-    if (!fs.existsSync(this.TEMP_DIR)) {
-      fs.mkdirSync(this.TEMP_DIR, { recursive: true });
+  async _ensureTempDir() {
+    try {
+      await fs.access(this.TEMP_DIR);
+    } catch (error) {
+      // El directorio no existe, crearlo
+      await fs.mkdir(this.TEMP_DIR, { recursive: true });
       console.log(`📁 Directorio temporal creado: ${this.TEMP_DIR}`);
     }
   }
@@ -772,20 +776,32 @@ export class FileService {
         `🔄 Service: Ejecutando rsync download: ${remotePath} -> ${localPath}`
       );
 
-      // Para descargar, invertimos el orden: remoto -> local
       const { host, user, module, port } = rsyncClient.config;
 
-      // Construir URL remota
+      console.log("user", user);
+      console.log("host", host);
+      console.log("port", port);
+      console.log("module", module);
+      console.log("remotePath", remotePath);
+      console.log("localPath", localPath);
+
+      // CORRECCIÓN: El módulo rsync ya incluye la ruta base (/srv/expediente_data)
+      // No necesitamos agregar "srv/expediente_data" nuevamente
       const remoteUrl = `rsync://${user}@${host}:${port}/${module}/${remotePath}`;
+
+      // CORRECCIÓN: Para descarga, el ORDEN es crucial:
+      // ORIGEN: remoteUrl (archivo en servidor rsync)
+      // DESTINO: localPath (archivo local)
       const formattedLocalPath = rsyncClient.formatPathForRsync(localPath);
 
-      console.log(`🔗 Service: URL remota: ${remoteUrl}`);
-      console.log(`📁 Service: Ruta local: ${formattedLocalPath}`);
+      console.log(`🔗 Service: URL remota (origen): ${remoteUrl}`);
+      console.log(`📁 Service: Ruta local (destino): ${formattedLocalPath}`);
 
-      // Ejecutar rsync para descargar
+      // CORRECCIÓN: Ejecutar rsync con el orden correcto
+      // rsync [ORIGEN] [DESTINO] -> rsync [remoto] [local]
       const result = await rsyncClient.executeRsync(
-        remoteUrl,
-        formattedLocalPath
+        remoteUrl, // ORIGEN (remoto)
+        formattedLocalPath // DESTINO (local)
       );
 
       return {

@@ -430,7 +430,10 @@ export class FileController {
 
       // TODO: Verificar permisos de descarga específicos del archivo
 
-      console.log(`✅ Descarga preparada: ${result.metadata.originalName}`);
+      console.log(
+        `✅ Descarga preparada: ${result.metadata.originalName}`,
+        JSON.stringify(result.metadata, null, 2)
+      );
 
       // Configurar headers para descarga
       res.setHeader(
@@ -440,7 +443,7 @@ export class FileController {
       res.setHeader("Content-Type", result.metadata.mimeType);
       res.setHeader("Content-Length", result.metadata.size);
       res.setHeader("X-File-Source", result.metadata.source);
-      res.setHeader("X-File-Checksum", result.metadata.checksum);
+      //res.setHeader("X-File-Checksum", result.metadata.checksum);
 
       // Enviar archivo
       res.status(200).send(result.fileStream);

@@ -216,73 +216,50 @@ class RsyncClient {
   }
 
   /**
-   * Construir comando rsync corregido para Windows
+   * Construir comando rsync - CORREGIDO para evitar duplicación de rutas
    */
-  async buildRsyncCommand(localPath, remotePath) {
-    const { host, user, module, port, options } = this.config;
-    let command = ["rsync"];
-    let passwordFile = null;
+  async buildRsyncCommand(source, destination) {
+    // Las rutas ya vienen formateadas correctamente desde el servicio
+    const formattedSource = this.formatPathForRsync(source);
+    const formattedDestination = this.formatPathForRsync(destination);
 
-    // Agregar opciones básicas desde .env
-    if (options) {
-      command.push(...options.split(" ").filter((opt) => opt.trim()));
-    }
+    console.log(`🔧 Source formateado: ${formattedSource}`);
+    console.log(`🔧 Destination formateado: ${formattedDestination}`);
 
-    // Configurar puerto personalizado
-    if (port && port !== "873") {
-      command.push("--port", port);
-    }
+    // Resto del código para construir el comando...
+    const baseCommand = [
+      "rsync",
+      "-avz",
+      "--partial",
+      "--mkpath",
+      "--progress",
+      `--timeout=${this.config.timeout || 300}`,
+    ];
 
-    // Configurar archivo de contraseña si está disponible
-    if (this.config.password && this.config.usePasswordFile) {
-      passwordFile = await this.createPasswordFile();
-      // CORREGIDO: También formatear la ruta del archivo de contraseña
-      const formattedPasswordFile = this.formatPathForRsync(passwordFile);
-      command.push("--password-file", formattedPasswordFile);
-    }
-
-    // Opciones adicionales desde variables de entorno
-    if (this.config.deleteAfter) {
-      command.push("--delete-after");
-    }
-
-    if (!this.config.compress) {
-      command.push("--no-compress");
-    }
-
+    // Agregar verbosidad si está configurada
     if (this.config.verbose) {
-      command.push("-vv"); // Extra verbose
+      for (let i = 0; i < this.config.verbose; i++) {
+        baseCommand.push("-v");
+      }
     }
 
-    if (this.config.dryRun) {
-      command.push("--dry-run");
+    // Manejo de contraseña
+    let passwordFile = null;
+    if (this.config.usePasswordFile && this.config.password) {
+      passwordFile = await this.createPasswordFile(this.config.password);
+      baseCommand.push(
+        `--password-file=${this.formatPathForRsync(passwordFile)}`
+      );
     }
 
-    if (this.config.excludeFrom) {
-      command.push("--exclude-from", this.config.excludeFrom);
-    }
+    // Agregar source y destination al final (ORDEN CORRECTO)
+    baseCommand.push(formattedSource);
+    baseCommand.push(formattedDestination);
 
-    if (this.config.includeFrom) {
-      command.push("--include-from", this.config.includeFrom);
-    }
-
-    if (this.config.bandwidth) {
-      command.push("--bwlimit", this.config.bandwidth);
-    }
-
-    // CORREGIDO: Formatear rutas correctamente
-    const formattedLocalPath = this.formatPathForRsync(localPath);
-
-    // CORREGIDO: Construir URL remota normalizada
-    const remoteUrl = `rsync://${user}@${host}:${port}/${module}/${remotePath}`;
-
-    console.log(`🔗 URL remota construida: ${remoteUrl}`);
-
-    // Agregar paths - ORDEN CORRECTO: local primero, remoto después
-    command.push(formattedLocalPath);
-    command.push(remoteUrl);
-
-    return { command, passwordFile };
+    return {
+      command: baseCommand,
+      passwordFile,
+    };
   }
 
   /**
@@ -305,13 +282,15 @@ class RsyncClient {
 
   /**
    * Ejecutar comando rsync con manejo mejorado de archivos temporales
+   * CORREGIDO: Para descargas, origen = remoto, destino = local
    */
-  async executeRsync(localPath, remotePath, options = {}) {
+  async executeRsync(source, destination, options = {}) {
     let passwordFile = null;
 
     try {
+      // CORRECCIÓN: El source y destination ya vienen formateados correctamente
       const { command, passwordFile: tempPasswordFile } =
-        await this.buildRsyncCommand(localPath, remotePath);
+        await this.buildRsyncCommand(source, destination);
       passwordFile = tempPasswordFile;
 
       // Log del comando sin mostrar información sensible
@@ -323,7 +302,6 @@ class RsyncClient {
           stdio: ["pipe", "pipe", "pipe"],
           env: {
             ...process.env,
-            // Si no usamos archivo de contraseña, pasar por variable de entorno
             ...(this.config.password &&
               !this.config.usePasswordFile && {
                 RSYNC_PASSWORD: this.config.password,
@@ -340,12 +318,10 @@ class RsyncClient {
           const output = data.toString();
           stdout += output;
 
-          // Log de salida para debug
           if (this.config.verbose) {
             console.log(`📊 RSync stdout: ${output.trim()}`);
           }
 
-          // Extraer información de progreso
           const progressMatch = output.match(/(\d+)%.*?(\d+\.\d+[KMGT]?B\/s)/);
           if (progressMatch) {
             progressInfo = {
@@ -362,12 +338,10 @@ class RsyncClient {
         rsyncProcess.stderr.on("data", (data) => {
           const errorOutput = data.toString();
           stderr += errorOutput;
-          // Log inmediato de errores para debug
           console.warn(`⚠️ RSync stderr: ${errorOutput.trim()}`);
         });
 
         rsyncProcess.on("close", async (code) => {
-          // Limpiar archivo de contraseña inmediatamente
           if (passwordFile) {
             await this.removePasswordFile(passwordFile);
           }
@@ -399,17 +373,14 @@ class RsyncClient {
         });
 
         rsyncProcess.on("error", async (error) => {
-          // Limpiar archivo de contraseña en caso de error
           if (passwordFile) {
             await this.removePasswordFile(passwordFile);
           }
-
           console.error(`❌ Error ejecutando rsync: ${error.message}`);
           reject(new Error(`Error ejecutando rsync: ${error.message}`));
         });
 
-        // Timeout de seguridad (opcional)
-        const timeout = parseInt(process.env.RSYNC_TIMEOUT) || 600000; // 10 minutos por defecto
+        const timeout = parseInt(process.env.RSYNC_TIMEOUT) || 600000;
         setTimeout(() => {
           if (!rsyncProcess.killed) {
             console.warn(
@@ -420,7 +391,6 @@ class RsyncClient {
         }, timeout);
       });
     } catch (error) {
-      // Limpiar archivo de contraseña en caso de error durante la construcción
       if (passwordFile) {
         await this.removePasswordFile(passwordFile);
       }
