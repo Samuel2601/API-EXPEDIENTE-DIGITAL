@@ -55,7 +55,7 @@ export const requirePermission = (options = {}) => {
       let departmentId =
         req.params[departmentParam] || req.body[departmentParam];
       console.log("🔍 Verificando permisos de usuario:", userId, departmentId);
-      if (category === "documents" && permission === "canDownload") {
+      if (category === "documents") {
         console.log(
           "🔍 Verificando permisos de usuario:",
           userId,

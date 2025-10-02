@@ -479,7 +479,15 @@ export class FileController {
       });
 
       // Verificar que el archivo sea previsualizable
-      const previewableTypes = ["image/", "application/pdf", "text/"];
+      const previewableTypes = [
+        "application/pdf",
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/svg+xml",
+      ];
       const isPreviewable = previewableTypes.some((type) =>
         result.metadata.mimeType.startsWith(type)
       );
@@ -498,6 +506,10 @@ export class FileController {
 
       // Configurar headers para previsualización
       res.setHeader("Content-Type", result.metadata.mimeType);
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="${result.metadata.originalName}"`
+      );
       res.setHeader("Content-Length", result.metadata.size);
       res.setHeader("Cache-Control", "public, max-age=3600"); // Cache por 1 hora
       res.setHeader("X-Content-Type-Options", "nosniff");
