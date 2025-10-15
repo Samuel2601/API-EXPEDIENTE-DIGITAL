@@ -499,22 +499,36 @@ export class FileController {
           code: "NOT_PREVIEWABLE",
         });
       }
+      // ========================================
+      // 🔧 FIX: CONFIGURAR HEADERS CSP PARA IFRAME
+      // ========================================
 
-      console.log(
-        `✅ Previsualización preparada: ${result.metadata.originalName}`
-      );
-
-      // Configurar headers para previsualización
+      // Headers de seguridad para permitir iframe desde el frontend
       res.setHeader("Content-Type", result.metadata.mimeType);
+      res.setHeader("Content-Length", result.metadata.size);
       res.setHeader(
         "Content-Disposition",
         `inline; filename="${result.metadata.originalName}"`
       );
-      res.setHeader("Content-Length", result.metadata.size);
-      res.setHeader("Cache-Control", "public, max-age=3600"); // Cache por 1 hora
-      res.setHeader("X-Content-Type-Options", "nosniff");
 
-      // Enviar archivo para previsualización
+      // ✅ CRÍTICO: Permitir que el contenido se muestre en iframes
+      // desde el mismo origen (localhost) y desde tu dominio de producción
+      res.setHeader(
+        "Content-Security-Policy",
+        "frame-ancestors 'self' http://localhost:* http://127.0.0.1:*"
+      );
+
+      // Headers adicionales de seguridad
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("X-Frame-Options", "SAMEORIGIN"); // Permite iframes del mismo origen
+
+      // Cache para mejorar rendimiento
+      res.setHeader("Cache-Control", "private, max-age=3600");
+      res.setHeader("X-File-Source", result.metadata.source);
+
+      // ========================================
+      // ENVIAR ARCHIVO
+      // ========================================
       res.status(200).send(result.fileStream);
     } catch (error) {
       console.error(`❌ Error previsualizando archivo: ${error.message}`);
