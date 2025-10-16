@@ -40,6 +40,16 @@ export class ModulePermissionRepository extends BaseRepository {
         data.crossDepartmentAccess.hasGlobalAccess = true;
       }
 
+      if (
+        data.assignment?.assignedBy == null ||
+        data.assignment?.assignedBy === "" ||
+        !data.assignment?.assignedBy
+      ) {
+        data.assignment = {
+          assignedBy: userData.userId,
+        };
+      }
+
       const newAccess = await this.create(data, userData, options);
 
       return await this.findById(newAccess._id, {
