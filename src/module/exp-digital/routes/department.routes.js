@@ -49,43 +49,6 @@ router.post(
  */
 router.get("/", departmentController.getAllDepartments);
 
-/**
- * Obtener departamento por ID
- * GET /departments/:id
- * Permisos: Acceso básico al módulo
- */
-router.get("/:id", departmentController.getDepartmentById);
-
-/**
- * Actualizar departamento
- * PUT /departments/:id
- * Permisos: special.canManagePermissions (solo administradores)
- */
-router.put(
-  "/:id",
-  requirePermission({
-    category: "special",
-    permission: "canManagePermissions",
-    errorMessage: "Solo los administradores pueden actualizar departamentos",
-  }),
-  departmentController.updateDepartment
-);
-
-/**
- * Eliminar departamento (soft delete)
- * DELETE /departments/:id
- * Permisos: special.canManagePermissions (solo administradores)
- */
-router.delete(
-  "/:id",
-  requirePermission({
-    category: "special",
-    permission: "canManagePermissions",
-    errorMessage: "Solo los administradores pueden eliminar departamentos",
-  }),
-  departmentController.deleteDepartment
-);
-
 // =============================================================================
 // OPERACIONES ESPECÍFICAS PARA CONTRATACIÓN PÚBLICA
 // =============================================================================
@@ -168,6 +131,43 @@ router.get(
     errorMessage: "No tiene permisos para exportar datos",
   }),
   departmentController.exportDepartments
+);
+
+/**
+ * Obtener departamento por ID
+ * GET /departments/:id
+ * Permisos: Acceso básico al módulo
+ */
+router.get("/:id", departmentController.getDepartmentById);
+
+/**
+ * Actualizar departamento
+ * PUT /departments/:id
+ * Permisos: special.canManagePermissions (solo administradores)
+ */
+router.put(
+  "/:id",
+  requirePermission({
+    category: "special",
+    permission: "canManagePermissions",
+    errorMessage: "Solo los administradores pueden actualizar departamentos",
+  }),
+  departmentController.updateDepartment
+);
+
+/**
+ * Eliminar departamento (soft delete)
+ * DELETE /departments/:id
+ * Permisos: special.canManagePermissions (solo administradores)
+ */
+router.delete(
+  "/:id",
+  requirePermission({
+    category: "special",
+    permission: "canManagePermissions",
+    errorMessage: "Solo los administradores pueden eliminar departamentos",
+  }),
+  departmentController.deleteDepartment
 );
 
 export default router;
