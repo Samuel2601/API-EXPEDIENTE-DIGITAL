@@ -774,6 +774,211 @@ export class DepartmentService {
     }
   }
 
+  /**
+   * Obtener estadísticas específicas de un departamento por ID usando agregación
+   * @param {string} departmentId - ID del departamento
+   * @returns {Promise<Object>} Estadísticas del departamento específico
+   */
+  async getDepartmentStatisticsById(departmentId) {
+    try {
+      console.log(
+        `📊 Service: Generando estadísticas del departamento ${departmentId} con agregación`
+      );
+
+      // Primero validar que el departamento existe
+      const department = await this.departmentRepository.findById(departmentId);
+      if (!department) {
+        throw createError(
+          ERROR_CODES.DEPARTMENT_NOT_FOUND,
+          `Departamento con ID ${departmentId} no encontrado`,
+          404
+        );
+      }
+
+      const pipeline = [
+        {
+          $match: {
+            _id: new mongoose.Types.ObjectId(departmentId),
+            isActive: true,
+            $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
+          },
+        },
+        {
+          $lookup: {
+            from: "departments", // nombre de la colección de departamentos
+            localField: "_id",
+            foreignField: "parentDepartment",
+            as: "childrenDepartments",
+          },
+        },
+        {
+          $project: {
+            name: 1,
+            level: 1,
+            description: 1,
+            tags: 1,
+            "budgetConfig.canApproveContracts": 1,
+            "budgetConfig.maxApprovalAmount": 1,
+            parentDepartment: 1,
+            totalChildren: { $size: "$childrenDepartments" },
+            activeChildren: {
+              $size: {
+                $filter: {
+                  input: "$childrenDepartments",
+                  as: "child",
+                  cond: {
+                    $and: [
+                      { $eq: ["$$child.isActive", true] },
+                      {
+                        $or: [
+                          { $eq: ["$$child.deletedAt", null] },
+                          { $eq: ["$$child.deletedAt", { $exists: false }] },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+            hasApprovalCapacity: {
+              $cond: [
+                { $eq: ["$budgetConfig.canApproveContracts", true] },
+                true,
+                false,
+              ],
+            },
+            approvalAmount: {
+              $cond: [
+                { $eq: ["$budgetConfig.canApproveContracts", true] },
+                "$budgetConfig.maxApprovalAmount",
+                0,
+              ],
+            },
+            hasParent: {
+              $cond: [{ $ne: ["$parentDepartment", null] }, true, false],
+            },
+          },
+        },
+      ];
+
+      const result =
+        await this.departmentRepository.getStatsWithAggregation(pipeline);
+      const departmentStats = result[0];
+
+      if (!departmentStats) {
+        throw createError(
+          ERROR_CODES.DEPARTMENT_NOT_FOUND,
+          `Departamento con ID ${departmentId} no encontrado o inactivo`,
+          404
+        );
+      }
+
+      // Obtener estadísticas de los hijos
+      const childrenPipeline = [
+        {
+          $match: {
+            parentDepartment: new mongoose.Types.ObjectId(departmentId),
+            isActive: true,
+            $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalChildrenApprovalCapacity: {
+              $sum: {
+                $cond: [
+                  { $eq: ["$budgetConfig.canApproveContracts", true] },
+                  "$budgetConfig.maxApprovalAmount",
+                  0,
+                ],
+              },
+            },
+            childrenWithApprovalCapacity: {
+              $sum: {
+                $cond: [
+                  { $eq: ["$budgetConfig.canApproveContracts", true] },
+                  1,
+                  0,
+                ],
+              },
+            },
+            maxChildLevel: { $max: "$level" },
+            childrenTags: { $push: "$tags" },
+          },
+        },
+      ];
+
+      const childrenStatsResult =
+        await this.departmentRepository.getStatsWithAggregation(
+          childrenPipeline
+        );
+      const childrenStats = childrenStatsResult[0] || {};
+
+      // Procesar tags de hijos
+      const childrenByTags = {};
+      if (childrenStats.childrenTags) {
+        childrenStats.childrenTags.flat().forEach((tag) => {
+          if (tag) childrenByTags[tag] = (childrenByTags[tag] || 0) + 1;
+        });
+      }
+
+      const stats = {
+        departmentInfo: {
+          id: departmentId,
+          name: departmentStats.name,
+          level: departmentStats.level,
+          description: departmentStats.description,
+          tags: departmentStats.tags || [],
+        },
+        hierarchy: {
+          hasParent: departmentStats.hasParent,
+          totalChildren: departmentStats.totalChildren || 0,
+          activeChildren: departmentStats.activeChildren || 0,
+          maxChildLevel: childrenStats.maxChildLevel || 0,
+        },
+        budget: {
+          hasApprovalCapacity: departmentStats.hasApprovalCapacity || false,
+          approvalAmount: departmentStats.approvalAmount || 0,
+          childrenWithApprovalCapacity:
+            childrenStats.childrenWithApprovalCapacity || 0,
+          totalChildrenApprovalCapacity:
+            childrenStats.totalChildrenApprovalCapacity || 0,
+          totalApprovalCapacity:
+            (departmentStats.approvalAmount || 0) +
+            (childrenStats.totalChildrenApprovalCapacity || 0),
+        },
+        childrenStatistics: {
+          byTags: childrenByTags,
+        },
+      };
+
+      console.log(
+        `✅ Service: Estadísticas del departamento ${departmentId} generadas exitosamente`
+      );
+
+      return {
+        statistics: stats,
+        generatedAt: new Date(),
+      };
+    } catch (error) {
+      console.error(
+        `❌ Service: Error generando estadísticas del departamento: ${error.message}`
+      );
+
+      // Si el error ya es uno personalizado, lo relanzamos
+      if (error.code && error.statusCode) {
+        throw error;
+      }
+
+      throw createError(
+        ERROR_CODES.STATISTICS_ERROR,
+        `Error al generar estadísticas del departamento: ${error.message}`,
+        500
+      );
+    }
+  }
+
   // =============================================================================
   // MÉTODOS PRIVADOS Y UTILIDADES
   // =============================================================================

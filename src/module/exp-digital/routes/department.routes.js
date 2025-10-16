@@ -86,6 +86,16 @@ router.post("/search", departmentController.searchDepartments);
 router.get("/statistics", departmentController.getDepartmentsStatistics);
 
 /**
+ * Obtener estadísticas generales de departamentos
+ * GET /departments/:id/statistics
+ * Permisos: Acceso básico al módulo
+ */
+router.get(
+  "/:id/statistics",
+  departmentController.getDepartmentsStatisticsbyId
+);
+
+/**
  * Validar jerarquía de departamentos
  * POST /departments/validate-hierarchy
  * Permisos: special.canManagePermissions (solo administradores)

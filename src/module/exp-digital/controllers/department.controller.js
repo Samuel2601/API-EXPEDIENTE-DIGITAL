@@ -558,6 +558,62 @@ export class DepartmentController {
   ];
 
   /**
+   * Obtener estadísticas específicas de un departamento por ID
+   * GET /departments/:id/statistics
+   * Permisos: Acceso básico al módulo
+   */
+  getDepartmentsStatisticsbyId = [
+    auth,
+    verifyModuleAccess,
+    async (req, res) => {
+      try {
+        const { user, params } = req;
+        const { id } = params;
+
+        console.log(
+          `📊 Usuario ${user.userId} consultando estadísticas del departamento ${id}`
+        );
+
+        // Validar que el ID esté presente
+        if (!id) {
+          return res.status(400).json({
+            success: false,
+            message: "ID de departamento es requerido",
+            code: "MISSING_DEPARTMENT_ID",
+          });
+        }
+
+        const result =
+          await this.departmentService.getDepartmentStatisticsById(id);
+
+        console.log(
+          `✅ Estadísticas del departamento ${id} generadas exitosamente`
+        );
+
+        res.status(200).json({
+          success: true,
+          data: result.statistics,
+          metadata: {
+            ...result,
+            requestedBy: user.userId,
+            requestedAt: new Date(),
+          },
+        });
+      } catch (error) {
+        console.error(
+          `❌ Error obteniendo estadísticas del departamento: ${error.message}`
+        );
+
+        res.status(error.statusCode || 500).json({
+          success: false,
+          message: error.message || "Error interno del servidor",
+          code: error.code || "STATISTICS_ERROR",
+        });
+      }
+    },
+  ];
+
+  /**
    * Validar jerarquía de departamentos
    * POST /departments/validate-hierarchy
    * Permisos: special.canManagePermissions (solo administradores)
