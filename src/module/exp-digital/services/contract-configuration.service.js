@@ -442,7 +442,7 @@ export class ContractConfigurationService {
   /**
    * Obtener todos los tipos de contratación con información completa
    * @param {Object} options - Opciones de consulta
-   * @returns {Promise<Object>} Tipos de contratación categorizados
+   * @returns {Promise<Object>} Tipos de contratación categorizados o planos
    */
   async getAllContractTypes(options = {}) {
     try {
@@ -451,16 +451,32 @@ export class ContractConfigurationService {
         regime = null,
         page = 1,
         limit = 50,
+        flat = false, // Nueva opción para devolver todo plano
       } = options;
 
       console.log(`📋 Obteniendo tipos de contratación:`, options);
 
+      // Si se solicita un régimen específico
       if (regime) {
         const types = await this.contractTypeRepository.findByRegimen(regime, {
           includeInactive,
           page,
           limit,
         });
+
+        const resultData = types.docs || types;
+
+        // Si flat=true, devolver directamente el array
+        if (flat) {
+          return {
+            types: resultData,
+            count: types.totalDocs || types.length,
+            totalPages: types.totalPages || 1,
+            currentPage: types.page || 1,
+            regime,
+            includeInactive,
+          };
+        }
 
         return {
           [regime.toLowerCase()]: {
@@ -469,7 +485,7 @@ export class ContractConfigurationService {
               regime === "COMUN"
                 ? "Procedimientos Comunes según LOSNCP"
                 : "Procedimientos Especiales según LOSNCP",
-            types: types.docs || types,
+            types: resultData,
             count: types.totalDocs || types.length,
             totalPages: types.totalPages || 1,
             currentPage: types.page || 1,
@@ -478,6 +494,7 @@ export class ContractConfigurationService {
         };
       }
 
+      // Obtener ambos regímenes
       const [commonTypes, specialTypes] = await Promise.all([
         this.contractTypeRepository.findByRegimen("COMUN", {
           includeInactive,
@@ -491,17 +508,34 @@ export class ContractConfigurationService {
         }),
       ]);
 
+      const commonTypesData = commonTypes.docs || commonTypes;
+      const specialTypesData = specialTypes.docs || specialTypes;
+
+      // Si flat=true, combinar todos los tipos en un solo array
+      if (flat) {
+        const allTypes = [...commonTypesData, ...specialTypesData];
+        return {
+          types: allTypes,
+          count: allTypes.length,
+          comunCount: commonTypesData.length,
+          especialCount: specialTypesData.length,
+          totalTypes: allTypes.length,
+          includeInactive,
+        };
+      }
+
+      // Estructura original agrupada
       return {
         comun: {
           regime: "COMUN",
           description: "Procedimientos Comunes según LOSNCP",
-          types: commonTypes.docs || commonTypes,
+          types: commonTypesData,
           count: commonTypes.totalDocs || commonTypes.length,
         },
         especial: {
           regime: "ESPECIAL",
           description: "Procedimientos Especiales según LOSNCP",
-          types: specialTypes.docs || specialTypes,
+          types: specialTypesData,
           count: specialTypes.totalDocs || specialTypes.length,
         },
         totalTypes:
@@ -918,7 +952,10 @@ export class ContractConfigurationService {
         page,
         limit,
         includeDeleted: includeInactive ? true : false,
-        populate: ["dependencies.requiredPhases.phase"],
+        populate: [
+          "dependencies.requiredPhases.phase",
+          "typeSpecificConfig.contractType",
+        ],
         sort: { order: 1, name: 1 },
       });
 

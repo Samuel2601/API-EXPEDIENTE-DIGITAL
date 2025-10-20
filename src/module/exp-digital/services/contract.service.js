@@ -52,16 +52,32 @@ export class ContractService {
    */
   async createContract(contractData, options = {}, userData = {}) {
     try {
-      console.log("📝 Service: Iniciando creación de contrato");
+      console.log(
+        "📝 Service: Iniciando creación de contrato",
+        JSON.stringify(contractData)
+      );
 
       // Validar datos básicos
       await this._validateContractData(contractData);
 
+      let contractNumber = contractData.contractNumber || "SIN_NUMERO";
+
       // Generar número de contrato único
-      const contractNumber = await this._generateContractNumber(
-        contractData.requestingDepartment,
-        contractData.contractType
-      );
+      if (!contractData.contractNumber) {
+        contractNumber = await this._generateContractNumber(
+          contractData.requestingDepartment,
+          contractData.contractType
+        );
+      }
+
+      const existingContractNumber =
+        await this.contractRepository.findByContractNumber(
+          contractNumber,
+          false
+        );
+      if (existingContractNumber) {
+        throw createError(400, "El número de contrato ya existe");
+      }
 
       // Obtener la primera fase del proceso (PREPARATORIA)
       const initialPhase = await this._getInitialPhase(

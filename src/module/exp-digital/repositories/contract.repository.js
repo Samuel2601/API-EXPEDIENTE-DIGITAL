@@ -259,12 +259,12 @@ export class ContractRepository extends BaseRepository {
   /**
    * Buscar contrato por número
    */
-  async findByContractNumber(contractNumber) {
+  async findByContractNumber(contractNumber, isDeleted = true) {
     try {
       const contract = await this.model
         .findOne({
           contractNumber: contractNumber.toUpperCase(),
-          isActive: true,
+          isDeleted: isDeleted,
         })
         .populate([
           { path: "contractType", select: "code name category" },

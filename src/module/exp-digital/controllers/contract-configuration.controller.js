@@ -42,6 +42,7 @@ export class ContractConfigurationController {
         regime = null,
         page = 1,
         limit = 50,
+        flat = false,
       } = query;
 
       console.log(
@@ -54,6 +55,7 @@ export class ContractConfigurationController {
         regime,
         page: parseInt(page),
         limit: parseInt(limit),
+        flat,
       };
 
       const contractTypes =
@@ -443,7 +445,7 @@ export class ContractConfigurationController {
       console.log(
         `📝 Usuario ${user.userId} actualizando fase de contratación: ${id}`
       );
-
+      console.log(body);
       validateObjectId(id, "ID de la fase de contratación");
 
       const updatedPhase = await this.configService.updateContractPhase(
