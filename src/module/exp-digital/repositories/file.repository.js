@@ -95,7 +95,7 @@ export class FileRepository extends BaseRepository {
           );
         }
       },
-      2 * 60 * 1000
+      2 * 60 * 100000
     ); // 2 minutos
 
     // Verificar archivos fallidos cada 10 minutos
@@ -107,7 +107,7 @@ export class FileRepository extends BaseRepository {
           console.error("❌ Error en reintentos automáticos:", error.message);
         }
       },
-      10 * 60 * 1000
+      10 * 60 * 100000
     ); // 10 minutos
   }
 
