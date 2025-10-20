@@ -594,7 +594,7 @@ export class DepartmentService {
         results = textResults.docs || textResults;
       } else {
         // Si no hay búsqueda por texto, obtener todos
-        const allResults = await this.departmentRepository.find(
+        const allResults = await this.departmentRepository.findAll(
           { isActive: !includeInactive ? true : undefined },
           { sort: { level: 1, name: 1 } }
         );
@@ -660,68 +660,103 @@ export class DepartmentService {
   }
 
   /**
-   * Obtener estadísticas generales de departamentos
+   * Obtener estadísticas generales de departamentos usando agregación
    * @returns {Promise<Object>} Estadísticas generales
    */
   async getDepartmentsStatistics() {
     try {
-      console.log("📊 Service: Generando estadísticas de departamentos");
+      console.log(
+        "📊 Service: Generando estadísticas de departamentos con agregación"
+      );
 
-      // Obtener todos los departamentos activos
-      const allDepartments = await this.departmentRepository.find({
-        isActive: true,
-      });
+      const pipeline = [
+        {
+          $match: {
+            isActive: true,
+            $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalDepartments: { $sum: 1 },
+            byLevel: { $push: "$level" },
+            withApprovalCapacity: {
+              $sum: {
+                $cond: [
+                  { $eq: ["$budgetConfig.canApproveContracts", true] },
+                  1,
+                  0,
+                ],
+              },
+            },
+            withoutParent: {
+              $sum: {
+                $cond: [{ $not: "$parentDepartment" }, 1, 0],
+              },
+            },
+            totalChildren: {
+              $sum: {
+                $cond: ["$parentDepartment", 1, 0],
+              },
+            },
+            totalApprovalCapacity: {
+              $sum: {
+                $cond: [
+                  { $eq: ["$budgetConfig.canApproveContracts", true] },
+                  "$budgetConfig.maxApprovalAmount",
+                  0,
+                ],
+              },
+            },
+            maxLevel: { $max: "$level" },
+            allTags: { $push: "$tags" },
+          },
+        },
+      ];
 
-      // Calcular estadísticas
+      const result =
+        await this.departmentRepository.getStatsWithAggregation(pipeline);
+      const aggregationResult = result[0] || {};
+
+      // Procesar niveles
+      const byLevel = {};
+      if (aggregationResult.byLevel) {
+        aggregationResult.byLevel.forEach((level) => {
+          byLevel[level] = (byLevel[level] || 0) + 1;
+        });
+      }
+
+      // Procesar tags
+      const byTags = {};
+      if (aggregationResult.allTags) {
+        aggregationResult.allTags.flat().forEach((tag) => {
+          if (tag) byTags[tag] = (byTags[tag] || 0) + 1;
+        });
+      }
+
       const stats = {
-        totalDepartments: allDepartments.length,
-        byLevel: {},
-        withApprovalCapacity: 0,
-        withoutParent: 0,
-        averageChildrenPerDepartment: 0,
-        maxLevel: 0,
-        totalApprovalCapacity: 0,
-        byTags: {},
+        totalDepartments: aggregationResult.totalDepartments || 0,
+        byLevel,
+        withApprovalCapacity: aggregationResult.withApprovalCapacity || 0,
+        withoutParent: aggregationResult.withoutParent || 0,
+        averageChildrenPerDepartment:
+          aggregationResult.withoutParent > 0
+            ? Math.round(
+                (aggregationResult.totalChildren /
+                  (aggregationResult.totalDepartments -
+                    aggregationResult.withoutParent)) *
+                  100
+              ) / 100
+            : 0,
+        maxLevel: aggregationResult.maxLevel || 0,
+        totalApprovalCapacity: aggregationResult.totalApprovalCapacity || 0,
+        byTags,
       };
 
-      // Procesar cada departamento
-      allDepartments.forEach((dept) => {
-        // Por nivel
-        const level = dept.level || 0;
-        stats.byLevel[level] = (stats.byLevel[level] || 0) + 1;
-        if (level > stats.maxLevel) stats.maxLevel = level;
-
-        // Con capacidad de aprobación
-        if (dept.budgetConfig?.canApproveContracts) {
-          stats.withApprovalCapacity++;
-          stats.totalApprovalCapacity +=
-            dept.budgetConfig.maxApprovalAmount || 0;
-        }
-
-        // Sin padre
-        if (!dept.parentDepartment) {
-          stats.withoutParent++;
-        }
-
-        // Por tags
-        if (dept.tags && dept.tags.length > 0) {
-          dept.tags.forEach((tag) => {
-            stats.byTags[tag] = (stats.byTags[tag] || 0) + 1;
-          });
-        }
-      });
-
-      // Calcular promedio de hijos por departamento
-      const totalChildren = allDepartments.filter(
-        (d) => d.parentDepartment
-      ).length;
-      const parentsCount = allDepartments.length - stats.withoutParent;
-      stats.averageChildrenPerDepartment =
-        parentsCount > 0
-          ? Math.round((totalChildren / parentsCount) * 100) / 100
-          : 0;
-
-      console.log("✅ Service: Estadísticas generadas exitosamente");
+      console.log(
+        "✅ Service: Estadísticas generadas exitosamente con agregación"
+      );
 
       return {
         statistics: stats,
@@ -734,6 +769,211 @@ export class DepartmentService {
       throw createError(
         ERROR_CODES.STATISTICS_ERROR,
         `Error al generar estadísticas: ${error.message}`,
+        500
+      );
+    }
+  }
+
+  /**
+   * Obtener estadísticas específicas de un departamento por ID usando agregación
+   * @param {string} departmentId - ID del departamento
+   * @returns {Promise<Object>} Estadísticas del departamento específico
+   */
+  async getDepartmentStatisticsById(departmentId) {
+    try {
+      console.log(
+        `📊 Service: Generando estadísticas del departamento ${departmentId} con agregación`
+      );
+
+      // Primero validar que el departamento existe
+      const department = await this.departmentRepository.findById(departmentId);
+      if (!department) {
+        throw createError(
+          ERROR_CODES.DEPARTMENT_NOT_FOUND,
+          `Departamento con ID ${departmentId} no encontrado`,
+          404
+        );
+      }
+
+      const pipeline = [
+        {
+          $match: {
+            _id: new mongoose.Types.ObjectId(departmentId),
+            isActive: true,
+            $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
+          },
+        },
+        {
+          $lookup: {
+            from: "departments", // nombre de la colección de departamentos
+            localField: "_id",
+            foreignField: "parentDepartment",
+            as: "childrenDepartments",
+          },
+        },
+        {
+          $project: {
+            name: 1,
+            level: 1,
+            description: 1,
+            tags: 1,
+            "budgetConfig.canApproveContracts": 1,
+            "budgetConfig.maxApprovalAmount": 1,
+            parentDepartment: 1,
+            totalChildren: { $size: "$childrenDepartments" },
+            activeChildren: {
+              $size: {
+                $filter: {
+                  input: "$childrenDepartments",
+                  as: "child",
+                  cond: {
+                    $and: [
+                      { $eq: ["$$child.isActive", true] },
+                      {
+                        $or: [
+                          { $eq: ["$$child.deletedAt", null] },
+                          { $eq: ["$$child.deletedAt", { $exists: false }] },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+            hasApprovalCapacity: {
+              $cond: [
+                { $eq: ["$budgetConfig.canApproveContracts", true] },
+                true,
+                false,
+              ],
+            },
+            approvalAmount: {
+              $cond: [
+                { $eq: ["$budgetConfig.canApproveContracts", true] },
+                "$budgetConfig.maxApprovalAmount",
+                0,
+              ],
+            },
+            hasParent: {
+              $cond: [{ $ne: ["$parentDepartment", null] }, true, false],
+            },
+          },
+        },
+      ];
+
+      const result =
+        await this.departmentRepository.getStatsWithAggregation(pipeline);
+      const departmentStats = result[0];
+
+      if (!departmentStats) {
+        throw createError(
+          ERROR_CODES.DEPARTMENT_NOT_FOUND,
+          `Departamento con ID ${departmentId} no encontrado o inactivo`,
+          404
+        );
+      }
+
+      // Obtener estadísticas de los hijos
+      const childrenPipeline = [
+        {
+          $match: {
+            parentDepartment: new mongoose.Types.ObjectId(departmentId),
+            isActive: true,
+            $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalChildrenApprovalCapacity: {
+              $sum: {
+                $cond: [
+                  { $eq: ["$budgetConfig.canApproveContracts", true] },
+                  "$budgetConfig.maxApprovalAmount",
+                  0,
+                ],
+              },
+            },
+            childrenWithApprovalCapacity: {
+              $sum: {
+                $cond: [
+                  { $eq: ["$budgetConfig.canApproveContracts", true] },
+                  1,
+                  0,
+                ],
+              },
+            },
+            maxChildLevel: { $max: "$level" },
+            childrenTags: { $push: "$tags" },
+          },
+        },
+      ];
+
+      const childrenStatsResult =
+        await this.departmentRepository.getStatsWithAggregation(
+          childrenPipeline
+        );
+      const childrenStats = childrenStatsResult[0] || {};
+
+      // Procesar tags de hijos
+      const childrenByTags = {};
+      if (childrenStats.childrenTags) {
+        childrenStats.childrenTags.flat().forEach((tag) => {
+          if (tag) childrenByTags[tag] = (childrenByTags[tag] || 0) + 1;
+        });
+      }
+
+      const stats = {
+        departmentInfo: {
+          id: departmentId,
+          name: departmentStats.name,
+          level: departmentStats.level,
+          description: departmentStats.description,
+          tags: departmentStats.tags || [],
+        },
+        hierarchy: {
+          hasParent: departmentStats.hasParent,
+          totalChildren: departmentStats.totalChildren || 0,
+          activeChildren: departmentStats.activeChildren || 0,
+          maxChildLevel: childrenStats.maxChildLevel || 0,
+        },
+        budget: {
+          hasApprovalCapacity: departmentStats.hasApprovalCapacity || false,
+          approvalAmount: departmentStats.approvalAmount || 0,
+          childrenWithApprovalCapacity:
+            childrenStats.childrenWithApprovalCapacity || 0,
+          totalChildrenApprovalCapacity:
+            childrenStats.totalChildrenApprovalCapacity || 0,
+          totalApprovalCapacity:
+            (departmentStats.approvalAmount || 0) +
+            (childrenStats.totalChildrenApprovalCapacity || 0),
+        },
+        childrenStatistics: {
+          byTags: childrenByTags,
+        },
+      };
+
+      console.log(
+        `✅ Service: Estadísticas del departamento ${departmentId} generadas exitosamente`
+      );
+
+      return {
+        statistics: stats,
+        generatedAt: new Date(),
+      };
+    } catch (error) {
+      console.error(
+        `❌ Service: Error generando estadísticas del departamento: ${error.message}`
+      );
+
+      // Si el error ya es uno personalizado, lo relanzamos
+      if (error.code && error.statusCode) {
+        throw error;
+      }
+
+      throw createError(
+        ERROR_CODES.STATISTICS_ERROR,
+        `Error al generar estadísticas del departamento: ${error.message}`,
         500
       );
     }
