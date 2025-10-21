@@ -431,9 +431,10 @@ export class ContractService {
       protectedFields.forEach((field) => delete dataToUpdate[field]);
 
       // Actualizar usando el repositorio
-      const updatedContract = await this.contractRepository.updateById(
+      const updatedContract = await this.contractRepository.update(
         contractId,
-        dataToUpdate
+        dataToUpdate,
+        userData
       );
 
       // Crear entrada en historial si está habilitado
@@ -502,14 +503,18 @@ export class ContractService {
 
       if (softDelete) {
         // Soft delete - marcar como eliminado
-        result = await this.contractRepository.updateById(contractId, {
-          isActive: false,
-          deletedAt: new Date(),
-          deletionReason: reason,
-          generalStatus: "CANCELLED",
-          "audit.deletedBy": userData?.userId || deletedBy,
-          "audit.deletedAt": new Date(),
-        });
+        result = await this.contractRepository.update(
+          contractId,
+          {
+            isActive: false,
+            deletedAt: new Date(),
+            deletionReason: reason,
+            generalStatus: "CANCELLED",
+            "audit.deletedBy": userData?.userId || deletedBy,
+            "audit.deletedAt": new Date(),
+          },
+          userData
+        );
       } else {
         // Hard delete (solo para casos excepcionales)
         result = await this.contractRepository.deleteById(contractId);
@@ -636,7 +641,7 @@ export class ContractService {
       });
 
       // Actualizar contrato
-      const updatedContract = await this.contractRepository.updateById(
+      const updatedContract = await this.contractRepository.update(
         contractId,
         {
           currentPhase: nextPhase._id,
@@ -644,7 +649,8 @@ export class ContractService {
           "timeline.lastStatusChange": new Date(),
           "audit.lastModifiedAt": new Date(),
           "audit.lastModifiedBy": userData?.userId,
-        }
+        },
+        userData
       );
 
       // Crear entrada en historial
@@ -699,7 +705,13 @@ export class ContractService {
    * @param {Object} options - Opciones adicionales
    * @returns {Promise<Object>} Fase actualizada
    */
-  async updateContractPhase(contractId, phaseId, updateData, options = {}) {
+  async updateContractPhase(
+    contractId,
+    phaseId,
+    updateData,
+    options = {},
+    userData = {}
+  ) {
     try {
       validateObjectId(contractId, "ID del contrato");
       validateObjectId(phaseId, "ID de la fase");
@@ -730,11 +742,15 @@ export class ContractService {
       });
 
       // Actualizar contrato
-      await this.contractRepository.updateById(contractId, {
-        phases: updatedPhases,
-        "audit.lastModifiedAt": new Date(),
-        "audit.lastModifiedBy": updateData?.userId,
-      });
+      await this.contractRepository.update(
+        contractId,
+        {
+          phases: updatedPhases,
+          "audit.lastModifiedAt": new Date(),
+          "audit.lastModifiedBy": updateData?.userId,
+        },
+        userData
+      );
 
       // Encontrar la fase actualizada
       const updatedPhase = updatedPhases.find(
@@ -2011,7 +2027,7 @@ export class ContractService {
       });
 
       // Actualizar contrato
-      const updatedContract = await this.contractRepository.updateById(
+      const updatedContract = await this.contractRepository.update(
         contractId,
         {
           currentPhase: phaseData.newPhase,
@@ -2020,6 +2036,7 @@ export class ContractService {
           updatedBy: phaseData.userId,
           updatedAt: new Date(),
         },
+        userData,
         { new: true, populate: ["currentPhase"] }
       );
 
@@ -2081,7 +2098,7 @@ export class ContractService {
       const previousStatus = contract.generalStatus;
 
       // Actualizar contrato
-      const updatedContract = await this.contractRepository.updateById(
+      const updatedContract = await this.contractRepository.update(
         contractId,
         {
           generalStatus: statusData.newStatus,
@@ -2089,6 +2106,7 @@ export class ContractService {
           updatedBy: statusData.userId,
           updatedAt: new Date(),
         },
+        userData,
         { new: true }
       );
 
@@ -3161,7 +3179,7 @@ export class ContractService {
       }
 
       // Guardar cambios
-      const updatedContract = await this.contractRepository.updateById(
+      const updatedContract = await this.contractRepository.update(
         contractId,
         {
           phases: contract.phases,
@@ -3169,6 +3187,7 @@ export class ContractService {
           updatedBy: updateData.userId,
           updatedAt: new Date(),
         },
+        updateData,
         { new: true }
       );
 
@@ -3185,7 +3204,12 @@ export class ContractService {
    * @param {string} observationId - ID de la observación
    * @param {Object} options - Opciones de eliminación
    */
-  async deleteContractObservation(contractId, observationId, options) {
+  async deleteContractObservation(
+    contractId,
+    observationId,
+    options,
+    userData = {}
+  ) {
     try {
       const contract = await this.contractRepository.findById(contractId);
       if (!contract) {
@@ -3231,12 +3255,16 @@ export class ContractService {
       }
 
       // Guardar cambios
-      await this.contractRepository.updateById(contractId, {
-        phases: contract.phases,
-        observations: contract.observations,
-        updatedBy: options.userId,
-        updatedAt: new Date(),
-      });
+      await this.contractRepository.update(
+        contractId,
+        {
+          phases: contract.phases,
+          observations: contract.observations,
+          updatedBy: options.userId,
+          updatedAt: new Date(),
+        },
+        userData
+      );
     } catch (error) {
       console.error("❌ Service error en deleteContractObservation:", error);
       throw error;
@@ -4634,7 +4662,7 @@ export class ContractService {
    * @param {string} contractId - ID del contrato
    * @param {Object} archiveOptions - Opciones de archivado
    */
-  async archiveContract(contractId, archiveOptions) {
+  async archiveContract(contractId, archiveOptions, userData = {}) {
     try {
       console.log(`📦 Service: Archivando contrato ${contractId}`);
 
@@ -4656,7 +4684,7 @@ export class ContractService {
       }
 
       // Actualizar estado del contrato
-      const archivedContract = await this.contractRepository.updateById(
+      const archivedContract = await this.contractRepository.update(
         contractId,
         {
           generalStatus: "ARCHIVED",
@@ -4667,6 +4695,7 @@ export class ContractService {
           updatedBy: archiveOptions.userId,
           updatedAt: new Date(),
         },
+        userData,
         { new: true }
       );
 
@@ -4708,7 +4737,7 @@ export class ContractService {
    * @param {string} contractId - ID del contrato
    * @param {Object} restoreOptions - Opciones de restauración
    */
-  async restoreContract(contractId, restoreOptions) {
+  async restoreContract(contractId, restoreOptions, userData = {}) {
     try {
       console.log(`🔄 Service: Restaurando contrato ${contractId}`);
 
@@ -4725,7 +4754,7 @@ export class ContractService {
       const previousStatus = await this._determinePreviousStatus(contractId);
 
       // Restaurar contrato
-      const restoredContract = await this.contractRepository.updateById(
+      const restoredContract = await this.contractRepository.update(
         contractId,
         {
           generalStatus: previousStatus || "ACTIVE",
@@ -4739,6 +4768,7 @@ export class ContractService {
           updatedBy: restoreOptions.userId,
           updatedAt: new Date(),
         },
+        userData,
         { new: true }
       );
 

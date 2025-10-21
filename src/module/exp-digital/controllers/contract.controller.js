@@ -607,7 +607,8 @@ export class ContractController {
         {
           userId: user.userId,
           createHistory: true,
-        }
+        },
+        user
       );
 
       console.log(`✅ Fase actualizada exitosamente`);
@@ -959,17 +960,50 @@ export class ContractController {
   changeContractPhase = async (req, res) => {
     try {
       const { contractId } = req.params;
-      const { newPhase, observations, attachments } = req.body;
+      const { phaseData } = req.body; // Cambio aquí: extraer phaseData
       const { user } = req;
 
+      console.log(`🔄 Cambiando fase del contrato ${contractId}`);
+      console.log("Datos recibidos: ", JSON.stringify(req.body, null, 2));
+
       validateObjectId(contractId, "ID del contrato");
+
+      // Validar que phaseData existe
+      if (!phaseData) {
+        return res.status(400).json({
+          success: false,
+          message: "El objeto phaseData es requerido",
+        });
+      }
+
+      // Extraer los datos de phaseData
+      const {
+        newPhase,
+        reason,
+        observations, // Mantener observations por compatibilidad
+        attachments,
+        validations,
+        nextPhaseSettings,
+      } = phaseData;
+
+      // Validar que newPhase es requerido
+      if (!newPhase) {
+        return res.status(400).json({
+          success: false,
+          message: "newPhase es requerido",
+        });
+      }
+
+      console.log(`🎯 Nueva fase: ${newPhase}`);
 
       const result = await this.contractService.changeContractPhase(
         contractId,
         {
           newPhase,
-          observations,
-          attachments,
+          observations: observations || reason, // Usar reason si observations no viene
+          attachments: attachments || [],
+          validations, // Incluir validaciones
+          nextPhaseSettings, // Incluir configuraciones
           userId: user.userId,
           userInfo: {
             name: user.name,
@@ -1015,7 +1049,8 @@ export class ContractController {
             name: user.name,
             email: user.email,
           },
-        }
+        },
+        user
       );
 
       res.json({
@@ -1197,43 +1232,24 @@ export class ContractController {
    * Sincronizar nombres de archivos entre BD y resultados de rsync
    * @private
    */
-
-  /**
-   * Sincronizar nombres de archivos entre BD y resultados de rsync
-   * @private
-   */
   async synchronizeFileNamesWithRsync(successfulFiles, rsyncResults, userData) {
     try {
       console.log(
         `🔄 Sincronizando nombres de ${successfulFiles.length} archivos con rsync`
       );
 
-      console.log("rsyncResults", JSON.stringify(rsyncResults, null, 2));
-      console.log("successfulFiles", JSON.stringify(successfulFiles, null, 2));
-
       for (let i = 0; i < successfulFiles.length; i++) {
         const fileRecord = successfulFiles[i];
-        console.log("fileRecord", fileRecord.fileId);
         const rsyncResult = rsyncResults.find(
           (r) => r.file === fileRecord.filename && r.success === true
         );
-        console.log("rsyncResult", JSON.stringify(rsyncResult, null, 2));
-        if (rsyncResult) {
-          // CORREGIDO: Estructura correcta del objeto de actualización
-          // Actualizar el registro del archivo con información de rsync
-          await this.fileService.updateFile(
-            fileRecord.fileId,
-            {
-              storage: {
-                storageProvider: "RSYNC",
-                path: rsyncResult.remotePath,
-              },
-            },
-            userData
-          );
 
+        if (rsyncResult) {
+          // Preparar todos los datos de actualización en un solo objeto
           const updateData = {
+            systemName: rsyncResult.systemName || fileRecord.systemName,
             "storage.storageProvider": "RSYNC",
+            "storage.path": rsyncResult.remotePath,
             "rsyncInfo.remoteFileName": rsyncResult.remoteFileName,
             "rsyncInfo.remotePath": rsyncResult.remotePath,
             "rsyncInfo.syncStatus": "SYNCED",
@@ -1241,31 +1257,22 @@ export class ContractController {
             "rsyncInfo.syncError": null,
             "rsyncInfo.syncRetries": 0,
           };
-          console.log("updateData", JSON.stringify(updateData, null, 2));
-          // Actualizar el registro del archivo con información de rsync
+
+          console.log(
+            `🔄 Actualizando archivo ${fileRecord.fileId}:`,
+            JSON.stringify(updateData, null, 2)
+          );
+
+          // Una sola llamada a updateFile
           await this.fileService.updateFile(
             fileRecord.fileId,
             updateData,
             userData
           );
 
-          // Actualizar el systemName en la BD para que coincida con rsync
-          if (
-            rsyncResult.systemName &&
-            rsyncResult.systemName !== fileRecord.systemName
-          ) {
-            await this.fileService.updateFile(
-              fileRecord.fileId,
-              {
-                systemName: rsyncResult.systemName,
-              },
-              userData
-            );
-
-            console.log(
-              `✅ Archivo sincronizado: ${fileRecord.originalName} -> ${rsyncResult.systemName}`
-            );
-          }
+          console.log(
+            `✅ Archivo sincronizado: ${fileRecord.originalName} -> ${rsyncResult.systemName}`
+          );
         } else {
           console.warn(
             `⚠️ No se encontró resultado de rsync para: ${fileRecord.originalName}`
@@ -1666,7 +1673,8 @@ export class ContractController {
         {
           reason,
           userId: user.userId,
-        }
+        },
+        user
       );
 
       res.json({
@@ -1983,15 +1991,19 @@ export class ContractController {
 
       validateObjectId(contractId, "ID del contrato");
 
-      await this.contractService.archiveContract(contractId, {
-        reason,
-        archiveDocuments,
-        userId: user.userId,
-        userInfo: {
-          name: user.name,
-          email: user.email,
+      await this.contractService.archiveContract(
+        contractId,
+        {
+          reason,
+          archiveDocuments,
+          userId: user.userId,
+          userInfo: {
+            name: user.name,
+            email: user.email,
+          },
         },
-      });
+        user
+      );
 
       res.json({
         success: true,
@@ -2018,14 +2030,18 @@ export class ContractController {
 
       validateObjectId(contractId, "ID del contrato");
 
-      const restored = await this.contractService.restoreContract(contractId, {
-        reason,
-        userId: user.userId,
-        userInfo: {
-          name: user.name,
-          email: user.email,
+      const restored = await this.contractService.restoreContract(
+        contractId,
+        {
+          reason,
+          userId: user.userId,
+          userInfo: {
+            name: user.name,
+            email: user.email,
+          },
         },
-      });
+        user
+      );
 
       res.json({
         success: true,

@@ -218,7 +218,8 @@ class RsyncClient {
   /**
    * Construir comando rsync - CORREGIDO para evitar duplicación de rutas
    */
-  async buildRsyncCommand(source, destination) {
+  async buildRsyncCommandDescarga(source, destination) {
+    //Descarga
     // Las rutas ya vienen formateadas correctamente desde el servicio
     const formattedSource = this.formatPathForRsync(source);
     const formattedDestination = this.formatPathForRsync(destination);
@@ -262,6 +263,61 @@ class RsyncClient {
     };
   }
 
+  async buildRsyncCommandSubida(source, destination) {
+    //SUBIDA
+    const { host, user, module, port, options } = this.config;
+
+    // Formatear rutas
+    const formattedSource = this.formatPathForRsync(source);
+
+    console.log(`🔧 Source formateado: ${formattedSource}`);
+    console.log(`🔧 Destination crudo: ${destination}`);
+
+    // Construir comando base
+    const baseCommand = [
+      "rsync",
+      "-avz",
+      "--partial",
+      "--mkpath",
+      "--progress",
+      `--timeout=${this.config.timeout || 300}`,
+    ];
+
+    // Agregar verbosidad
+    if (this.config.verbose) {
+      for (let i = 0; i < this.config.verbose; i++) {
+        baseCommand.push("-v");
+      }
+    }
+
+    // Configurar puerto personalizado
+    if (port && port !== "873") {
+      baseCommand.push("--port", port);
+    }
+
+    // Manejo de contraseña (ESTO SÍ ES CORRECTO para rsync daemon)
+    let passwordFile = null;
+    if (this.config.usePasswordFile && this.config.password) {
+      passwordFile = await this.createPasswordFile(this.config.password);
+      baseCommand.push(
+        `--password-file=${this.formatPathForRsync(passwordFile)}`
+      );
+    }
+
+    // ✅ CORREGIR: Construir URL remota correcta para rsync daemon
+    const remoteUrl = `rsync://${user}@${host}:${port}/${module}/${destination}`;
+    console.log(`🔗 URL remota construida: ${remoteUrl}`);
+
+    // Agregar source y destination en orden correcto
+    baseCommand.push(formattedSource);
+    baseCommand.push(remoteUrl);
+
+    return {
+      command: baseCommand,
+      passwordFile,
+    };
+  }
+
   /**
    * Método de debug para imprimir comando sin información sensible
    */
@@ -284,18 +340,21 @@ class RsyncClient {
    * Ejecutar comando rsync con manejo mejorado de archivos temporales
    * CORREGIDO: Para descargas, origen = remoto, destino = local
    */
-  async executeRsync(source, destination, options = {}) {
+  async executeRsync(source, destination, options = {}, isDownload = true) {
     let passwordFile = null;
 
     try {
       // CORRECCIÓN: El source y destination ya vienen formateados correctamente
-      const { command, passwordFile: tempPasswordFile } =
-        await this.buildRsyncCommand(source, destination);
+      const { command, passwordFile: tempPasswordFile } = isDownload
+        ? await this.buildRsyncCommandDescarga(source, destination)
+        : await this.buildRsyncCommandSubida(source, destination);
       passwordFile = tempPasswordFile;
 
       // Log del comando sin mostrar información sensible
       const safeCommand = this.formatCommandForLogging(command, passwordFile);
-      console.log(`📄 Ejecutando: ${safeCommand}`);
+      console.log(
+        `📄 Ejecutando comando de ${isDownload ? "DESCARGA" : "SUBIDA"}: ${safeCommand}`
+      );
 
       return new Promise((resolve, reject) => {
         const rsyncProcess = spawn(command[0], command.slice(1), {
@@ -477,7 +536,12 @@ class RsyncClient {
           `🚀 Intento ${attempt}/${maxRetries} para transferir: ${fileName}`
         );
 
-        const result = await this.executeRsync(localFilePath, remotePath);
+        const result = await this.executeRsync(
+          localFilePath,
+          remotePath,
+          {},
+          false
+        );
 
         // Verificar integridad si se solicita
         if (verifyTransfer && fileHash) {

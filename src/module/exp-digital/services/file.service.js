@@ -413,23 +413,37 @@ export class FileService {
         throw createError(ERROR_CODES.NOT_FOUND, "Archivo no encontrado", 404);
       }
 
-      // Campos permitidos para actualización
+      // Campos permitidos para actualización - EXPANDIDOS
       const allowedFields = [
         "displayName",
         "description",
         "documentType",
         "category",
+        "systemName", // ✅ NUEVO: Para sincronización con rsync
+        "storage.storageProvider", // ✅ NUEVO: Para info de almacenamiento
+        "storage.path", // ✅ NUEVO: Para ruta de almacenamiento
         "access.isPublic",
         "access.allowedRoles",
         "access.allowedUsers",
+        "rsyncInfo.remoteFileName", // ✅ NUEVO: Para sincronización
+        "rsyncInfo.remotePath", // ✅ NUEVO: Para sincronización
+        "rsyncInfo.syncStatus", // ✅ NUEVO: Para sincronización
+        "rsyncInfo.lastSyncSuccess", // ✅ NUEVO: Para sincronización
+        "rsyncInfo.syncError", // ✅ NUEVO: Para sincronización
+        "rsyncInfo.syncRetries", // ✅ NUEVO: Para sincronización
         "rsyncInfo.priority",
         "rsyncInfo.keepLocal",
       ];
-
+      console.log("Datos recbidos: ", JSON.stringify(updateData, null, 2));
       // Filtrar datos de actualización
       const filteredUpdate = this._filterUpdateFields(
         updateData,
         allowedFields
+      );
+
+      console.log(
+        `📋 Campos a actualizar:`,
+        JSON.stringify(filteredUpdate, null, 2)
       );
 
       // Si cambió el tipo de documento, actualizar categoría
@@ -461,12 +475,79 @@ export class FileService {
   }
 
   /**
+   * Filtrar campos permitidos para actualización (versión corregida)
+   * @param {Object} updateData - Datos a actualizar
+   * @param {Array} allowedFields - Campos permitidos
+   * @returns {Object} Datos filtrados
+   * @private
+   */
+  _filterUpdateFields(updateData, allowedFields) {
+    const filtered = {};
+
+    allowedFields.forEach((field) => {
+      // Verificar si el campo existe directamente en updateData (notación de puntos como clave)
+      if (updateData[field] !== undefined) {
+        // El campo viene como "storage.path" en el objeto updateData
+        // Necesitamos convertirlo a estructura anidada { storage: { path: value } }
+        const fieldParts = field.split(".");
+        let targetObj = filtered;
+
+        for (let i = 0; i < fieldParts.length; i++) {
+          const part = fieldParts[i];
+          if (i === fieldParts.length - 1) {
+            // Última parte - asignar el valor
+            targetObj[part] = updateData[field];
+          } else {
+            // Partes intermedias - crear objetos si no existen
+            if (!targetObj[part] || typeof targetObj[part] !== "object") {
+              targetObj[part] = {};
+            }
+            targetObj = targetObj[part];
+          }
+        }
+      }
+
+      // También verificar si existe en estructura anidada (para compatibilidad)
+      const fieldParts = field.split(".");
+      let sourceValue = updateData;
+
+      for (let i = 0; i < fieldParts.length; i++) {
+        const part = fieldParts[i];
+        if (sourceValue && sourceValue[part] !== undefined) {
+          sourceValue = sourceValue[part];
+        } else {
+          sourceValue = undefined;
+          break;
+        }
+      }
+
+      // Si encontramos el valor en estructura anidada, construimos la estructura
+      if (sourceValue !== undefined) {
+        let targetObj = filtered;
+        for (let i = 0; i < fieldParts.length; i++) {
+          const part = fieldParts[i];
+          if (i === fieldParts.length - 1) {
+            targetObj[part] = sourceValue;
+          } else {
+            if (!targetObj[part] || typeof targetObj[part] !== "object") {
+              targetObj[part] = {};
+            }
+            targetObj = targetObj[part];
+          }
+        }
+      }
+    });
+
+    return filtered;
+  }
+
+  /**
    * Eliminar archivo (soft delete)
    * @param {String} fileId - ID del archivo
    * @param {Object} options - Opciones de eliminación
    * @returns {Promise<Object>} Resultado de la eliminación
    */
-  async deleteFile(fileId, options = {}) {
+  async deleteFile(fileId, options = {}, userData = {}) {
     try {
       validateObjectId(fileId, "ID del archivo");
 
@@ -493,13 +574,17 @@ export class FileService {
       }
 
       // Soft delete en base de datos
-      const deletedFile = await this.fileRepository.updateById(fileId, {
-        isActive: false,
-        deletedAt: new Date(),
-        deletionReason: reason,
-        "audit.deletedBy": deletedBy,
-        "audit.deletedAt": new Date(),
-      });
+      const deletedFile = await this.fileRepository.update(
+        fileId,
+        {
+          isActive: false,
+          deletedAt: new Date(),
+          deletionReason: reason,
+          "audit.deletedBy": deletedBy,
+          "audit.deletedAt": new Date(),
+        },
+        userData
+      );
 
       // Eliminar archivos físicos si se solicita
       const deletionResults = {
@@ -1588,27 +1673,6 @@ export class FileService {
         },
       ],
     });
-  }
-
-  /**
-   * Filtrar campos permitidos para actualización
-   * @param {Object} updateData - Datos a actualizar
-   * @param {Array} allowedFields - Campos permitidos
-   * @returns {Object} Datos filtrados
-   * @private
-   */
-  _filterUpdateFields(updateData, allowedFields) {
-    const filtered = {};
-    allowedFields.forEach((field) => {
-      if (this._getNestedValue(updateData, field) !== undefined) {
-        this._setNestedValue(
-          filtered,
-          field,
-          this._getNestedValue(updateData, field)
-        );
-      }
-    });
-    return filtered;
   }
 
   /**

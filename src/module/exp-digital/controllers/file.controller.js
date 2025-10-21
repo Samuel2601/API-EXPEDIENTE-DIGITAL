@@ -374,12 +374,16 @@ export class FileController {
 
       // TODO: Verificar que el usuario sea propietario o tenga permisos especiales
 
-      const result = await this.fileService.deleteFile(id, {
-        deleteLocal: deleteLocal === true,
-        deleteRemote: deleteRemote === true,
-        deletedBy: user.userId,
-        reason,
-      });
+      const result = await this.fileService.deleteFile(
+        id,
+        {
+          deleteLocal: deleteLocal === true,
+          deleteRemote: deleteRemote === true,
+          deletedBy: user.userId,
+          reason,
+        },
+        user
+      );
 
       console.log(`✅ Archivo eliminado: ${result.fileName}`);
 

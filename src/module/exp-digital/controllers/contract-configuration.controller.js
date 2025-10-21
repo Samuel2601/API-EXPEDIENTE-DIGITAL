@@ -250,9 +250,11 @@ export class ContractConfigurationController {
 
       validateObjectId(id, "ID del tipo de contratación");
 
-      const deletedType = await this.configService.deleteContractType(id, {
-        userId: user.userId,
-      });
+      const deletedType = await this.configService.deleteContractType(
+        id,
+        user,
+        {}
+      );
 
       console.log(`✅ Tipo de contratación eliminado: ${deletedType.code}`);
 

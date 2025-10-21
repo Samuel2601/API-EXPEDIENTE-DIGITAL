@@ -812,9 +812,10 @@ export class ContractConfigurationService {
         dataToUpdate.code = dataToUpdate.code.toUpperCase();
       }
 
-      const updatedType = await this.contractTypeRepository.updateById(
+      const updatedType = await this.contractTypeRepository.update(
         typeId,
         dataToUpdate,
+        userData,
         { returnDocument: "after" }
       );
 
@@ -838,7 +839,7 @@ export class ContractConfigurationService {
    * @param {Object} options - Opciones adicionales
    * @returns {Promise<Object>} Tipo de contratación eliminado
    */
-  async deleteContractType(typeId, options = {}) {
+  async deleteContractType(typeId, userData, options = {}) {
     try {
       validateObjectId(typeId, "ID del tipo de contratación");
 
@@ -864,17 +865,18 @@ export class ContractConfigurationService {
       // }
 
       // Realizar soft delete
-      const deletedType = await this.contractTypeRepository.updateById(
+      const deletedType = await this.contractTypeRepository.update(
         typeId,
         {
           isActive: false,
           deletedAt: new Date(),
           audit: {
             ...existingType.audit,
-            deletedBy: options.userId || "system",
+            deletedBy: userData.userId || "system",
             deletedAt: new Date(),
           },
         },
+        userData,
         { returnDocument: "after" }
       );
 

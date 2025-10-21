@@ -277,7 +277,12 @@ export class DepartmentService {
    * @param {Object} options - Opciones adicionales
    * @returns {Promise<Object>} Departamento actualizado
    */
-  async updateDepartment(departmentId, updateData, options = {}) {
+  async updateDepartment(
+    departmentId,
+    updateData,
+    options = {},
+    userData = {}
+  ) {
     try {
       validateObjectId(departmentId, "ID del departamento");
 
@@ -329,13 +334,18 @@ export class DepartmentService {
         }
 
         // Si cambió la jerarquía, actualizar descendientes
-        await this._updateDescendantsLevel(departmentId, normalizedData.level);
+        await this._updateDescendantsLevel(
+          departmentId,
+          normalizedData.level,
+          userData
+        );
       }
 
       // Actualizar departamento
-      const updatedDepartment = await this.departmentRepository.updateById(
+      const updatedDepartment = await this.departmentRepository.update(
         departmentId,
-        normalizedData
+        normalizedData,
+        userData
       );
 
       console.log(
@@ -361,12 +371,12 @@ export class DepartmentService {
    * @param {Object} options - Opciones de eliminación
    * @returns {Promise<Object>} Resultado de la eliminación
    */
-  async deleteDepartment(departmentId, options = {}) {
+  async deleteDepartment(departmentId, options = {}, userData = {}) {
     try {
       validateObjectId(departmentId, "ID del departamento");
 
       console.log(`🗑️ Service: Eliminando departamento: ${departmentId}`);
-
+      //updateById
       const { force = false } = options;
 
       // Obtener departamento
@@ -399,17 +409,22 @@ export class DepartmentService {
       // Si tiene hijos y force = true, eliminar en cascada
       if (children.length > 0 && force) {
         for (const child of children) {
-          await this.deleteDepartment(child._id.toString(), { force: true });
+          await this.deleteDepartment(
+            child._id.toString(),
+            { force: true },
+            userData
+          );
         }
       }
 
       // Realizar soft delete
-      const deletedDepartment = await this.departmentRepository.updateById(
+      const deletedDepartment = await this.departmentRepository.update(
         departmentId,
         {
           isActive: false,
           deletedAt: new Date(),
-        }
+        },
+        userData
       );
 
       console.log(`✅ Service: Departamento eliminado: ${department.code}`);
@@ -1152,7 +1167,7 @@ export class DepartmentService {
    * @param {Number} newLevel - Nuevo nivel del padre
    * @private
    */
-  async _updateDescendantsLevel(departmentId, newLevel) {
+  async _updateDescendantsLevel(departmentId, newLevel, userData = {}) {
     try {
       const descendants =
         await this.departmentRepository.getAllDescendants(departmentId);
@@ -1163,9 +1178,13 @@ export class DepartmentService {
           const levelDiff = desc.level - (newLevel - 1);
           const newDescendantLevel = newLevel + levelDiff;
 
-          await this.departmentRepository.updateById(desc._id, {
-            level: newDescendantLevel,
-          });
+          await this.departmentRepository.update(
+            desc._id,
+            {
+              level: newDescendantLevel,
+            },
+            userData
+          );
         }
       }
     } catch (error) {

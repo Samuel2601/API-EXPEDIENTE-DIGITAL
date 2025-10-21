@@ -250,7 +250,8 @@ export class DepartmentController {
         const updatedDepartment = await this.departmentService.updateDepartment(
           id,
           body,
-          { userId: user.userId }
+          { userId: user.userId },
+          user
         );
 
         console.log(`✅ Departamento actualizado: ${updatedDepartment.code}`);
@@ -299,10 +300,14 @@ export class DepartmentController {
 
         validateObjectId(id, "ID del departamento");
 
-        const result = await this.departmentService.deleteDepartment(id, {
-          force: force === true,
-          userId: user.userId,
-        });
+        const result = await this.departmentService.deleteDepartment(
+          id,
+          {
+            force: force === true,
+            userId: user.userId,
+          },
+          user
+        );
 
         console.log(`✅ Departamento eliminado: ${result.departmentCode}`);
 
