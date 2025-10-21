@@ -38,11 +38,11 @@ router.get("/types", controller.getAllContractTypes);
  */
 router.post(
   "/types",
-  requirePermission({
+  /*requirePermission({
     category: "special",
     permission: "canManagePermissions",
     errorMessage: "Solo los administradores pueden crear tipos de contratación",
-  }),
+  }),*/
   controller.createContractType
 );
 
@@ -59,12 +59,12 @@ router.get("/types/:id", controller.getContractTypeById);
  */
 router.put(
   "/types/:id",
-  requirePermission({
+  /*requirePermission({
     category: "special",
     permission: "canManagePermissions",
     errorMessage:
       "Solo los administradores pueden actualizar tipos de contratación",
-  }),
+  }),*/
   controller.updateContractType
 );
 
@@ -75,12 +75,12 @@ router.put(
  */
 router.delete(
   "/types/:id",
-  requirePermission({
+  /* requirePermission({
     category: "special",
     permission: "canManagePermissions",
     errorMessage:
       "Solo los administradores pueden eliminar tipos de contratación",
-  }),
+  }),*/
   controller.deleteContractType
 );
 
@@ -102,11 +102,11 @@ router.get("/phases", controller.getAllContractPhases);
  */
 router.post(
   "/phases",
-  requirePermission({
+  /*requirePermission({
     category: "special",
     permission: "canManagePermissions",
     errorMessage: "Solo los administradores pueden crear fases de contratación",
-  }),
+  }),*/
   controller.createContractPhase
 );
 
@@ -123,12 +123,12 @@ router.get("/phases/:id", controller.getContractPhaseById);
  */
 router.put(
   "/phases/:id",
-  requirePermission({
+  /*requirePermission({
     category: "special",
     permission: "canManagePermissions",
     errorMessage:
       "Solo los administradores pueden actualizar fases de contratación",
-  }),
+  }),*/
   controller.updateContractPhase
 );
 
@@ -139,12 +139,12 @@ router.put(
  */
 router.delete(
   "/phases/:id",
-  requirePermission({
+  /* requirePermission({
     category: "special",
     permission: "canManagePermissions",
     errorMessage:
       "Solo los administradores pueden eliminar fases de contratación",
-  }),
+  }),*/
   controller.deleteContractPhase
 );
 

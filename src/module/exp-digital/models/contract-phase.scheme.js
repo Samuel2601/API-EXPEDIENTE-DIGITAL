@@ -207,6 +207,8 @@ export const ContractPhaseJSON = {
       values: [
         "PLANIFICACION",
         "PREPARACION",
+        "PRECONTRACTUAL",
+        "CONTRACTUAL",
         "CONVOCATORIA",
         "EVALUACION",
         "ADJUDICACION",

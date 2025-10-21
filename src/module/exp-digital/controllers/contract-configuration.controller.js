@@ -451,9 +451,7 @@ export class ContractConfigurationController {
       const updatedPhase = await this.configService.updateContractPhase(
         id,
         body,
-        {
-          userId: user.userId,
-        }
+        user
       );
 
       console.log(`✅ Fase de contratación actualizada: ${updatedPhase.code}`);
@@ -468,9 +466,7 @@ export class ContractConfigurationController {
         },
       });
     } catch (error) {
-      console.error(
-        `❌ Error actualizando fase de contratación: ${error.message}`
-      );
+      console.error(`❌ Error actualizando fase de contratación: ${error}`);
 
       res.status(error.statusCode || 500).json({
         success: false,
@@ -496,9 +492,10 @@ export class ContractConfigurationController {
 
       validateObjectId(id, "ID de la fase de contratación");
 
-      const deletedPhase = await this.configService.deleteContractPhase(id, {
-        userId: user.userId,
-      });
+      const deletedPhase = await this.configService.deleteContractPhase(
+        id,
+        user
+      );
 
       console.log(`✅ Fase de contratación eliminada: ${deletedPhase.code}`);
 

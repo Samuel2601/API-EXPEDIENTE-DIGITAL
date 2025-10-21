@@ -1069,7 +1069,7 @@ export class ContractConfigurationService {
    * @param {Object} options - Opciones adicionales
    * @returns {Promise<Object>} Fase de contratación actualizada
    */
-  async updateContractPhase(phaseId, updateData, options = {}) {
+  async updateContractPhase(phaseId, updateData, userData = {}) {
     try {
       validateObjectId(phaseId, "ID de la fase de contratación");
 
@@ -1101,11 +1101,16 @@ export class ContractConfigurationService {
       // Validar categoría si se actualiza
       if (updateData.category) {
         const validCategories = [
-          "PREPARATORIA",
+          "PLANIFICACION",
+          "PREPARACION",
           "PRECONTRACTUAL",
           "CONTRACTUAL",
-          "PAGO",
-          "RECEPCION",
+          "CONVOCATORIA",
+          "EVALUACION",
+          "ADJUDICACION",
+          "EJECUCION",
+          "LIQUIDACION",
+          "ARCHIVO",
         ];
         if (!validCategories.includes(updateData.category)) {
           throw createValidationError(
@@ -1119,7 +1124,7 @@ export class ContractConfigurationService {
         ...updateData,
         audit: {
           ...existingPhase.audit,
-          updatedBy: options.userId || "system",
+          updatedBy: userData.userId,
           updatedAt: new Date(),
         },
       };
@@ -1129,9 +1134,10 @@ export class ContractConfigurationService {
         dataToUpdate.code = dataToUpdate.code.toUpperCase();
       }
 
-      const updatedPhase = await this.contractPhaseRepository.updateById(
+      const updatedPhase = await this.contractPhaseRepository.update(
         phaseId,
         dataToUpdate,
+        userData,
         { returnDocument: "after" }
       );
 
@@ -1155,7 +1161,7 @@ export class ContractConfigurationService {
    * @param {Object} options - Opciones adicionales
    * @returns {Promise<Object>} Fase de contratación eliminada
    */
-  async deleteContractPhase(phaseId, options = {}) {
+  async deleteContractPhase(phaseId, userData = {}) {
     try {
       validateObjectId(phaseId, "ID de la fase de contratación");
 
@@ -1183,17 +1189,18 @@ export class ContractConfigurationService {
       }
 
       // Realizar soft delete
-      const deletedPhase = await this.contractPhaseRepository.updateById(
+      const deletedPhase = await this.contractPhaseRepository.update(
         phaseId,
         {
           isActive: false,
           deletedAt: new Date(),
           audit: {
             ...existingPhase.audit,
-            deletedBy: options.userId || "system",
+            deletedBy: userData.userId || "system",
             deletedAt: new Date(),
           },
         },
+        userData,
         { returnDocument: "after" }
       );
 
