@@ -2067,6 +2067,8 @@ export class ContractService {
     }
   }
 
+  _calculatePhaseDuration(contract) {}
+
   /**
    * Cambiar estado de contrato
    * @param {string} contractId - ID del contrato
