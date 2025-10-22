@@ -221,6 +221,7 @@ export class FileController {
         sortOrder,
         includeDeleted: includeDeleted === "true",
       };
+      console.log("Filters: ", filters);
 
       const result = await this.fileService.getAllFiles(filters);
 

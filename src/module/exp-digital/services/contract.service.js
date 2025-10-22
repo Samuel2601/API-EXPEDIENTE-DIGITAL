@@ -1991,18 +1991,38 @@ export class ContractService {
         );
       }
 
+      // Guardar referencia a la fase anterior (ObjectId)
+      const previousPhaseId = contract.currentPhase?._id || null;
+      const previousPhaseName =
+        contract.currentPhase?.name || "Sin fase previa";
+
       // Actualizar fase actual en el array de fases
       const phaseIndex = contract.phases.findIndex(
-        (p) => p.phase.toString() === contract.currentPhase?._id.toString()
+        (p) => p.phase.toString() === previousPhaseId?.toString()
       );
 
       if (phaseIndex >= 0) {
         contract.phases[phaseIndex].status = "COMPLETED";
-        contract.phases[phaseIndex].completedAt = new Date();
-        contract.phases[phaseIndex].duration = this._calculatePhaseDuration(
-          contract.phases[phaseIndex].startDate,
-          new Date()
-        );
+        contract.phases[phaseIndex].endDate = new Date();
+
+        // Calcular duración si existe startDate
+        if (contract.phases[phaseIndex].startDate) {
+          const durationDays = this._calculatePhaseDuration(
+            contract.phases[phaseIndex].startDate,
+            new Date()
+          );
+
+          // Agregar observación con la duración calculada
+          if (!contract.phases[phaseIndex].observations) {
+            contract.phases[phaseIndex].observations = [];
+          }
+          contract.phases[phaseIndex].observations.push({
+            content: `Fase completada. Duración: ${durationDays} días`,
+            createdBy: userData.userId,
+            createdAt: new Date(),
+            attachments: [],
+          });
+        }
       }
 
       // Agregar nueva fase
@@ -2010,20 +2030,19 @@ export class ContractService {
         phase: phaseData.newPhase,
         status: "IN_PROGRESS",
         startDate: new Date(),
-        assignedTo: phaseData.userId,
+        endDate: null,
+        assignedTo: userData.userId,
         documents: [],
-        observations: phaseData.observations
+        observations: phaseData.reason
           ? [
               {
-                content: phaseData.observations,
-                createdBy: phaseData.userId,
+                content: phaseData.reason,
+                createdBy: userData.userId,
                 createdAt: new Date(),
                 attachments: phaseData.attachments || [],
               },
             ]
           : [],
-        completedAt: null,
-        duration: null,
       });
 
       // Actualizar contrato
@@ -2033,28 +2052,28 @@ export class ContractService {
           currentPhase: phaseData.newPhase,
           phases: contract.phases,
           "timeline.lastStatusChange": new Date(),
-          updatedBy: phaseData.userId,
+          updatedBy: userData.userId,
           updatedAt: new Date(),
         },
         userData,
         { new: true, populate: ["currentPhase"] }
       );
 
-      // Registrar en historial
+      // Registrar en historial - CORREGIDO: usar ObjectIds en lugar de nombres
       await this._createHistoryEntry(
         contractId,
         {
           eventType: "PHASE_CHANGE",
-          description: `Cambio de fase a ${newPhase.name}`,
+          description: `Cambio de fase de "${previousPhaseName}" a "${newPhase.name}"`,
           user: {
-            userId: phaseData.userId,
-            name: phaseData.userInfo?.name,
-            email: phaseData.userInfo?.email,
+            userId: userData.userId,
+            name: userData.name,
+            email: userData.email,
           },
           changeDetails: {
-            previousPhase: contract.currentPhase?.name || null,
-            newPhase: newPhase.name,
-            observations: phaseData.observations,
+            previousPhase: previousPhaseId, // ✅ ObjectId en lugar de string
+            newPhase: phaseData.newPhase, // ✅ ObjectId en lugar de string
+            observations: phaseData.reason || "Sin observaciones",
           },
         },
         userData
@@ -2067,8 +2086,24 @@ export class ContractService {
     }
   }
 
-  _calculatePhaseDuration(contract) {}
+  /**
+   * Calcular duración de una fase en días
+   * @param {Date} startDate - Fecha de inicio
+   * @param {Date} endDate - Fecha de fin
+   * @returns {number} Duración en días
+   */
+  _calculatePhaseDuration(startDate, endDate) {
+    if (!startDate || !endDate) {
+      return 0;
+    }
 
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const durationMs = end - start;
+    const durationDays = Math.floor(durationMs / (1000 * 60 * 60 * 24));
+
+    return durationDays >= 0 ? durationDays : 0;
+  }
   /**
    * Cambiar estado de contrato
    * @param {string} contractId - ID del contrato
