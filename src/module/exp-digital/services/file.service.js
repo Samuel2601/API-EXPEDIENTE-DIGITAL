@@ -644,84 +644,157 @@ export class FileService {
    * @returns {Promise<Object>} Stream y metadatos del archivo
    */
   async downloadFile(fileId, options = {}) {
+    const { source = "auto", userId = null, trackDownload = true } = options;
+
     try {
-      validateObjectId(fileId, "ID del archivo");
+      console.log(`📥 Iniciando descarga de archivo: ${fileId}`);
 
-      console.log(`📥 Service: Preparando descarga de archivo: ${fileId}`);
-
-      const {
-        source = "auto", // "auto", "local", "remote"
-        userId = null,
-        trackDownload = true,
-        useCache = true, // Usar caché de archivos temporales
-        cacheTimeout = 3600000, // 1 hora en ms
-      } = options;
-
-      // Obtener archivo
+      // 1. Obtener metadata del archivo
       const file = await this.fileRepository.findById(fileId);
       if (!file) {
-        throw createError(ERROR_CODES.NOT_FOUND, "Archivo no encontrado", 404);
+        throw new AppError("Archivo no encontrado", 404, "FILE_NOT_FOUND");
       }
 
-      // Verificar disponibilidad
-      if (!this._isFileAvailable(file)) {
-        throw createError(
-          ERROR_CODES.SERVICE_UNAVAILABLE,
-          "Archivo temporalmente no disponible",
-          503
+      // 2. VERIFICAR CACHÉ PRIMERO
+      const cacheCheck = await tempFileService.isCached(fileId, file.version);
+
+      if (cacheCheck.cached) {
+        console.log(`✅ Usando archivo desde caché: ${file.storedName}`);
+
+        // Registrar descarga si está habilitado
+        if (trackDownload && userId) {
+          await this.trackDownload(fileId, userId, "cache");
+        }
+
+        // Retornar archivo desde caché
+        return {
+          fileStream: await fs.readFile(cacheCheck.path),
+          metadata: {
+            id: file._id,
+            originalName: file.originalName,
+            storedName: file.storedName,
+            mimeType: file.mimeType,
+            size: file.size,
+            source: "cache",
+            checksum: file.checksum,
+          },
+        };
+      }
+
+      // 3. ADQUIRIR LOCK para evitar descargas simultáneas
+      const lock = await tempFileService.acquireLock(fileId, file.version);
+
+      // Si otro proceso ya está descargando, esperar
+      if (!lock.acquired && lock.fromCache) {
+        console.log(`⏳ Otro proceso descargando, usando resultado del caché`);
+        const cacheCheck2 = await tempFileService.isCached(
+          fileId,
+          file.version
         );
+
+        if (cacheCheck2.cached) {
+          return {
+            fileStream: await fs.readFile(cacheCheck2.path),
+            metadata: {
+              id: file._id,
+              originalName: file.originalName,
+              storedName: file.storedName,
+              mimeType: file.mimeType,
+              size: file.size,
+              source: "cache-waited",
+              checksum: file.checksum,
+            },
+          };
+        }
       }
 
-      // Determinar fuente de descarga
-      const downloadSource = this._determineDownloadSource(file, source);
+      // 4. DESCARGAR ARCHIVO (lock adquirido)
+      let tempFilePath;
+      let fileSource;
 
-      let fileStream;
-      let tempFileInfo = null;
+      try {
+        // Determinar fuente de descarga
+        if (source === "auto") {
+          fileSource = file.storageLocation === "local" ? "local" : "remote";
+        } else {
+          fileSource = source;
+        }
 
-      switch (downloadSource) {
-        case "local":
-          fileStream = await this._downloadFromLocal(file);
-          break;
+        console.log(`📡 Descargando desde: ${fileSource}`);
 
-        case "remote":
-          fileStream = await this._downloadFromRemote(file, {
-            useCache,
-            cacheTimeout,
-          });
-          break;
+        if (fileSource === "local") {
+          tempFilePath = await this._downloadFromLocal(file);
+        } else {
+          tempFilePath = await this._downloadFromRemote(file);
+        }
 
-        default:
-          throw createError(
-            ERROR_CODES.CONFIG_ERROR,
-            "Fuente de descarga no válida",
-            400
-          );
+        console.log(`✅ Descarga completada: ${file.storedName}`);
+
+        // 5. GUARDAR EN CACHÉ
+        const cachePath = await tempFileService.saveToCache(
+          fileId,
+          tempFilePath,
+          file.version
+        );
+
+        // 6. LIBERAR LOCK con éxito
+        tempFileService.releaseLock(lock.lockKey, cachePath);
+
+        // 7. Registrar descarga
+        if (trackDownload && userId) {
+          await this.trackDownload(fileId, userId, fileSource);
+        }
+
+        // 8. Retornar archivo
+        return {
+          fileStream: await fs.readFile(cachePath),
+          metadata: {
+            id: file._id,
+            originalName: file.originalName,
+            storedName: file.storedName,
+            mimeType: file.mimeType,
+            size: file.size,
+            source: fileSource,
+            checksum: file.checksum,
+          },
+        };
+      } catch (downloadError) {
+        // Liberar lock en caso de error
+        if (lock.lockKey) {
+          tempFileService.releaseLock(lock.lockKey, null);
+        }
+        throw downloadError;
+      } finally {
+        // Limpiar archivo temporal original (no el de caché)
+        if (tempFilePath && tempFilePath !== cachePath) {
+          try {
+            await fs.unlink(tempFilePath);
+          } catch (cleanupError) {
+            console.warn(
+              `⚠️ No se pudo limpiar archivo temporal: ${tempFilePath}`
+            );
+          }
+        }
       }
-
-      // Registrar descarga si se solicita
-      if (trackDownload && userId) {
-        await this._trackDownload(fileId, userId, downloadSource);
-      }
-
-      console.log(
-        `✅ Service: Archivo preparado para descarga: ${file.systemName} desde ${downloadSource}`
-      );
-
-      return {
-        fileStream,
-        metadata: {
-          originalName: file.originalName,
-          systemName: file.systemName,
-          mimeType: file.fileInfo.mimeType,
-          size: file.fileInfo.size,
-          checksum: file.fileInfo.checksum,
-          source: downloadSource,
-          tempFile: tempFileInfo,
-        },
-      };
     } catch (error) {
-      console.error(`❌ Service: Error descargando archivo: ${error.message}`);
+      console.error(`❌ Error en downloadFile: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Registrar descarga de archivo
+   */
+  async trackDownload(fileId, userId, source) {
+    try {
+      await this.fileRepository.incrementDownloads(fileId, {
+        userId,
+        source,
+        timestamp: new Date(),
+      });
+      console.log(`📊 Descarga registrada: ${fileId} por ${userId}`);
+    } catch (error) {
+      console.warn(`⚠️ Error registrando descarga: ${error.message}`);
     }
   }
 
