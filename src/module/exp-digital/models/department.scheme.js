@@ -197,10 +197,10 @@ export const DepartmentJSON = {
       trim: true,
       maxlength: 20,
       meta: {
-        validation: { isString: true, optional: true, isLength: { max: 20 } },
+        validation: { isString: true, optional: true, isLength: { max: 200 } },
         messages: {
           isString: "El piso debe ser un texto válido",
-          isLength: "El piso no puede exceder 20 caracteres",
+          isLength: "El piso no puede exceder 200 caracteres",
         },
       },
     },
@@ -209,10 +209,10 @@ export const DepartmentJSON = {
       trim: true,
       maxlength: 20,
       meta: {
-        validation: { isString: true, optional: true, isLength: { max: 20 } },
+        validation: { isString: true, optional: true, isLength: { max: 200 } },
         messages: {
           isString: "La oficina debe ser un texto válido",
-          isLength: "La oficina no puede exceder 20 caracteres",
+          isLength: "La oficina no puede exceder 200 caracteres",
         },
       },
     },
