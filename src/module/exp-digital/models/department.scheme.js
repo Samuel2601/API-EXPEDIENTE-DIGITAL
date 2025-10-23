@@ -195,7 +195,7 @@ export const DepartmentJSON = {
     floor: {
       type: String,
       trim: true,
-      maxlength: 20,
+      maxlength: 200,
       meta: {
         validation: { isString: true, optional: true, isLength: { max: 200 } },
         messages: {
@@ -207,7 +207,7 @@ export const DepartmentJSON = {
     office: {
       type: String,
       trim: true,
-      maxlength: 20,
+      maxlength: 200,
       meta: {
         validation: { isString: true, optional: true, isLength: { max: 200 } },
         messages: {
