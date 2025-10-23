@@ -177,7 +177,7 @@ export const requireContractAccess = (contractParam = "contractId") => {
       const hasAccess = userAccesses.some((access) =>
         access.canAccessContract(contract)
       );
-      console.log(hasAccess);
+      console.log("Has access?", hasAccess);
       if (!hasAccess) {
         return res.status(403).json({
           success: false,

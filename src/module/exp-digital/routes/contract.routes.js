@@ -237,6 +237,7 @@ router.put(
   requirePermission({
     category: "contracts",
     permission: "canEdit",
+    departmentParam: "requestingDepartment",
     errorMessage: "No tiene permisos para editar contratos",
   }),
   controller.updateContract
