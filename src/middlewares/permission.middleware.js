@@ -157,9 +157,6 @@ export const requireContractAccess = (contractParam = "contractId") => {
         });
       }
 
-      // Buscar todos los accesos activos del usuario
-      const userAccesses = await UserDepartmentAccess.getUserAccesses(userId);
-
       // Obtener información del contrato
       const contract = await Contract.findById(contractId).select(
         "requestingDepartment"
@@ -171,6 +168,14 @@ export const requireContractAccess = (contractParam = "contractId") => {
           message: "Contrato no encontrado",
         });
       }
+
+      // Buscar todos los accesos activos del usuario
+      const userAccesses = await UserDepartmentAccess.getUserAccesses(
+        userId,
+        "ACTIVE",
+        contract.requestingDepartment
+      );
+
       console.log("contract", contract);
       console.log("userAccesses", userAccesses);
       // Verificar si el usuario tiene acceso al departamento del contrato

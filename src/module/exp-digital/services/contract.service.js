@@ -2440,8 +2440,13 @@ export class ContractService {
           const phaseIndex = contract.phases.findIndex(
             (p) => p.phase.toString() === phaseId.toString()
           );
-
+          console.log("Registro de Fases ", JSON.stringify(contract.phases));
           if (phaseIndex >= 0) {
+            // ✅ CORRECCIÓN: Inicializar documents si no existe
+            if (!contract.phases[phaseIndex].documents) {
+              contract.phases[phaseIndex].documents = [];
+            }
+
             contract.phases[phaseIndex].documents.push({
               _id: new mongoose.Types.ObjectId(),
               file: fileRecord._id,

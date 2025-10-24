@@ -331,8 +331,8 @@ export class ContractController {
         });
       }
       console.log(
-        "Permissions",
-        req.permissions?.hasPermission("contracts", "canEdit")
+        "Permissions Sobre el Contrato",
+        JSON.stringify(req.permissions)
       );
       // Verificar permisos específicos para este contrato
       const userPermissions = {

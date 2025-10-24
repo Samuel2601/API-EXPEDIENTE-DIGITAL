@@ -978,13 +978,15 @@ UserDepartmentAccessSchema.statics.isProtected = function (method) {
 // Obtener todos los accesos de un usuario
 UserDepartmentAccessSchema.statics.getUserAccesses = function (
   userId,
-  status = "ACTIVE"
+  status = "ACTIVE",
+  departmentId = null
 ) {
   console.log("Obteniendo accesos para el usuario:", userId, status);
   return this.find({
     user: new Types.ObjectId(userId),
     status: status,
     isActive: true,
+    department: departmentId,
   })
     .populate("department", "code name shortName contactInfo")
     .sort({ "assignment.isPrimary": -1, "assignment.assignmentDate": -1 });

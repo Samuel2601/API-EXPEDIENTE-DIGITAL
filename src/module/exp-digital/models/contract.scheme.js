@@ -346,6 +346,39 @@ export const ContractJSON = {
           type: Schema.Types.ObjectId,
           ref: "User",
         },
+        documents: {
+          type: [
+            {
+              file: {
+                type: Schema.Types.ObjectId,
+                ref: "File",
+                required: true,
+              },
+              documentType: {
+                type: String,
+                required: true,
+              },
+              uploadedBy: {
+                type: Schema.Types.ObjectId,
+                ref: "User",
+                required: true,
+              },
+              uploadedAt: Date,
+              observations: String,
+              version: Number,
+              status: {
+                type: String,
+                enum: ["active", "deleted"],
+                default: "active",
+              },
+              isRequired: {
+                type: Boolean,
+                default: false,
+              },
+            },
+          ],
+          default: [],
+        },
         notes: String, // Notas específicas de esta fase en este contrato
         completionPercentage: {
           // Progreso granular de la fase
