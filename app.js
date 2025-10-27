@@ -73,7 +73,7 @@ app.use(compression());
 
 // Rate Limiting
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutos
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 1 * 60 * 1000, // 15 minutos
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // límite de requests por ventana
   message: {
     error: "Demasiadas solicitudes desde esta IP, intenta de nuevo más tarde.",
