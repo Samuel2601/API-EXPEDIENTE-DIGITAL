@@ -99,13 +99,13 @@ router.get(
  */
 router.put(
   "/accesses/:id",
-  requireFlexiblePermissions(
+  /*requireFlexiblePermissions(
     [
       { category: "special", permission: "canManagePermissions" },
       { category: "contracts", permission: "canEdit" },
     ],
     { allowGlobal: true }
-  ),
+  ),*/
   ModulePermissionController.updateUserAccess
 );
 
