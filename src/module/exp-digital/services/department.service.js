@@ -173,7 +173,7 @@ export class DepartmentService {
         includeInactive,
         level,
         parentDepartment,
-        canApproveContracts,
+        //canApproveContracts,
         tags,
         searchTerm,
         allowedDepartmentIds, // ✅ Pasar los IDs permitidos al query builder
