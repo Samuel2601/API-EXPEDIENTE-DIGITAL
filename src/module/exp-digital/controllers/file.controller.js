@@ -516,20 +516,27 @@ export class FileController {
         `inline; filename="${result.metadata.originalName}"`
       );
 
-      // ✅ CRÍTICO: Permitir que el contenido se muestre en iframes
-      // desde el mismo origen (localhost) y desde tu dominio de producción
+      // ✅ CSP MÁS FLEXIBLE PARA PREVIEW
+      const allowedDomains = [
+        "'self'",
+        "http://localhost:*",
+        "http://127.0.0.1:*",
+        "https://*.*.gob.ec",
+      ].join(" ");
+
       res.setHeader(
         "Content-Security-Policy",
-        "frame-ancestors 'self' http://localhost:* http://127.0.0.1:*"
+        `frame-ancestors ${allowedDomains}`
       );
 
-      // Headers adicionales de seguridad
+      // Headers de seguridad adicionales
       res.setHeader("X-Content-Type-Options", "nosniff");
-      res.setHeader("X-Frame-Options", "SAMEORIGIN"); // Permite iframes del mismo origen
+      res.setHeader("X-Frame-Options", "ALLOW-FROM https://*.gob.ec"); // Compatibilidad legacy
 
       // Cache para mejorar rendimiento
       res.setHeader("Cache-Control", "private, max-age=3600");
       res.setHeader("X-File-Source", result.metadata.source);
+      res.setHeader("X-File-Id", result.metadata.id);
 
       // ========================================
       // ENVIAR ARCHIVO

@@ -638,7 +638,7 @@ export class FileService {
   // =============================================================================
 
   /**
-   * Descargar archivo del sistema
+   * Descargar archivo del sistema (VERSIÓN CORREGIDA)
    * @param {String} fileId - ID del archivo
    * @param {Object} options - Opciones de descarga
    * @returns {Promise<Object>} Stream y metadatos del archivo
@@ -659,22 +659,25 @@ export class FileService {
       const cacheCheck = await tempFileService.isCached(fileId, file.version);
 
       if (cacheCheck.cached) {
-        console.log(`✅ Usando archivo desde caché: ${file.storedName}`);
+        console.log(`✅ Usando archivo desde caché: ${file.systemName}`);
 
         if (trackDownload && userId) {
           await this.trackDownload(fileId, userId, "cache");
         }
 
+        // ✅ CORRECCIÓN: Leer el archivo desde la ruta del caché
+        const fileBuffer = await fs.readFile(cacheCheck.path);
+
         return {
-          fileStream: await fs.readFile(cacheCheck.path),
+          fileStream: fileBuffer,
           metadata: {
             id: file._id,
             originalName: file.originalName,
-            storedName: file.storedName,
-            mimeType: file.mimeType,
-            size: file.size,
+            systemName: file.systemName,
+            mimeType: file.fileInfo.mimeType,
+            size: file.fileInfo.size,
             source: "cache",
-            checksum: file.checksum,
+            checksum: file.fileInfo.checksum,
           },
         };
       }
@@ -682,17 +685,43 @@ export class FileService {
       // 3. ADQUIRIR LOCK
       const lock = await tempFileService.acquireLock(fileId, file.version);
 
+      // Si el lock viene de caché (otro proceso ya descargó)
+      if (lock.fromCache) {
+        console.log(`♻️ Archivo ya descargado por otro proceso, usando caché`);
+
+        // Reintentar verificar caché
+        const retryCacheCheck = await tempFileService.isCached(
+          fileId,
+          file.version
+        );
+        if (retryCacheCheck.cached) {
+          const fileBuffer = await fs.readFile(retryCacheCheck.path);
+
+          if (trackDownload && userId) {
+            await this.trackDownload(fileId, userId, "cache");
+          }
+
+          return {
+            fileStream: fileBuffer,
+            metadata: {
+              id: file._id,
+              originalName: file.originalName,
+              systemName: file.systemName,
+              mimeType: file.fileInfo.mimeType,
+              size: file.fileInfo.size,
+              source: "cache",
+              checksum: file.fileInfo.checksum,
+            },
+          };
+        }
+      }
+
       // 4. DESCARGAR ARCHIVO
       let tempFilePath;
       let fileSource;
 
       try {
-        fileSource =
-          source === "auto"
-            ? file.storageLocation === "local"
-              ? "local"
-              : "remote"
-            : source;
+        fileSource = this._determineDownloadSource(file, source);
 
         console.log(`📡 Descargando desde: ${fileSource}`);
 
@@ -711,7 +740,7 @@ export class FileService {
         }
 
         console.log(
-          `✅ Descarga completada: ${file.storedName} (${stats.size} bytes)`
+          `✅ Descarga completada: ${file.systemName} (${stats.size} bytes)`
         );
 
         // 5. GUARDAR EN CACHÉ (pasar RUTA, no Buffer)
@@ -721,8 +750,11 @@ export class FileService {
           file.version
         );
 
-        // 6. LIBERAR LOCK con éxito
+        // ✅ CORRECCIÓN: Liberar lock con ÉXITO (no con error)
         tempFileService.releaseLock(lock.lockKey, cachePath);
+
+        // 6. Leer archivo desde caché para consistencia
+        const cachedBuffer = await fs.readFile(cachePath);
 
         // 7. Registrar descarga
         if (trackDownload && userId) {
@@ -731,19 +763,19 @@ export class FileService {
 
         // 8. Retornar el archivo
         return {
-          fileStream: await fs.readFile(cachePath),
+          fileStream: cachedBuffer,
           metadata: {
             id: file._id,
             originalName: file.originalName,
-            storedName: file.storedName,
-            mimeType: file.mimeType,
-            size: file.size,
+            systemName: file.systemName,
+            mimeType: file.fileInfo.mimeType,
+            size: file.fileInfo.size,
             source: fileSource,
-            checksum: file.checksum,
+            checksum: file.fileInfo.checksum,
           },
         };
       } catch (downloadError) {
-        // Liberar lock en caso de error
+        // ✅ CORRECCIÓN: Liberar lock con error específico
         tempFileService.releaseLock(lock.lockKey);
 
         // Limpiar archivo temporal si existe
@@ -776,15 +808,16 @@ export class FileService {
   }
 
   /**
-   * Descargar desde almacenamiento local
+   * Descargar desde almacenamiento local (VERSIÓN CORREGIDA)
    */
   async _downloadFromLocal(file) {
-    const filePath = file.storage.path;
+    const filePath = file.storage.localPath;
 
     // Verificar que existe localmente
     try {
       await fs.access(filePath);
-      return await fs.readFile(filePath);
+      // ✅ CORRECCIÓN: Devolver la RUTA, no el contenido
+      return filePath;
     } catch (error) {
       throw createError(
         ERROR_CODES.FILE_NOT_FOUND,
@@ -795,7 +828,7 @@ export class FileService {
   }
 
   /**
-   * Descargar desde servidor remoto via RSync
+   * Descargar desde servidor remoto via RSync (VERSIÓN CORREGIDA)
    */
   async _downloadFromRemote(file, options = {}) {
     const { useCache = true, cacheTimeout = 3600000 } = options;
@@ -805,7 +838,7 @@ export class FileService {
     );
 
     // Verificar si tenemos información de almacenamiento remoto
-    if (!file.storage?.path) {
+    if (!file.storage?.remotePath) {
       throw createError(
         ERROR_CODES.CONFIG_ERROR,
         "El archivo no tiene configuración de almacenamiento remoto",
@@ -821,13 +854,14 @@ export class FileService {
           console.log(
             `♻️ Service: Usando archivo en caché: ${file.systemName}`
           );
-          return cachedFile;
+          // ✅ CORRECCIÓN: Devolver la RUTA, no el Buffer
+          return cachedFile.path; // Devuelve la ruta del archivo en caché
         }
       }
 
       // Si no está en caché, descargar desde remoto
       console.log(
-        `⬇️ Service: Iniciando descarga remota: ${file.storage.path}`
+        `⬇️ Service: Iniciando descarga remota: ${file.storage.remotePath}`
       );
 
       // Crear directorio temporal para la descarga
@@ -838,11 +872,10 @@ export class FileService {
         tempDir,
         `temp_${Date.now()}_${file.systemName}`
       );
-      const remotePath = file.storage.path;
 
       // Ejecutar rsync para descargar el archivo
       const result = await this._executeRsyncDownload(
-        remotePath,
+        file.storage.remotePath,
         localTempPath
       );
 
@@ -850,25 +883,32 @@ export class FileService {
         throw new Error(`Error en rsync: ${result.error}`);
       }
 
-      // Leer el archivo descargado
-      const fileBuffer = await fs.readFile(localTempPath);
+      // ✅ VERIFICAR que el archivo se descargó correctamente
+      await fs.access(localTempPath);
+      const stats = await fs.stat(localTempPath);
+
+      if (stats.size === 0) {
+        throw new Error("Archivo descargado está vacío");
+      }
+
+      console.log(
+        `✅ Archivo descargado: ${localTempPath} (${stats.size} bytes)`
+      );
 
       // Guardar en caché si está habilitado
       if (useCache) {
         await this._cacheFile(file, localTempPath);
       }
 
-      // Limpiar archivo temporal de rsync
-      await fs.unlink(localTempPath).catch(() => {
-        console.warn(
-          `⚠️ No se pudo eliminar archivo temporal: ${localTempPath}`
-        );
-      });
-
-      console.log(`✅ Service: Descarga remota completada: ${file.systemName}`);
-      return fileBuffer;
+      // ✅ CORRECCIÓN: Devolver la RUTA del archivo temporal, no el contenido
+      return localTempPath;
     } catch (error) {
       console.error(`❌ Service: Error en descarga remota: ${error.message}`);
+
+      // Limpiar archivo temporal si existe
+      if (localTempPath) {
+        await fs.unlink(localTempPath).catch(() => {});
+      }
 
       // Mapear errores específicos de rsync
       if (error.message.includes("No such file or directory")) {
@@ -952,7 +992,7 @@ export class FileService {
   }
 
   /**
-   * Obtener archivo desde caché temporal
+   * Obtener archivo desde caché temporal (VERSIÓN CORREGIDA)
    */
   async _getCachedFile(file) {
     try {
@@ -964,9 +1004,11 @@ export class FileService {
 
       if (cacheCheck.cached) {
         console.log(`✅ Cache HIT: ${fileId}`);
-        // Leer el archivo desde la ruta del caché
-        const fileBuffer = await fs.readFile(cacheCheck.path);
-        return fileBuffer;
+        // ✅ CORRECCIÓN: Devolver metadata con la ruta, no el contenido
+        return {
+          path: cacheCheck.path,
+          metadata: cacheCheck.metadata,
+        };
       }
 
       console.log(`📭 Cache MISS: ${fileId}`);

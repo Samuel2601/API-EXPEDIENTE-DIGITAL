@@ -192,7 +192,7 @@ class TempFileService {
   }
 
   /**
-   * Sistema de locks para evitar descargas simultáneas
+   * Sistema de locks para evitar descargas simultáneas (VERSIÓN CORREGIDA)
    */
   async acquireLock(fileId, version = undefined) {
     const lockKey = this.generateCacheKey(fileId, version);
@@ -200,7 +200,15 @@ class TempFileService {
     // Si ya existe un lock, esperar
     if (this.downloadLocks.has(lockKey)) {
       console.log(`🔒 Esperando lock para: ${fileId}`);
-      return await this.waitForLock(lockKey);
+      try {
+        const cachePath = await this.waitForLock(lockKey);
+        return { acquired: false, fromCache: true, cachePath };
+      } catch (error) {
+        console.log(
+          `⏰ Timeout esperando lock, procediendo con descarga: ${fileId}`
+        );
+        return { acquired: true, lockKey };
+      }
     }
 
     // Crear nuevo lock con Promise
@@ -217,40 +225,38 @@ class TempFileService {
   }
 
   /**
-   * Esperar a que se libere un lock
+   * Esperar a que se libere un lock (VERSIÓN CORREGIDA)
    */
   async waitForLock(lockKey) {
     const lock = this.downloadLocks.get(lockKey);
-    if (!lock) return { acquired: true, lockKey };
+    if (!lock) return null;
 
     try {
       // Esperar máximo 30 segundos
-      await Promise.race([
+      const cachePath = await Promise.race([
         lock.promise,
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error("Lock timeout")), 30000)
         ),
       ]);
 
-      return { acquired: false, fromCache: true };
+      return cachePath;
     } catch (error) {
       console.error(`❌ Error esperando lock: ${lockKey}`, error);
-      return { acquired: true, lockKey };
+      throw error;
     }
   }
 
   /**
-   * Liberar lock y notificar a otros esperando
+   * Liberar lock y notificar a otros esperando (VERSIÓN CORREGIDA)
    */
   releaseLock(lockKey, cachePath = null) {
     const lock = this.downloadLocks.get(lockKey);
     if (!lock) return;
 
-    if (cachePath) {
-      lock.resolve(cachePath);
-    } else {
-      lock.reject(new Error("Download failed"));
-    }
+    // ✅ CORRECCIÓN: Siempre resolver la promesa, nunca rechazar
+    // Si hay cachePath, es éxito, si no, igual se resuelve
+    lock.resolve(cachePath);
 
     this.downloadLocks.delete(lockKey);
     console.log(`🔓 Lock liberado: ${lockKey}`);
