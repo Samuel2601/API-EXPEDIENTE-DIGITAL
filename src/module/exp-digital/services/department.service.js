@@ -14,6 +14,7 @@ import {
   validateObjectId,
   validateRequiredFields,
 } from "../../../../utils/validation.util.js";
+import { UserDepartmentAccess } from "../models/module-permission.scheme.js";
 
 export class DepartmentService {
   constructor() {
@@ -100,9 +101,10 @@ export class DepartmentService {
   /**
    * Obtener todos los departamentos con filtros
    * @param {Object} filters - Filtros de búsqueda
+   * @param {String} userId - ID del usuario autenticado (requerido cuando canApproveContracts=true)
    * @returns {Promise<Object>} Lista de departamentos
    */
-  async getAllDepartments(filters = {}) {
+  async getAllDepartments(filters = {}, userId = null) {
     try {
       console.log("📋 Service: Obteniendo departamentos con filtros:", filters);
 
@@ -119,6 +121,57 @@ export class DepartmentService {
         searchTerm,
       } = filters;
 
+      // ✅ NUEVA LÓGICA: Si canApproveContracts=true, filtrar por permisos del usuario
+      let allowedDepartmentIds = null;
+
+      if (canApproveContracts === true && userId) {
+        console.log(
+          `🔐 Filtrando departamentos donde el usuario ${userId} puede crear contratos`
+        );
+
+        // Obtener todos los accesos activos del usuario
+        const userAccesses = await UserDepartmentAccess.getUserAccesses(
+          userId,
+          "ACTIVE",
+          null
+        );
+
+        // Filtrar solo los departamentos donde el usuario tiene permiso para crear contratos
+        allowedDepartmentIds = userAccesses
+          .filter((access) => access.permissions?.contracts?.canCreate === true)
+          .map((access) => access.department._id || access.department);
+
+        console.log(
+          `✅ Usuario tiene permiso para crear contratos en ${allowedDepartmentIds.length} departamentos`
+        );
+
+        // Si no tiene permisos en ningún departamento, retornar lista vacía
+        if (allowedDepartmentIds.length === 0) {
+          return {
+            departments: [],
+            pagination: {
+              currentPage: 1,
+              totalPages: 0,
+              totalDepartments: 0,
+              limit: limit,
+              hasNextPage: false,
+              hasPrevPage: false,
+            },
+            appliedFilters: {
+              level,
+              parentDepartment,
+              canApproveContracts,
+              tags,
+              searchTerm,
+              includeInactive,
+              sorting: { field: sortBy, order: sortOrder },
+              userFiltered: true,
+              allowedDepartments: allowedDepartmentIds.length,
+            },
+          };
+        }
+      }
+
       // Construir query de MongoDB
       const query = this._buildDepartmentQuery({
         includeInactive,
@@ -127,6 +180,7 @@ export class DepartmentService {
         canApproveContracts,
         tags,
         searchTerm,
+        allowedDepartmentIds, // ✅ Pasar los IDs permitidos al query builder
       });
 
       // Configurar opciones de consulta
@@ -141,13 +195,17 @@ export class DepartmentService {
           },
         ],
       };
+
       console.log("query", query, "queryOptions", queryOptions);
+
       // Ejecutar consulta
       const result = await this.departmentRepository.findAll(
         query,
         queryOptions
       );
+
       console.log("result", result);
+
       // Enriquecer datos
       const enrichedDepartments = await Promise.all(
         result.docs.map(async (dept) => {
@@ -182,6 +240,10 @@ export class DepartmentService {
           searchTerm,
           includeInactive,
           sorting: { field: sortBy, order: sortOrder },
+          userFiltered: canApproveContracts === true && userId ? true : false,
+          allowedDepartments: allowedDepartmentIds
+            ? allowedDepartmentIds.length
+            : null,
         },
       };
     } catch (error) {
@@ -1095,6 +1157,15 @@ export class DepartmentService {
       query.isActive = true;
     }
 
+    // ✅ NUEVO: Filtro por departamentos permitidos según permisos del usuario
+    if (
+      filters.allowedDepartmentIds &&
+      Array.isArray(filters.allowedDepartmentIds) &&
+      filters.allowedDepartmentIds.length > 0
+    ) {
+      query._id = { $in: filters.allowedDepartmentIds };
+    }
+
     // Filtros específicos
     if (filters.level !== undefined) {
       query.level = filters.level;
@@ -1113,6 +1184,7 @@ export class DepartmentService {
       query.tags = { $in: filters.tags };
     }
 
+    // Búsqueda por texto
     if (filters.searchTerm) {
       query.$or = [
         { code: { $regex: filters.searchTerm, $options: "i" } },

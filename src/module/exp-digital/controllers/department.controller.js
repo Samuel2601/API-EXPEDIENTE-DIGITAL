@@ -130,7 +130,10 @@ export class DepartmentController {
           searchTerm,
         };
 
-        const result = await this.departmentService.getAllDepartments(filters);
+        const result = await this.departmentService.getAllDepartments(
+          filters,
+          user.userId
+        );
 
         console.log(
           `✅ Departamentos devueltos: ${result.departments.length}/${result.pagination.totalDepartments}`
