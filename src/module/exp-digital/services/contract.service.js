@@ -387,7 +387,9 @@ export class ContractService {
     try {
       validateObjectId(contractId, "ID del contrato");
 
-      console.log(`✏️ Service: Actualizando contrato: ${contractId}`);
+      console.log(
+        `✏️ Service: Actualizando contrato: ${JSON.stringify(updateData)}`
+      );
 
       const {
         userData,
