@@ -855,7 +855,7 @@ export class FileService {
 
       // Guardar en caché si está habilitado
       if (useCache) {
-        await this._cacheFile(file, fileBuffer);
+        await this._cacheFile(file, localTempPath);
       }
 
       // Limpiar archivo temporal de rsync
