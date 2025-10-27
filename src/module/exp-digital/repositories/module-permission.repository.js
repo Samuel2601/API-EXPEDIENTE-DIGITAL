@@ -182,19 +182,43 @@ export class ModulePermissionRepository extends BaseRepository {
    */
   async updateUserAccess(id, updateData, userData, options = {}) {
     try {
-      // Si se cambia el nivel de acceso, reconfigurar permisos
-      if (updateData.accessLevel) {
+      // Obtener el acceso actual para comparar
+      const currentAccess = await this.findById(id);
+
+      if (!currentAccess) {
+        throw new Error("Acceso no encontrado");
+      }
+
+      // Solo reconfigurar permisos si el accessLevel cambió
+      if (
+        updateData.accessLevel &&
+        updateData.accessLevel !== currentAccess.accessLevel
+      ) {
+        // El nivel de acceso cambió, aplicar permisos por defecto del nuevo nivel
         updateData.permissions = this.getDefaultPermissionsByLevel(
           updateData.accessLevel
         );
 
-        // Actualizar acceso global si es REPOSITORY
+        // Actualizar acceso global si el nuevo nivel es REPOSITORY
         if (updateData.accessLevel === ACCESS_LEVELS.REPOSITORY) {
           updateData.crossDepartmentAccess =
             updateData.crossDepartmentAccess || {};
           updateData.crossDepartmentAccess.hasGlobalAccess = true;
         }
+
+        console.log(
+          `Nivel de acceso cambió de ${currentAccess.accessLevel} a ${updateData.accessLevel}, aplicando permisos por defecto`
+        );
+      } else if (
+        updateData.accessLevel === currentAccess.accessLevel &&
+        updateData.permissions
+      ) {
+        // El nivel es el mismo y se enviaron permisos personalizados
+        console.log(
+          "Actualizando permisos personalizados sin cambiar el nivel de acceso"
+        );
       }
+      // Si no se envía accessLevel, simplemente actualizar lo que venga en updateData
 
       return await this.update(id, updateData, userData, options);
     } catch (error) {
