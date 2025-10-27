@@ -982,15 +982,22 @@ UserDepartmentAccessSchema.statics.getUserAccesses = function (
   departmentId = null
 ) {
   console.log("Obteniendo accesos para el usuario:", userId, status);
-  return this.find({
+
+  // Construir el objeto de consulta base
+  const query = {
     user: new Types.ObjectId(userId),
     status: status,
     isActive: true,
-    department: departmentId,
-  })
+  };
+
+  // Solo agregar department a la consulta si departmentId no es null
+  if (departmentId !== null) {
+    query.department = departmentId;
+  }
+
+  return this.find(query)
     .populate("department", "code name shortName contactInfo")
     .sort({ "assignment.isPrimary": -1, "assignment.assignmentDate": -1 });
-  // REMOVER .lean() para mantener los métodos de instancia
 };
 
 // Verificar si un usuario puede realizar una acción específica

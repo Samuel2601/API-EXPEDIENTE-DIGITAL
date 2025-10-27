@@ -130,11 +130,7 @@ export class DepartmentService {
         );
 
         // Obtener todos los accesos activos del usuario
-        const userAccesses = await UserDepartmentAccess.getUserAccesses(
-          userId,
-          "ACTIVE",
-          null
-        );
+        const userAccesses = await UserDepartmentAccess.getUserAccesses(userId);
 
         // Filtrar solo los departamentos donde el usuario tiene permiso para crear contratos
         allowedDepartmentIds = userAccesses
@@ -142,7 +138,7 @@ export class DepartmentService {
           .map((access) => access.department._id || access.department);
 
         console.log(
-          `✅ Usuario tiene permiso para crear contratos en ${allowedDepartmentIds.length} departamentos`
+          `✅ Usuario: ${userId} tiene permiso para crear contratos en ${allowedDepartmentIds.length} departamentos`
         );
 
         // Si no tiene permisos en ningún departamento, retornar lista vacía
