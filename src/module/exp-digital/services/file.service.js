@@ -838,7 +838,7 @@ export class FileService {
     );
 
     // Verificar si tenemos información de almacenamiento remoto
-    if (!file.storage?.remotePath) {
+    if (!file.storage?.path) {
       throw createError(
         ERROR_CODES.CONFIG_ERROR,
         "El archivo no tiene configuración de almacenamiento remoto",
@@ -861,7 +861,7 @@ export class FileService {
 
       // Si no está en caché, descargar desde remoto
       console.log(
-        `⬇️ Service: Iniciando descarga remota: ${file.storage.remotePath}`
+        `⬇️ Service: Iniciando descarga remota: ${file.storage.path}`
       );
 
       // Crear directorio temporal para la descarga
@@ -875,7 +875,7 @@ export class FileService {
 
       // Ejecutar rsync para descargar el archivo
       const result = await this._executeRsyncDownload(
-        file.storage.remotePath,
+        file.storage.path,
         localTempPath
       );
 
