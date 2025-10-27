@@ -215,7 +215,12 @@ export class ModulePermissionController {
       if (!id) {
         return res.status(400).json({ message: "ID de acceso es requerido" });
       }
-
+      console.log(
+        "Editando acceso de usuario",
+        id,
+        "con:",
+        JSON.stringify(body)
+      );
       const userData = {
         userId: user.sub,
         userName: user.name,
@@ -227,7 +232,7 @@ export class ModulePermissionController {
         body,
         userData
       );
-
+      console.log("Acceso actualizado:", updatedAccess);
       res.status(200).json({
         success: true,
         data: updatedAccess,
