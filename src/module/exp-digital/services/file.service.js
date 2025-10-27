@@ -655,18 +655,16 @@ export class FileService {
         throw new AppError("Archivo no encontrado", 404, "FILE_NOT_FOUND");
       }
 
-      // 2. VERIFICAR CACHÉ PRIMERO
+      // 2. VERIFICAR CACHÉ PRIMERO (método correcto)
       const cacheCheck = await tempFileService.isCached(fileId, file.version);
 
       if (cacheCheck.cached) {
         console.log(`✅ Usando archivo desde caché: ${file.storedName}`);
 
-        // Registrar descarga si está habilitado
         if (trackDownload && userId) {
           await this.trackDownload(fileId, userId, "cache");
         }
 
-        // Retornar archivo desde caché
         return {
           fileStream: await fs.readFile(cacheCheck.path),
           metadata: {
@@ -681,44 +679,20 @@ export class FileService {
         };
       }
 
-      // 3. ADQUIRIR LOCK para evitar descargas simultáneas
+      // 3. ADQUIRIR LOCK
       const lock = await tempFileService.acquireLock(fileId, file.version);
 
-      // Si otro proceso ya está descargando, esperar
-      if (!lock.acquired && lock.fromCache) {
-        console.log(`⏳ Otro proceso descargando, usando resultado del caché`);
-        const cacheCheck2 = await tempFileService.isCached(
-          fileId,
-          file.version
-        );
-
-        if (cacheCheck2.cached) {
-          return {
-            fileStream: await fs.readFile(cacheCheck2.path),
-            metadata: {
-              id: file._id,
-              originalName: file.originalName,
-              storedName: file.storedName,
-              mimeType: file.mimeType,
-              size: file.size,
-              source: "cache-waited",
-              checksum: file.checksum,
-            },
-          };
-        }
-      }
-
-      // 4. DESCARGAR ARCHIVO (lock adquirido)
+      // 4. DESCARGAR ARCHIVO
       let tempFilePath;
       let fileSource;
 
       try {
-        // Determinar fuente de descarga
-        if (source === "auto") {
-          fileSource = file.storageLocation === "local" ? "local" : "remote";
-        } else {
-          fileSource = source;
-        }
+        fileSource =
+          source === "auto"
+            ? file.storageLocation === "local"
+              ? "local"
+              : "remote"
+            : source;
 
         console.log(`📡 Descargando desde: ${fileSource}`);
 
@@ -728,12 +702,22 @@ export class FileService {
           tempFilePath = await this._downloadFromRemote(file);
         }
 
-        console.log(`✅ Descarga completada: ${file.storedName}`);
+        // ✅ VERIFICAR que el archivo fue descargado correctamente
+        await fs.access(tempFilePath, fs.constants.R_OK);
+        const stats = await fs.stat(tempFilePath);
 
-        // 5. GUARDAR EN CACHÉ
+        if (stats.size === 0) {
+          throw new Error("Archivo descargado está vacío");
+        }
+
+        console.log(
+          `✅ Descarga completada: ${file.storedName} (${stats.size} bytes)`
+        );
+
+        // 5. GUARDAR EN CACHÉ (pasar RUTA, no Buffer)
         const cachePath = await tempFileService.saveToCache(
           fileId,
-          tempFilePath,
+          tempFilePath, // ✅ Pasar la RUTA del archivo temporal
           file.version
         );
 
@@ -745,7 +729,7 @@ export class FileService {
           await this.trackDownload(fileId, userId, fileSource);
         }
 
-        // 8. Retornar archivo
+        // 8. Retornar el archivo
         return {
           fileStream: await fs.readFile(cachePath),
           metadata: {
@@ -760,21 +744,14 @@ export class FileService {
         };
       } catch (downloadError) {
         // Liberar lock en caso de error
-        if (lock.lockKey) {
-          tempFileService.releaseLock(lock.lockKey, null);
+        tempFileService.releaseLock(lock.lockKey);
+
+        // Limpiar archivo temporal si existe
+        if (tempFilePath) {
+          await fs.unlink(tempFilePath).catch(() => {});
         }
+
         throw downloadError;
-      } finally {
-        // Limpiar archivo temporal original (no el de caché)
-        if (tempFilePath && tempFilePath !== cachePath) {
-          try {
-            await fs.unlink(tempFilePath);
-          } catch (cleanupError) {
-            console.warn(
-              `⚠️ No se pudo limpiar archivo temporal: ${tempFilePath}`
-            );
-          }
-        }
       }
     } catch (error) {
       console.error(`❌ Error en downloadFile: ${error.message}`);
@@ -979,20 +956,20 @@ export class FileService {
    */
   async _getCachedFile(file) {
     try {
-      const cacheKey = this._getCacheKey(file);
-      const tempFile = await tempFileService.getTempFile(cacheKey);
+      const fileId = file._id.toString();
+      const version = file.version;
 
-      if (tempFile) {
-        // Verificar que no esté expirado
-        const fileAge = Date.now() - tempFile.createdAt.getTime();
-        if (fileAge < options.cacheTimeout) {
-          return tempFile.buffer;
-        } else {
-          // Eliminar si está expirado
-          await tempFileService.deleteTempFile(cacheKey);
-        }
+      // Usar el método correcto: isCached
+      const cacheCheck = await tempFileService.isCached(fileId, version);
+
+      if (cacheCheck.cached) {
+        console.log(`✅ Cache HIT: ${fileId}`);
+        // Leer el archivo desde la ruta del caché
+        const fileBuffer = await fs.readFile(cacheCheck.path);
+        return fileBuffer;
       }
 
+      console.log(`📭 Cache MISS: ${fileId}`);
       return null;
     } catch (error) {
       console.warn(`⚠️ Service: Error accediendo a caché: ${error.message}`);
@@ -1003,14 +980,31 @@ export class FileService {
   /**
    * Guardar archivo en caché temporal
    */
-  async _cacheFile(file, fileBuffer) {
+  async _cacheFile(file, tempFilePath) {
     try {
-      const cacheKey = this._getCacheKey(file);
-      await tempFileService.createTempFile(fileBuffer, cacheKey);
-      console.log(`💾 Service: Archivo guardado en caché: ${file.systemName}`);
+      const fileId = file._id.toString();
+      const version = file.version;
+
+      // Verificar que tempFilePath es una ruta válida (string)
+      if (typeof tempFilePath !== "string") {
+        throw new Error("tempFilePath debe ser una ruta de archivo string");
+      }
+
+      // Verificar que el archivo existe
+      await fs.access(tempFilePath);
+
+      // Usar el método correcto: saveToCache
+      const cachePath = await tempFileService.saveToCache(
+        fileId,
+        tempFilePath,
+        version
+      );
+
+      console.log(`💾 Service: Archivo guardado en caché: ${file.storedName}`);
+      return cachePath;
     } catch (error) {
       console.warn(`⚠️ Service: Error guardando en caché: ${error.message}`);
-      // No lanzar error, la caché es opcional
+      throw error;
     }
   }
 

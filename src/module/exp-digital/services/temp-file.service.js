@@ -152,7 +152,7 @@ class TempFileService {
       const stats = await fs.stat(cachePath);
       const now = Date.now();
 
-      // Registrar metadata
+      // ✅ La metadata se guarda AQUÍ directamente en el Map
       this.cacheMetadata.set(cacheKey, {
         path: cachePath,
         size: stats.size,
