@@ -300,6 +300,11 @@ export class SercopSyncService {
   async getOrCreateContractType(internalType, options = {}) {
     try {
       const { userData = {}, dryRun = false } = options;
+      if (internalType === null) {
+        console.log("internalType es null", JSON.stringify(internalType));
+        console.log("Opciones", JSON.stringify(options));
+        return null;
+      }
 
       console.log(`🔍 Procesando tipo: "${internalType}"`);
 

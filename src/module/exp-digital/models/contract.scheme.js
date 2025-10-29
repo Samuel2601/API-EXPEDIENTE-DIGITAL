@@ -46,7 +46,7 @@ export const ContractJSON = {
 
   sercopCode: {
     type: String,
-    uppercase: true,
+    //uppercase: true,
     trim: true,
     maxlength: 300,
     sparse: true, // Permite nulls únicos
@@ -700,7 +700,7 @@ ContractSchema.pre("save", function (next) {
   }
 
   if (this.sercopCode) {
-    this.sercopCode = this.sercopCode.toUpperCase().trim();
+    this.sercopCode = this.sercopCode.trim(); //.toUpperCase().trim();
   }
 
   // Normalizar tags
