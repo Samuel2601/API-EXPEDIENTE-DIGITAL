@@ -11,6 +11,8 @@ import rateLimit from "express-rate-limit";
 import { config } from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { createServer } from "http";
+import { initializeWebSocket } from "./src/module/notifications/websocket/notification.websocket.js";
 
 // Configuraciones
 config();
@@ -39,6 +41,7 @@ import {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const PORTSOCKECT = process.env.PORTSOCKECT || 3001;
 const NODE_ENV = process.env.NODE_ENV || "development";
 
 // Obtener ruta del directorio actual
@@ -534,5 +537,15 @@ const server = app.listen(PORT, () => {
 });
 
 //mapRoutes(app);
+
+const httpServer = createServer(app);
+initializeWebSocket(httpServer);
+// Iniciar servidor
+httpServer.listen(PORTSOCKECT, () => {
+  console.log(`🚀 Servidor corriendo en puerto ${PORTSOCKECT}`);
+  console.log(
+    `🔌 WebSocket disponible en ws://localhost:${PORTSOCKECT}/notifications`
+  );
+});
 
 export default app;

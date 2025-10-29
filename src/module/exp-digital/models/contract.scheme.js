@@ -418,7 +418,11 @@ export const ContractJSON = {
       oldSystemId: String,
       otherReferences: Schema.Types.Mixed,
     },
-
+    source: String,
+    sercopOcid: String,
+    originalName: String,
+    importedAt: Date,
+    importedBy: Schema.Types.ObjectId,
     publicAccess: {
       type: Boolean,
       default: true,
