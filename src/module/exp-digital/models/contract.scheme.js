@@ -48,11 +48,11 @@ export const ContractJSON = {
     type: String,
     uppercase: true,
     trim: true,
-    maxlength: 30,
+    maxlength: 300,
     sparse: true, // Permite nulls únicos
     index: true,
     meta: {
-      validation: { isString: true, optional: true, isLength: { max: 30 } },
+      validation: { isString: true, optional: true, isLength: { max: 300 } },
       messages: {
         isString: "El código SERCOP debe ser un texto válido",
         isLength: "El código SERCOP no puede exceder 30 caracteres",

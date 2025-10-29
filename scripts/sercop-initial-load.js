@@ -13,17 +13,37 @@ import { DepartmentRepository } from "../src/module/exp-digital/repositories/dep
 // Cargar variables de entorno
 dotenv.config();
 
+// Función para parsear argumentos de línea de comandos
+function parseArgs() {
+  const args = process.argv.slice(2);
+  const parsed = {};
+
+  args.forEach((arg) => {
+    if (arg.startsWith("--")) {
+      const [key, value] = arg.replace("--", "").split("=");
+      parsed[key] = value === undefined ? true : value;
+    }
+  });
+
+  return parsed;
+}
+
+// Obtener argumentos
+const args = parseArgs();
+
 // Configuración de carga
 const LOAD_CONFIG = {
   buyer: "GOBIERNO AUTONOMO DESCENTRALIZADO DE LA PROVINCIA DE ESMERALDAS",
-  year: 2025,
-  dryRun: process.argv.includes("--dry-run"),
-  syncTypes: !process.argv.includes("--no-sync-types"),
-  importContracts: process.argv.includes("--import-contracts"),
+  year: args.year ? parseInt(args.year) : 2025, // Usar año proporcionado o 2025 por defecto
+  dryRun: process.argv.includes("--dry-run") || args.dryRun,
+  syncTypes:
+    !process.argv.includes("--no-sync-types") && !args["no-sync-types"],
+  importContracts:
+    process.argv.includes("--import-contracts") || args["import-contracts"],
   maxContracts:
     parseInt(
       process.argv.find((arg) => arg.startsWith("--max="))?.split("=")[1]
-    ) || null,
+    ) || (args.max ? parseInt(args.max) : null),
 };
 
 class SercopInitialLoader {
@@ -484,6 +504,7 @@ USO:
 
 OPCIONES:
   --help                  Mostrar esta ayuda
+  --year=YYYY            Especificar el año para la carga (ej: --year=2024)
   --dry-run              Modo de prueba (no realiza cambios en BD)
   --no-sync-types        No sincronizar tipos de contrato
   --import-contracts     Importar contratos además de tipos
@@ -491,17 +512,20 @@ OPCIONES:
 
 EJEMPLOS:
 
-  # Dry run - solo ver qué se haría
-  node scripts/sercop-initial-load.js --dry-run
+  # Cargar datos para año específico
+  node scripts/sercop-initial-load.js --year=2024
 
-  # Sincronizar solo tipos de contrato (recomendado primero)
-  node scripts/sercop-initial-load.js
+  # Dry run para año específico
+  node scripts/sercop-initial-load.js --year=2023 --dry-run
 
-  # Sincronizar tipos e importar primeros 50 contratos
-  node scripts/sercop-initial-load.js --import-contracts --max=50
+  # Sincronizar solo tipos de contrato para año específico
+  node scripts/sercop-initial-load.js --year=2024
 
-  # Importar contratos sin actualizar tipos
-  node scripts/sercop-initial-load.js --no-sync-types --import-contracts
+  # Sincronizar tipos e importar primeros 50 contratos para año específico
+  node scripts/sercop-initial-load.js --year=2024 --import-contracts --max=50
+
+  # Importar contratos sin actualizar tipos para año específico
+  node scripts/sercop-initial-load.js --year=2024 --no-sync-types --import-contracts
   `);
   process.exit(0);
 }
