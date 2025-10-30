@@ -335,7 +335,8 @@ export class ContractController {
         JSON.stringify(req.permissions)
       );
       // Verificar permisos específicos para este contrato
-      const userPermissions = {
+      const userPermissions = req.permissions;
+      /*{
         canEdit:
           req.permissions?.hasPermission("contracts", "canEdit") || false,
         canDelete:
@@ -347,7 +348,7 @@ export class ContractController {
           req.permissions?.hasPermission("documents", "canUpload") || false,
         canDownloadDocuments:
           req.permissions?.hasPermission("documents", "canDownload") || false,
-      };
+      };*/
 
       console.log(
         `✅ Contrato obtenido: ${contractDetails.contract.contractNumber}`
