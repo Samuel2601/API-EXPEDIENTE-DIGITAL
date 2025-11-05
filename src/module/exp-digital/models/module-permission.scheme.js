@@ -909,11 +909,20 @@ UserDepartmentAccessSchema.methods.hasPermission = function (
   category,
   permission
 ) {
-  if (!this.isActive || this.status !== "ACTIVE" || this.isExpired()) {
+  console.log("hasPermission called with:", category, permission);
+  console.log("Current permissions:", this.permissions);
+
+  // Verificar si la categoría existe
+  if (!this.permissions || !this.permissions[category]) {
+    console.log("Category not found:", category);
     return false;
   }
 
-  return this.permissions[category] && this.permissions[category][permission];
+  // Verificar si el permiso existe en la categoría
+  const hasPerm = this.permissions[category][permission] === true;
+  console.log("Permission check result:", hasPerm);
+
+  return hasPerm;
 };
 
 // Verificar si el acceso ha expirado
@@ -1031,7 +1040,10 @@ UserDepartmentAccessSchema.statics.checkUserPermission = async function (
     const contract = await Contract.findById(contractId);
     if (!contract) return { allowed: false, reason: "Contract not found" };
 
-    if (!access.canAccessContract(contract)) {
+    const canAccess = access.canAccessContract(contract);
+    console.log("Contract access check:", canAccess);
+
+    if (!canAccess) {
       return { allowed: false, reason: "No access to this contract" };
     }
   }

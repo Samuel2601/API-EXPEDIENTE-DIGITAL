@@ -413,8 +413,125 @@ export class FileService {
         throw createError(ERROR_CODES.NOT_FOUND, "Archivo no encontrado", 404);
       }
 
+      // Preparar datos de actualización
+      const updatePayload = { ...updateData };
+
+      // Si se está cambiando el estado, auto-rellenar campos según el estado
+      if (updateData.status && updateData.status !== existingFile.status) {
+        updatePayload.review = updatePayload.review || {};
+
+        switch (updateData.status) {
+          case "REVIEW":
+            // Para estado REVIEW, asignar revisor y fecha de revisión
+            if (!updatePayload.review.reviewedBy) {
+              updatePayload.review.reviewedBy = userData.userId;
+            }
+            if (!updatePayload.review.reviewDate) {
+              updatePayload.review.reviewDate = new Date();
+            }
+            break;
+
+          case "APPROVED":
+            // Para estado APPROVED, asignar aprobador y fecha de aprobación
+            if (!updatePayload.review.approvedBy) {
+              updatePayload.review.approvedBy = userData.userId;
+            }
+            if (!updatePayload.review.approvalDate) {
+              updatePayload.review.approvalDate = new Date();
+            }
+
+            // Si no hay revisor asignado, usar el mismo usuario
+            if (!updatePayload.review.reviewedBy) {
+              updatePayload.review.reviewedBy = userData.userId;
+            }
+            if (!updatePayload.review.reviewDate) {
+              updatePayload.review.reviewDate = new Date();
+            }
+            break;
+
+          case "REJECTED":
+            // Para estado REJECTED, validar que hay razón de rechazo
+            if (!updatePayload.review.rejectionReason) {
+              throw createError(
+                ERROR_CODES.INVALID_OPERATION,
+                "No se puede rechazar el archivo sin especificar la razón de rechazo",
+                400
+              );
+            }
+
+            // Asignar revisor y fecha
+            if (!updatePayload.review.reviewedBy) {
+              updatePayload.review.reviewedBy = userData.userId;
+            }
+            if (!updatePayload.review.reviewDate) {
+              updatePayload.review.reviewDate = new Date();
+            }
+            break;
+
+          case "OBSOLETE":
+          case "ARCHIVED":
+            // Para estados de archivo, registrar quién realizó la acción
+            updatePayload.audit = updatePayload.audit || {};
+            if (!updatePayload.audit.lastModifiedBy) {
+              updatePayload.audit.lastModifiedBy = userData.userId;
+            }
+            break;
+        }
+      }
+
+      // Validaciones específicas por estado
+      if (updateData.status) {
+        switch (updateData.status) {
+          case "REVIEW":
+            if (!updatePayload.review?.observations) {
+              throw createError(
+                ERROR_CODES.INVALID_OPERATION,
+                "No se puede cambiar el estado a REVIEW sin observaciones",
+                400
+              );
+            }
+            break;
+
+          case "APPROVED":
+            if (!updatePayload.review?.observations) {
+              throw createError(
+                ERROR_CODES.INVALID_OPERATION,
+                "No se puede cambiar el estado a APPROVED sin observaciones",
+                400
+              );
+            }
+            break;
+
+          case "REJECTED":
+            if (!updatePayload.review?.rejectionReason) {
+              throw createError(
+                ERROR_CODES.INVALID_OPERATION,
+                "No se puede cambiar el estado a REJECTED sin razón de rechazo",
+                400
+              );
+            }
+            break;
+        }
+      }
+
+      // Si hay observaciones en la revisión pero no hay revisor asignado
+      if (
+        updatePayload.review?.observations &&
+        !updatePayload.review.reviewedBy
+      ) {
+        updatePayload.review.reviewedBy = userData.userId;
+        updatePayload.review.reviewDate = new Date();
+      }
+
       // Campos permitidos para actualización - EXPANDIDOS
       const allowedFields = [
+        "status",
+        "review.observations",
+        "review.reviewedBy",
+        "review.reviewDate",
+        "review.approvedBy",
+        "review.approvalDate",
+        "review.rejectionReason",
         "displayName",
         "description",
         "documentType",
@@ -434,10 +551,10 @@ export class FileService {
         "rsyncInfo.priority",
         "rsyncInfo.keepLocal",
       ];
-      console.log("Datos recbidos: ", JSON.stringify(updateData, null, 2));
+      console.log("Datos recbidos: ", JSON.stringify(updatePayload, null, 2));
       // Filtrar datos de actualización
       const filteredUpdate = this._filterUpdateFields(
-        updateData,
+        updatePayload,
         allowedFields
       );
 

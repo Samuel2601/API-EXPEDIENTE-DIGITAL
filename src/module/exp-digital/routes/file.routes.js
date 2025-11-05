@@ -90,9 +90,9 @@ router.get(
 router.put(
   "/:id",
   requirePermission({
-    category: "documents",
-    permission: "canEdit",
-    errorMessage: "No tiene permisos para editar archivos",
+    category: "interactions",
+    permission: "canAddObservations",
+    errorMessage: "No tiene permisos para agregar observaciones a archivos",
   }),
   controller.updateFile
 );

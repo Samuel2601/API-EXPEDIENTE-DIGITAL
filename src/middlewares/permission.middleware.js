@@ -47,6 +47,7 @@ export const requirePermission = (options = {}) => {
   } = options;
   return async (req, res, next) => {
     console.log("Configurando middleware de permisos:", options);
+    console.log("Body:", req.body);
     try {
       // Obtener información del usuario autenticado
       const userId = req.user.userId;
@@ -55,7 +56,7 @@ export const requirePermission = (options = {}) => {
       let departmentId =
         req.params[departmentParam] || req.body[departmentParam];
       console.log("🔍 Verificando permisos de usuario:", userId, departmentId);
-      if (category === "documents") {
+      if (category === "documents" || category === "interactions") {
         console.log(
           "🔍 Verificando permisos de usuario:",
           userId,
@@ -92,7 +93,16 @@ export const requirePermission = (options = {}) => {
           message: "Se requiere un departamento para validar permisos",
         });
       }
-
+      console.log(
+        "Permisos de busqueda:",
+        userId,
+        departmentId,
+        category,
+        permission,
+        requireContractAccess
+          ? req.params[contractParam] || req.body[contractParam]
+          : null
+      );
       // Verificar permisos
       const permissionCheck = await UserDepartmentAccess.checkUserPermission(
         userId,
