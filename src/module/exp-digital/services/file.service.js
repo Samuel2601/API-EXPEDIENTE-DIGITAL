@@ -278,6 +278,16 @@ export class FileService {
             select: "name last_name email",
             model: "user",
           },
+          {
+            path: "createdBy",
+            select: "name last_name email",
+            model: "user",
+          },
+          {
+            path: "updatedBy",
+            select: "name last_name email",
+            model: "user",
+          },
         ],
       };
 
@@ -290,7 +300,7 @@ export class FileService {
           const enriched = file.toObject?.() ? file.toObject() : file;
 
           // Agregar estadísticas y estado
-          enriched.status = this._getFileStatus(file);
+          //enriched.status = this._getFileStatus(file);
           enriched.downloadUrl = this._generateDownloadUrl(file);
           enriched.isAvailable = this._isFileAvailable(file);
 

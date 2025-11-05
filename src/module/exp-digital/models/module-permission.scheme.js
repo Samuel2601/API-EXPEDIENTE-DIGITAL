@@ -206,19 +206,22 @@ export const UserDepartmentAccessJSON = {
   // ===== CONFIGURACIÓN DE ACCESO CRUZADO =====
   crossDepartmentAccess: {
     // Departamentos que puede visualizar (además del propio)
-    viewableDepartments: [
-      {
-        department: {
-          type: Schema.Types.ObjectId,
-          ref: "Department",
+    viewableDepartments: {
+      type: [
+        {
+          department: {
+            type: Schema.Types.ObjectId,
+            ref: "Department",
+          },
+          accessLevel: {
+            type: String,
+            enum: ["READ_ONLY", "OBSERVE_COMMENT", "COLLABORATE"],
+            default: "READ_ONLY",
+          },
         },
-        accessLevel: {
-          type: String,
-          enum: ["READ_ONLY", "OBSERVE_COMMENT", "COLLABORATE"],
-          default: "READ_ONLY",
-        },
-      },
-    ],
+      ],
+      default: [],
+    },
 
     // Si tiene acceso global (como repositorio)
     hasGlobalAccess: { type: Boolean, default: false },
@@ -763,6 +766,48 @@ UserDepartmentAccessSchema.pre("save", function (next) {
   }
 });
 
+// ===== HOOKS =====
+
+// ✅ CRÍTICO: Hook pre-save para controlar isPrimary duplicados
+// Garantiza que solo un acceso por usuario tenga isPrimary = true
+UserDepartmentAccessSchema.pre("save", async function (next) {
+  // Solo aplicar si isPrimary cambió a true
+  if (
+    this.isModified("assignment.isPrimary") &&
+    this.assignment.isPrimary === true
+  ) {
+    try {
+      // Desmarcar otros accesos como primarios para este usuario
+      await this.constructor.updateMany(
+        {
+          user: this.user,
+          _id: { $ne: this._id }, // Excluir el documento actual
+          "assignment.isPrimary": true,
+        },
+        {
+          $set: { "assignment.isPrimary": false },
+        }
+      );
+      console.log(
+        `[pre-save] Unmarked other primary accesses for user: ${this.user}`
+      );
+    } catch (error) {
+      console.error("[pre-save] Error unmarking primary accesses:", error);
+      return next(error);
+    }
+  }
+  next();
+});
+
+// ✅ Hook pre-save para actualizar versión de concurrencia
+UserDepartmentAccessSchema.pre("save", function (next) {
+  if (this.isModified() && !this.isNew) {
+    this.concurrency.version += 1;
+    this.concurrency.lastModified = new Date();
+  }
+  next();
+});
+
 // ===== MÉTODOS DE INSTANCIA =====
 
 UserDepartmentAccessSchema.methods.toJSON = function () {
@@ -905,24 +950,30 @@ UserDepartmentAccessSchema.methods.configurePermissionsByLevel = function () {
 };
 
 // Verificar si tiene un permiso específico
+// ✅ CORRECCIÓN: Logging más robusto y distinción de errores
 UserDepartmentAccessSchema.methods.hasPermission = function (
   category,
   permission
 ) {
-  console.log("hasPermission called with:", category, permission);
-  console.log("Current permissions:", this.permissions);
-
-  // Verificar si la categoría existe
-  if (!this.permissions || !this.permissions[category]) {
-    console.log("Category not found:", category);
+  if (!this.permissions) {
+    console.warn(`[hasPermission] No permissions object found`);
     return false;
   }
 
-  // Verificar si el permiso existe en la categoría
-  const hasPerm = this.permissions[category][permission] === true;
-  console.log("Permission check result:", hasPerm);
+  const cat = this.permissions[category];
+  if (!cat) {
+    console.warn(`[hasPermission] Category not found: ${category}`);
+    return false;
+  }
 
-  return hasPerm;
+  if (!(permission in cat)) {
+    console.warn(
+      `[hasPermission] Permission key not found in category ${category}: ${permission}`
+    );
+    return false;
+  }
+
+  return Boolean(cat[permission]);
 };
 
 // Verificar si el acceso ha expirado
@@ -932,42 +983,125 @@ UserDepartmentAccessSchema.methods.isExpired = function () {
 };
 
 // Verificar si puede acceder a un contrato específico
-// ✅ CORRECCIÓN: Manejar department poblado o no poblado
+// ✅ CORRECCIÓN COMPLETA: Evalúa allowedPhases, maxContractAmount y usa comparaciones robustas
 UserDepartmentAccessSchema.methods.canAccessContract = function (contract) {
+  // 1. Verificaciones de estado básico
   if (!this.isActive || this.status !== "ACTIVE" || this.isExpired()) {
+    console.log(
+      "[canAccessContract] Access is inactive, not ACTIVE, or expired"
+    );
     return false;
   }
 
-  // ✅ OBTENER EL ID correcto del departamento
-  const departmentId = this.department._id || this.department;
+  // 2. Obtener IDs de forma segura
+  const departmentId =
+    this.department && (this.department._id || this.department);
+  const contractDeptId =
+    contract.requestingDepartment &&
+    (contract.requestingDepartment._id || contract.requestingDepartment);
 
-  // Si es del mismo departamento
-  if (contract.requestingDepartment.toString() === departmentId.toString()) {
-    console.log("✅ Mismo departamento, verificando permiso canViewDepartment");
-    const hasPermission = this.hasPermission("contracts", "canViewDepartment");
-    console.log("Resultado hasPermission:", hasPermission);
-    return hasPermission;
+  if (!departmentId || !contractDeptId) {
+    console.warn("[canAccessContract] Missing department IDs");
+    return false;
   }
 
-  // Si tiene acceso global (REPOSITORY)
-  if (
-    this.crossDepartmentAccess.hasGlobalAccess &&
-    this.hasPermission("contracts", "canViewAll")
-  ) {
-    return true;
-  }
-
-  // Si tiene acceso específico a otros departamentos
-  const crossAccess = this.crossDepartmentAccess.viewableDepartments.find(
-    (vd) => {
-      const crossDeptId = vd.department._id || vd.department;
-      return (
-        crossDeptId.toString() === contract.requestingDepartment.toString()
-      );
-    }
+  // 3. Verificar acceso departamental (mismo departamento)
+  const isSameDepartment = new Types.ObjectId(departmentId).equals(
+    new Types.ObjectId(contractDeptId)
   );
 
-  return !!crossAccess;
+  if (isSameDepartment) {
+    if (!this.hasPermission("contracts", "canViewDepartment")) {
+      console.log(
+        "[canAccessContract] Same department but no canViewDepartment permission"
+      );
+      return false;
+    }
+  } else {
+    // 4. Verificar acceso cross-departamental
+    // 4.1 Acceso global (REPOSITORY)
+    if (
+      this.crossDepartmentAccess &&
+      this.crossDepartmentAccess.hasGlobalAccess &&
+      this.hasPermission("contracts", "canViewAll")
+    ) {
+      // OK - tiene acceso global, continuar con validaciones adicionales
+    } else {
+      // 4.2 Acceso específico cross-department
+      const viewableDepts =
+        (this.crossDepartmentAccess &&
+          this.crossDepartmentAccess.viewableDepartments) ||
+        [];
+      const hasCrossAccess = viewableDepts.some((vd) => {
+        const crossId = vd.department && (vd.department._id || vd.department);
+        return (
+          crossId &&
+          Types.ObjectId(crossId).equals(Types.ObjectId(contractDeptId))
+        );
+      });
+
+      if (!hasCrossAccess) {
+        console.log("[canAccessContract] No cross-department access found");
+        return false;
+      }
+    }
+  }
+
+  // 5. ✅ CRÍTICO: Verificar restricción de FASES
+  if (
+    this.restrictions &&
+    Array.isArray(this.restrictions.allowedPhases) &&
+    this.restrictions.allowedPhases.length > 0
+  ) {
+    const contractPhaseId =
+      contract.phase && (contract.phase._id || contract.phase);
+
+    if (!contractPhaseId) {
+      console.warn(
+        "[canAccessContract] Contract has no phase, but allowedPhases restriction exists"
+      );
+      return false;
+    }
+
+    const isPhaseAllowed = this.restrictions.allowedPhases.some(
+      (allowedPhase) => {
+        const phaseId = allowedPhase._id || allowedPhase;
+        return Types.ObjectId(phaseId).equals(Types.ObjectId(contractPhaseId));
+      }
+    );
+
+    if (!isPhaseAllowed) {
+      console.log("[canAccessContract] Contract phase not in allowedPhases");
+      return false;
+    }
+  }
+
+  // 6. ✅ CRÍTICO: Verificar restricción de MONTO
+  if (
+    this.restrictions &&
+    this.restrictions.maxContractAmount &&
+    this.restrictions.maxContractAmount > 0
+  ) {
+    const contractAmount =
+      typeof contract.amount === "number"
+        ? contract.amount
+        : parseFloat(contract.amount);
+
+    if (isNaN(contractAmount)) {
+      console.warn("[canAccessContract] Contract amount is not a valid number");
+      return false;
+    }
+
+    if (contractAmount > this.restrictions.maxContractAmount) {
+      console.log(
+        `[canAccessContract] Contract amount (${contractAmount}) exceeds max allowed (${this.restrictions.maxContractAmount})`
+      );
+      return false;
+    }
+  }
+
+  // 7. ✅ Todas las validaciones pasaron
+  return true;
 };
 
 // ===== MÉTODOS ESTÁTICOS =====
@@ -982,6 +1116,78 @@ UserDepartmentAccessSchema.statics.isProtected = function (method) {
     "updateBatch",
   ];
   return protectedMethods.includes(method);
+};
+
+// ✅ CRÍTICO: Método para expirar accesos automáticamente
+// Debe ser llamado por un job/cron periódicamente (ej: diario)
+UserDepartmentAccessSchema.statics.expireAccessesBatch = async function () {
+  try {
+    const now = new Date();
+
+    // Buscar accesos que deberían estar expirados
+    const expiredAccesses = await this.find({
+      status: "ACTIVE",
+      isActive: true,
+      "validity.endDate": { $lt: now },
+    });
+
+    if (expiredAccesses.length === 0) {
+      console.log("[expireAccessesBatch] No expired accesses found");
+      return { expired: 0, errors: [] };
+    }
+
+    const results = {
+      expired: 0,
+      errors: [],
+    };
+
+    // Procesar cada acceso expirado
+    for (const access of expiredAccesses) {
+      try {
+        access.status = "EXPIRED";
+        access.isActive = false;
+        access.auditInfo.lastModifiedAt = now;
+        access.auditInfo.lastModifiedBy = null; // Sistema automático
+
+        await access.save();
+
+        // Crear registro de historial si existe el modelo
+        try {
+          const PermissionHistory = mongoose.model("PermissionHistory");
+          await PermissionHistory.create({
+            userDepartmentAccess: access._id,
+            actionType: "EXPIRED",
+            changedBy: null, // Sistema automático
+            changeDate: now,
+            changeReason: "Expired automatically by system",
+            previousState: { status: "ACTIVE", isActive: true },
+            newState: { status: "EXPIRED", isActive: false },
+          });
+        } catch (historyError) {
+          console.warn(
+            "[expireAccessesBatch] Could not create history:",
+            historyError.message
+          );
+        }
+
+        results.expired++;
+      } catch (error) {
+        console.error(
+          `[expireAccessesBatch] Error expiring access ${access._id}:`,
+          error
+        );
+        results.errors.push({ accessId: access._id, error: error.message });
+      }
+    }
+
+    console.log(
+      `[expireAccessesBatch] Expired ${results.expired} accesses with ${results.errors.length} errors`
+    );
+    return results;
+  } catch (error) {
+    console.error("[expireAccessesBatch] Fatal error:", error);
+    throw error;
+  }
 };
 
 // Obtener todos los accesos de un usuario
@@ -1148,11 +1354,12 @@ UserDepartmentAccessSchema.index({ department: 1, accessLevel: 1, status: 1 });
 UserDepartmentAccessSchema.index({ user: 1, department: 1, status: 1 });
 
 // Índice único para evitar duplicados activos
+// ✅ CORRECCIÓN: Incluye isActive en la expresión parcial
 UserDepartmentAccessSchema.index(
-  { user: 1, department: 1, status: 1 },
+  { user: 1, department: 1 },
   {
     unique: true,
-    partialFilterExpression: { status: "ACTIVE" },
+    partialFilterExpression: { status: "ACTIVE", isActive: true },
   }
 );
 
@@ -1195,3 +1402,95 @@ export const PermissionHistory = mongoose.model(
   "PermissionHistory",
   PermissionHistorySchema
 );
+
+// =============================================================================
+// CORRECCIONES CRÍTICAS APLICADAS - VERSIÓN MEJORADA
+// =============================================================================
+//
+// 1. ✅ EVALUACIÓN DE FASES (allowedPhases)
+//    - canAccessContract() ahora valida si el contrato está en una fase permitida
+//    - Usar: restrictions.allowedPhases = [phaseId1, phaseId2, ...]
+//
+// 2. ✅ EVALUACIÓN DE MONTO MÁXIMO (maxContractAmount)
+//    - canAccessContract() ahora valida si el monto del contrato está dentro del límite
+//    - Usar: restrictions.maxContractAmount = 50000
+//
+// 3. ✅ CONTROL DE isPrimary DUPLICADOS
+//    - Hook pre-save garantiza que solo un acceso por usuario tenga isPrimary = true
+//    - Automáticamente desmarca otros accesos primarios del mismo usuario
+//
+// 4. ✅ AUTOMATIZACIÓN DE EXPIRACIÓN
+//    - Método estático expireAccessesBatch() para expirar accesos vencidos
+//    - Llamar desde un job/cron diario:
+//      ```javascript
+//      const { UserDepartmentAccess } = require('./models/module-permission.scheme');
+//      const result = await UserDepartmentAccess.expireAccessesBatch();
+//      console.log(`Expired: ${result.expired}, Errors: ${result.errors.length}`);
+//      ```
+//
+// 5. ✅ COMPARACIONES ROBUSTAS DE ObjectId
+//    - Usa Types.ObjectId.equals() en lugar de .toString()
+//    - Maneja casos poblados y no poblados correctamente
+//
+// 6. ✅ DEFAULTS SEGUROS
+//    - crossDepartmentAccess.viewableDepartments tiene default: []
+//    - Evita errores cuando el campo no existe
+//
+// 7. ✅ ÍNDICE ÚNICO MEJORADO
+//    - Expresión parcial incluye { status: "ACTIVE", isActive: true }
+//    - Más preciso para evitar duplicados
+//
+// 8. ✅ VERSIONADO DE CONCURRENCIA
+//    - Hook pre-save incrementa concurrency.version automáticamente
+//    - Actualiza concurrency.lastModified en cada guardado
+//
+// 9. ✅ hasPermission MEJORADO
+//    - Logging detallado con console.warn para debugging
+//    - Distingue entre "categoría no existe" y "permiso denegado"
+//
+// =============================================================================
+// MIGRACIÓN REQUERIDA ANTES DE DESPLEGAR
+// =============================================================================
+//
+// Ejecutar en MongoDB antes de aplicar el nuevo índice:
+//
+// ```javascript
+// // 1. Limpiar duplicados activos existentes
+// db.userdepartmentaccess.aggregate([
+//   { $match: { status: "ACTIVE", isActive: true } },
+//   { $group: { _id: { user: "$user", department: "$department" }, count: { $sum: 1 }, docs: { $push: "$$ROOT" } } },
+//   { $match: { count: { $gt: 1 } } }
+// ]).forEach(group => {
+//   // Mantener solo el más reciente, marcar otros como INACTIVE
+//   const sorted = group.docs.sort((a, b) => b.assignment.assignmentDate - a.assignment.assignmentDate);
+//   sorted.slice(1).forEach(doc => {
+//     db.userdepartmentaccess.updateOne(
+//       { _id: doc._id },
+//       { $set: { status: "INACTIVE", isActive: false } }
+//     );
+//   });
+// });
+//
+// // 2. Asegurar que crossDepartmentAccess existe en todos los documentos
+// db.userdepartmentaccess.updateMany(
+//   { crossDepartmentAccess: { $exists: false } },
+//   { $set: { crossDepartmentAccess: { viewableDepartments: [], hasGlobalAccess: false } } }
+// );
+//
+// // 3. Normalizar isPrimary (máximo uno por usuario)
+// db.userdepartmentaccess.aggregate([
+//   { $match: { "assignment.isPrimary": true } },
+//   { $group: { _id: "$user", count: { $sum: 1 }, docs: { $push: "$$ROOT" } } },
+//   { $match: { count: { $gt: 1 } } }
+// ]).forEach(group => {
+//   const sorted = group.docs.sort((a, b) => b.assignment.assignmentDate - a.assignment.assignmentDate);
+//   sorted.slice(1).forEach(doc => {
+//     db.userdepartmentaccess.updateOne(
+//       { _id: doc._id },
+//       { $set: { "assignment.isPrimary": false } }
+//     );
+//   });
+// });
+// ```
+//
+// =============================================================================
