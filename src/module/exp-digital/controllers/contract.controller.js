@@ -1159,17 +1159,17 @@ export class ContractController {
         files,
       };
 
-      const userData = {
+      /*const userData = {
         userId: user.userId,
         ipAddress: req.ip,
         userAgent: req.get("User-Agent"),
-      };
+      };*/
 
       // Procesar archivos con el service
       const result = await this.contractService.uploadContractDocuments(
         contractId,
         documentData,
-        userData
+        user
       );
 
       console.log(
@@ -1185,7 +1185,7 @@ export class ContractController {
         await this.synchronizeFileNamesWithRsync(
           result.successful,
           req.rsyncResults.results,
-          userData
+          user
         );
       }
 

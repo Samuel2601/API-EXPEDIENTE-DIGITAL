@@ -821,9 +821,10 @@ export const FileJSON = {
         },
         action: {
           type: String,
-          enum: ["VIEW", "DOWNLOAD"],
+          //enum: ["VIEW", "DOWNLOAD"],
           required: true,
         },
+        observations: String,
         timestamp: {
           type: Date,
           default: Date.now,

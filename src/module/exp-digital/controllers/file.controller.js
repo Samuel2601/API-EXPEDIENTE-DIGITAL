@@ -312,6 +312,51 @@ export class FileController {
     }
   };
 
+  getFileHistory = async (req, res) => {
+    try {
+      const { user, params } = req;
+      const { id } = params;
+
+      console.log(
+        `📋 Usuario ${user.userId} consultando historial de archivo: ${id}`
+      );
+
+      validateObjectId(id, "ID del archivo");
+
+      const result = await this.fileService.getFileById(id);
+      if (!result) {
+        return res.status(404).json({
+          success: false,
+          message: "Archivo no encontrado",
+          code: "FILE_NOT_FOUND",
+        });
+      }
+
+      const history = result.file.access.history;
+
+      console.log(`✅ Historial obtenido: ${history.length} entradas`);
+
+      res.status(200).json({
+        success: true,
+        data: history,
+        metadata: {
+          requestedBy: user.userId,
+          requestedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      console.error(
+        `❌ Error obteniendo historial de archivo: ${error.message}`
+      );
+
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Error interno del servidor",
+        code: error.code || "GET_FILE_HISTORY_ERROR",
+      });
+    }
+  };
+
   /**
    * Actualizar metadatos del archivo
    * PUT /files/:id
@@ -328,9 +373,7 @@ export class FileController {
 
       // TODO: Verificar que el usuario sea propietario o tenga permisos especiales
 
-      const updatedFile = await this.fileService.updateFile(id, body, {
-        userId: user.userId,
-      });
+      const updatedFile = await this.fileService.updateFile(id, body, user);
 
       console.log(`✅ Archivo actualizado: ${updatedFile.originalName}`);
 

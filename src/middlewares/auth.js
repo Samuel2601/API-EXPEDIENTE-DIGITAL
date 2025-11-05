@@ -157,6 +157,8 @@ export const auth = (req, res, next) => {
 
       req.user = payload;
       req.user.userId = req.user.sub;
+      req.user.ipAddress = req.ip;
+      req.user.userAgent = req.get("User-Agent") || "";
 
       // ✅ IMPORTANTE: No llamar mongooseContextMiddleware aquí
       // El contexto debe establecerse en validateAuth o verifyModuleAccess

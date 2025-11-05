@@ -361,16 +361,37 @@ export class FileService {
       const file = await this.fileRepository.findById(fileId, {
         populate: [
           {
-            path: "documentInfo.contractId",
+            path: "contract",
             select: "contractNumber contractualObject generalStatus",
           },
           {
-            path: "documentInfo.phaseId",
-            select: "code name category order",
+            path: "phase",
+            select: "code name category",
           },
           {
             path: "audit.uploadedBy",
-            select: "firstName lastName email",
+            select: "name last_name email",
+            model: "user",
+          },
+          {
+            path: "createdBy",
+            select: "name last_name email",
+            model: "user",
+          },
+          {
+            path: "updatedBy",
+            select: "name last_name email",
+            model: "user",
+          },
+          {
+            path: "review.reviewedBy",
+            select: "name last_name email",
+            model: "user",
+          },
+          {
+            path: "review.approvedBy",
+            select: "name last_name email",
+            model: "user",
           },
         ],
       });
@@ -378,9 +399,9 @@ export class FileService {
       if (!file) {
         return null;
       }
-
+      console.log("Archivo obtenido: ", file);
       const result = {
-        file: file.toObject(),
+        file: file,
         status: this._getFileStatus(file),
         downloadUrl: this._generateDownloadUrl(file),
         isAvailable: this._isFileAvailable(file),
@@ -585,6 +606,21 @@ export class FileService {
       const updatedFile = await this.fileRepository.update(
         fileId,
         filteredUpdate,
+        userData
+      );
+
+      //Agregar al Historial de Cambios
+      await this.fileRepository.addChangeLogEntry(
+        fileId,
+        {
+          userId: userData.userId,
+          action: updateData.status,
+          observations:
+            updateData.observations || updateData.rejectionReason || "",
+          source: "web",
+          ipAddress: userData.ipAddress,
+          userAgent: userData.userAgent,
+        },
         userData
       );
 

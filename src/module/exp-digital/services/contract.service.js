@@ -2315,7 +2315,9 @@ export class ContractService {
    */
   async uploadContractDocuments(contractId, documentData, userData = {}) {
     try {
-      console.log(`📄 Service: Subiendo documentos al contrato ${contractId}`);
+      console.log(
+        `📄 Service: Subiendo documentos al contrato ${JSON.stringify(userData)}`
+      );
 
       // Verificar que el contrato existe
       const contract = await this.contractRepository.findById(contractId);
@@ -2401,6 +2403,21 @@ export class ContractService {
                 diskUsage: file.size,
                 storageType: "LOCAL",
                 rsyncStatus: "PENDING",
+              },
+
+              //access
+              access: {
+                history: [
+                  {
+                    userId: userData.userId,
+                    action: "UPLOAD",
+                    observations: documentData.observations || "",
+                    timestamp: new Date(),
+                    source: "web",
+                    ipAddress: userData.ipAddress,
+                    userAgent: userData.userAgent,
+                  },
+                ],
               },
 
               // Relaciones

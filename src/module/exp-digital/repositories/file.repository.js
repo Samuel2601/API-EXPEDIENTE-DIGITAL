@@ -1079,6 +1079,26 @@ export class FileRepository extends BaseRepository {
       { new: true, lean: true }
     );
   }
+
+  addChangeLogEntry(fileId, changeData, userData) {
+    return this.model.findByIdAndUpdate(
+      fileId,
+      {
+        $push: {
+          "access.history": {
+            user: userData.userId,
+            action: changeData.action,
+            observations: changeData.observations,
+            timestamp: new Date(),
+            source: changeData.source,
+            ipAddress: changeData.ipAddress,
+            userAgent: changeData.userAgent,
+          },
+        },
+      },
+      { new: true, lean: true }
+    );
+  }
 }
 
 export default new FileRepository();

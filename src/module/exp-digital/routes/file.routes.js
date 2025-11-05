@@ -67,6 +67,17 @@ router.post(
  */
 router.get("/", controller.getAllFiles);
 
+//GET /files/:id/history
+router.get(
+  "/:id/history",
+  requirePermission({
+    category: "documents",
+    permission: "canView",
+    errorMessage: "No tiene permisos para ver archivos",
+  }),
+  controller.getFileHistory
+);
+
 /**
  * GET /files/:id
  * Obtener archivo por ID
