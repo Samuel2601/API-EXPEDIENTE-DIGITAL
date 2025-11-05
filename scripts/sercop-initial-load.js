@@ -67,7 +67,7 @@ class SercopInitialLoader {
   async connect() {
     try {
       const mongoUri =
-        process.env.MONGO_URI || "mongodb://localhost:27017/labella";
+        process.env.MONGO_URI || "mongodb://127.0.0.1:27017/labella";
       console.log(
         `🔌 Conectando a MongoDB: ${mongoUri.replace(/\/\/[^:]+:[^@]+@/, "//***:***@")}`
       );
