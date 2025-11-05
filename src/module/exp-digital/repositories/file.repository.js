@@ -1038,6 +1038,47 @@ export class FileRepository extends BaseRepository {
       clearInterval(this.retryInterval);
     }
   }
+
+  incrementDownloadCount(fileId, options = {}) {
+    return this.model.findByIdAndUpdate(
+      fileId,
+      {
+        $inc: { "access.downloadCount": 1 },
+        $push: {
+          "access.history": {
+            userId: options.userId,
+            action: "DOWNLOAD",
+            timestamp: options.timestamp,
+            source: options.source,
+            ipAddress: options.ipAddress,
+            userAgent: options.userAgent,
+            format: options.format,
+          },
+        },
+      },
+      { new: true, lean: true }
+    );
+  }
+
+  incrementViewCount(fileId, options = {}) {
+    return this.model.findByIdAndUpdate(
+      fileId,
+      {
+        $inc: { "access.viewCount": 1 },
+        $push: {
+          "access.history": {
+            userId: options.userId,
+            action: "VIEW",
+            timestamp: options.timestamp,
+            source: options.source,
+            ipAddress: options.ipAddress,
+            userAgent: options.userAgent,
+          },
+        },
+      },
+      { new: true, lean: true }
+    );
+  }
 }
 
 export default new FileRepository();

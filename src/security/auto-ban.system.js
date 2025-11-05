@@ -94,6 +94,7 @@ export class AutoBanSystem {
       "127.0.0.1",
       "::1",
       "localhost",
+      "*.*.gob.ec",
       // Agrega aquí IPs de tu oficina/casa si las conoces
     ]);
 

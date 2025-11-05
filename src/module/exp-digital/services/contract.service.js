@@ -2381,6 +2381,7 @@ export class ContractService {
           // Crear registro del archivo con TODOS los campos requeridos
           const fileRecord = await this.fileRepository.create(
             {
+              department: contract.requestingDepartment,
               // Información básica
               originalName: file.originalname || file.originalName,
               systemName: systemName,

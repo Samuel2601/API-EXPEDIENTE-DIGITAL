@@ -432,7 +432,7 @@ export class FileController {
         userId: user.userId,
         trackDownload: track === "true",
       });
-
+      await this.fileService.trackViewOrDownload(id, user.userId, "api", true);
       // TODO: Verificar permisos de descarga específicos del archivo
 
       console.log(
@@ -504,6 +504,8 @@ export class FileController {
           code: "NOT_PREVIEWABLE",
         });
       }
+
+      await this.fileService.trackViewOrDownload(id, user.userId, "api", false);
       // ========================================
       // 🔧 FIX: CONFIGURAR HEADERS CSP PARA IFRAME
       // ========================================

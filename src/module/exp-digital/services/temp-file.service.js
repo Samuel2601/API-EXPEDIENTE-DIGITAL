@@ -16,7 +16,7 @@ const __dirname = path.dirname(__filename);
 class TempFileService {
   constructor() {
     this.TEMP_DIR = path.join(process.cwd(), "temp", "downloads");
-    this.DEFAULT_TTL = 5 * 60 * 1000; // 5 minutos en ms
+    this.DEFAULT_TTL = 30 * 60 * 1000; // 30 minutos en ms
     this.CLEANUP_INTERVAL = 2 * 60 * 1000; // Limpiar cada 2 minutos
 
     // Mapa de metadatos de archivos en caché
@@ -88,7 +88,7 @@ class TempFileService {
    * Generar clave única para el archivo
    */
   generateCacheKey(fileId, version = undefined) {
-    const key = version ? `${fileId}_${version}` : fileId;
+    const key = version ? `${fileId}_${1}` : fileId;
     return crypto.createHash("md5").update(key).digest("hex");
   }
 
@@ -96,9 +96,10 @@ class TempFileService {
    * Verificar si un archivo está en caché y es válido
    */
   async isCached(fileId, version = undefined) {
-    const cacheKey = this.generateCacheKey(fileId, version);
+    const cacheKey = this.generateCacheKey(fileId, 1);
+    console.log(`🔍 Verificando caché para: ${cacheKey}`);
     const metadata = this.cacheMetadata.get(cacheKey);
-
+    console.log("Metadata: ", metadata);
     if (!metadata) {
       console.log(`📭 Cache MISS: ${fileId}`);
       return { cached: false };
@@ -134,25 +135,26 @@ class TempFileService {
   }
 
   /**
-   * Guardar archivo en caché
+   * Guardar archivo en caché (SOLO para archivos locales que necesitan copiarse)
    */
   async saveToCache(fileId, tempFilePath, version = undefined) {
     try {
-      const cacheKey = this.generateCacheKey(fileId, version);
+      const cacheKey = this.generateCacheKey(fileId, 1);
 
       // Generar nombre único para el archivo en caché
       const timestamp = Date.now();
-      const randomId = crypto.randomBytes(4).toString("hex");
-      const cacheFileName = `download_${timestamp}_${randomId}_cache_${cacheKey}_${version || "undefined"}`;
+      const cacheFileName = `cache_${cacheKey}_${timestamp}`;
       const cachePath = path.join(this.TEMP_DIR, cacheFileName);
 
       // Copiar archivo temporal a caché
       await fs.copyFile(tempFilePath, cachePath);
 
+      // ✅ IMPORTANTE: Eliminar el archivo temporal después de copiar
+      await fs.unlink(tempFilePath).catch(() => {});
+
       const stats = await fs.stat(cachePath);
       const now = Date.now();
 
-      // ✅ La metadata se guarda AQUÍ directamente en el Map
       this.cacheMetadata.set(cacheKey, {
         path: cachePath,
         size: stats.size,
@@ -195,7 +197,7 @@ class TempFileService {
    * Sistema de locks para evitar descargas simultáneas (VERSIÓN CORREGIDA)
    */
   async acquireLock(fileId, version = undefined) {
-    const lockKey = this.generateCacheKey(fileId, version);
+    const lockKey = this.generateCacheKey(fileId, 1);
 
     // Si ya existe un lock, esperar
     if (this.downloadLocks.has(lockKey)) {
@@ -340,6 +342,41 @@ class TempFileService {
     }
 
     console.log("✅ Caché completamente limpiado");
+  }
+
+  getCachePath(fileId, version = undefined) {
+    const cacheKey = this.generateCacheKey(fileId, 1);
+
+    // Verificar si existe en caché temporal
+    if (this.cacheMetadata.has(cacheKey)) {
+      console.log(`✅ Usando archivo en caché: ${fileId}`);
+      // ✅ CORRECCIÓN: Devolver metadata con la ruta, no el contenido
+      return this.cacheMetadata.get(cacheKey).path;
+    }
+
+    throw new Error("Archivo no encontrado en caché");
+  }
+
+  /**
+   * Registrar archivo en caché (sin copiarlo, ya está en la ubicación correcta)
+   */
+  registerCache(cacheKey, metadata) {
+    const now = Date.now();
+
+    this.cacheMetadata.set(cacheKey, {
+      path: metadata.path,
+      size: metadata.size,
+      createdAt: now,
+      expiresAt: now + this.DEFAULT_TTL,
+      lastAccessed: now,
+      hits: 0,
+      fileId: metadata.fileId,
+      version: metadata.version,
+    });
+
+    console.log(
+      `💾 Archivo registrado en caché: ${metadata.fileId} (TTL: ${this.DEFAULT_TTL / 1000}s)`
+    );
   }
 }
 

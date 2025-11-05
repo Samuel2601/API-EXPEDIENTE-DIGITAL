@@ -12,6 +12,10 @@ import rsyncClient from "../../../config/rsync.client.js";
 
 const { Schema } = mongoose;
 
+// ============================================
+// SUB-ESQUEMAS
+// ============================================
+
 // Sub-esquema para metadatos de archivo
 const FileMetadataJSON = {
   // Información técnica del archivo
@@ -61,8 +65,9 @@ const FileMetadataJSON = {
   modificationDate: Date,
 };
 
-// Sub-esquema para control de versiones
+// Sub-esquema mejorado para control de versiones
 const VersionInfoJSON = {
+  // Versión actual del documento
   version: {
     type: Number,
     required: true,
@@ -70,27 +75,107 @@ const VersionInfoJSON = {
     default: 1,
   },
 
+  // Indica si esta es la versión actual/vigente
   isCurrentVersion: {
     type: Boolean,
     default: true,
     index: true,
   },
 
-  previousVersion: {
+  // Referencia al documento padre (versión anterior)
+  // Este campo se usa para crear la cadena de versionado
+  parentDocument: {
     type: Schema.Types.ObjectId,
     ref: "File",
+    default: null,
+    index: true,
+    meta: {
+      validation: { isMongoId: true, optional: true },
+      messages: {
+        isMongoId: "El ID del documento padre no es válido",
+      },
+    },
   },
 
+  // Referencia al documento raíz (primera versión)
+  // Útil para encontrar todas las versiones de un documento
+  rootDocument: {
+    type: Schema.Types.ObjectId,
+    ref: "File",
+    default: null,
+    index: true,
+    meta: {
+      validation: { isMongoId: true, optional: true },
+      messages: {
+        isMongoId: "El ID del documento raíz no es válido",
+      },
+    },
+  },
+
+  // Notas sobre los cambios realizados en esta versión
   versionNotes: {
     type: String,
     trim: true,
-    maxlength: 500,
+    maxlength: 1000,
+    meta: {
+      validation: { isString: true, optional: true, isLength: { max: 1000 } },
+      messages: {
+        isString: "Las notas de versión deben ser un texto válido",
+        isLength: "Las notas de versión no pueden exceder 1000 caracteres",
+      },
+    },
   },
 
+  // Tipo de cambio realizado
   changeType: {
     type: String,
-    enum: ["MINOR", "MAJOR", "CORRECTION", "REPLACEMENT"],
+    enum: [
+      "MINOR", // Cambios menores (correcciones tipográficas, formato)
+      "MAJOR", // Cambios significativos (contenido, estructura)
+      "CORRECTION", // Corrección por error o rechazo
+      "REPLACEMENT", // Reemplazo completo del documento
+      "REVISION", // Revisión tras rechazo
+    ],
     default: "MINOR",
+    uppercase: true,
+  },
+
+  // Razón del cambio (especialmente importante para CORRECTION y REVISION)
+  changeReason: {
+    type: String,
+    trim: true,
+    maxlength: 500,
+    meta: {
+      validation: { isString: true, optional: true, isLength: { max: 500 } },
+      messages: {
+        isString: "La razón del cambio debe ser un texto válido",
+        isLength: "La razón del cambio no puede exceder 500 caracteres",
+      },
+    },
+  },
+
+  // Usuario que creó esta versión
+  versionedBy: {
+    type: Schema.Types.ObjectId,
+    ref: "User",
+    meta: {
+      validation: { isMongoId: true, optional: true },
+      messages: {
+        isMongoId: "El ID del usuario que versionó no es válido",
+      },
+    },
+  },
+
+  // Fecha de creación de la versión
+  versionDate: {
+    type: Date,
+    default: Date.now,
+    meta: {
+      validation: { isDate: true, optional: true },
+      messages: {
+        isDate: "La fecha de versión debe ser válida",
+      },
+    },
   },
 };
 
@@ -107,7 +192,7 @@ const RsyncInfoJSON = {
   remotePath: {
     type: String,
     trim: true,
-    maxlength: 1000, // Aumentado para rutas más largas
+    maxlength: 1000,
     default: null,
   },
 
@@ -117,7 +202,7 @@ const RsyncInfoJSON = {
     trim: true,
     maxlength: 255,
     default: null,
-    index: true, // Indexar para búsquedas rápidas
+    index: true,
   },
 
   // Estado de sincronización
@@ -159,7 +244,7 @@ const RsyncInfoJSON = {
   syncError: {
     type: String,
     trim: true,
-    maxlength: 2000, // Aumentado para errores más detallados
+    maxlength: 2000,
     default: null,
   },
 
@@ -167,7 +252,7 @@ const RsyncInfoJSON = {
   remoteHash: {
     type: String,
     trim: true,
-    maxlength: 128, // Soporte para diferentes tipos de hash
+    maxlength: 128,
     default: null,
   },
 
@@ -197,7 +282,7 @@ const RsyncInfoJSON = {
 
   keepLocal: {
     type: Boolean,
-    default: true, // Para expedientes legales, mantener copia local
+    default: true,
   },
 
   // Configuración específica del middleware
@@ -248,16 +333,53 @@ const RsyncInfoJSON = {
   },
 };
 
+// ============================================
+// ESQUEMA PRINCIPAL
+// ============================================
+
 export const FileJSON = {
-  contract: {
-    type: Schema.Types.ObjectId,
-    ref: "Contract",
+  // ============================================
+  // CONTEXTO Y MÓDULO
+  // ============================================
+
+  // Identificar el módulo de origen del documento
+  module: {
+    type: String,
+    enum: [
+      "DIGITAL_RECORD", // Expediente Digital (Contratación)
+      "DOCUMENT_MANAGEMENT", // Gestión Documental (Recepción/Emisión)
+      "ARCHIVE", // Archivo
+      "GENERAL", // General
+    ],
+    default: "DIGITAL_RECORD",
+    uppercase: true,
     required: true,
     index: true,
     meta: {
-      validation: { isMongoId: true, required: true },
+      validation: {
+        isIn: ["DIGITAL_RECORD", "DOCUMENT_MANAGEMENT", "ARCHIVE", "GENERAL"],
+        required: true,
+      },
       messages: {
-        required: "El contrato es obligatorio",
+        required: "El módulo es obligatorio",
+        isIn: "El módulo debe ser uno de los valores válidos",
+      },
+    },
+  },
+
+  // ============================================
+  // RELACIONES OPCIONALES (según módulo)
+  // ============================================
+
+  // SOLO para módulo DIGITAL_RECORD (Expediente Digital)
+  contract: {
+    type: Schema.Types.ObjectId,
+    ref: "Contract",
+    default: null,
+    index: true,
+    meta: {
+      validation: { isMongoId: true, optional: true },
+      messages: {
         isMongoId: "El ID del contrato no es válido",
       },
     },
@@ -266,16 +388,34 @@ export const FileJSON = {
   phase: {
     type: Schema.Types.ObjectId,
     ref: "ContractPhase",
+    default: null,
+    index: true,
+    meta: {
+      validation: { isMongoId: true, optional: true },
+      messages: {
+        isMongoId: "El ID de la fase no es válido",
+      },
+    },
+  },
+
+  // PARA todos los módulos - Departamento que gestiona el documento
+  department: {
+    type: Schema.Types.ObjectId,
+    ref: "Department",
     required: true,
     index: true,
     meta: {
       validation: { isMongoId: true, required: true },
       messages: {
-        required: "La fase es obligatoria",
-        isMongoId: "El ID de la fase no es válido",
+        required: "El departamento es obligatorio",
+        isMongoId: "El ID del departamento no es válido",
       },
     },
   },
+
+  // ============================================
+  // INFORMACIÓN DEL DOCUMENTO
+  // ============================================
 
   documentType: {
     type: String,
@@ -299,6 +439,10 @@ export const FileJSON = {
       },
     },
   },
+
+  // ============================================
+  // INFORMACIÓN DEL ARCHIVO
+  // ============================================
 
   // Información del archivo original
   originalName: {
@@ -598,10 +742,13 @@ export const FileJSON = {
     },
   },
 
-  // Control de versiones
+  // ============================================
+  // CONTROL DE VERSIONES
+  // ============================================
+
   versionInfo: {
     type: VersionInfoJSON,
-    default: {},
+    default: () => ({}),
     meta: {
       validation: { optional: true },
       messages: {
@@ -613,7 +760,7 @@ export const FileJSON = {
   // Metadatos del archivo
   metadata: {
     type: FileMetadataJSON,
-    default: {},
+    default: () => ({}),
     meta: {
       validation: { optional: true },
       messages: {
@@ -622,7 +769,10 @@ export const FileJSON = {
     },
   },
 
-  // Control de acceso
+  // ============================================
+  // CONTROL DE ACCESO
+  // ============================================
+
   access: {
     isPublic: {
       type: Boolean,
@@ -661,6 +811,34 @@ export const FileJSON = {
       },
     ],
 
+    // NUEVO: Historial unificado
+    history: [
+      {
+        userId: {
+          type: Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        action: {
+          type: String,
+          enum: ["VIEW", "DOWNLOAD"],
+          required: true,
+        },
+        timestamp: {
+          type: Date,
+          default: Date.now,
+        },
+        source: {
+          type: String,
+          enum: ["web", "mobile", "api"],
+          default: "web",
+        },
+        ipAddress: String,
+        userAgent: String,
+        format: String, // Solo para downloads
+      },
+    ],
+
     downloadCount: {
       type: Number,
       default: 0,
@@ -674,7 +852,10 @@ export const FileJSON = {
     },
   },
 
-  // Auditoría del archivo
+  // ============================================
+  // AUDITORÍA
+  // ============================================
+
   audit: {
     uploadedBy: {
       type: Schema.Types.ObjectId,
@@ -737,17 +918,27 @@ export const FileJSON = {
     },
   },
 
-  // Estado del documento
+  // ============================================
+  // ESTADOS DEL DOCUMENTO (EXTENDIDOS)
+  // ============================================
+
   status: {
     type: String,
     enum: {
       values: [
-        "DRAFT",
-        "REVIEW",
-        "APPROVED",
-        "REJECTED",
-        "OBSOLETE",
-        "ARCHIVED",
+        // Estados de flujo de contratación
+        "DRAFT", // Borrador
+        "REVIEW", // En revisión
+        "APPROVED", // Aprobado
+        "REJECTED", // Rechazado
+        "OBSOLETE", // Obsoleto
+        "ARCHIVED", // Archivado
+        // Estados de gestión documental
+        "RECEPTION", // Recepción de documento
+        "EMISSION", // Emisión de documento
+        "PENDING", // Pendiente
+        "IN_PROCESS", // En proceso
+        "COMPLETED", // Completado
       ],
       message: "Estado no válido",
     },
@@ -763,6 +954,11 @@ export const FileJSON = {
           "REJECTED",
           "OBSOLETE",
           "ARCHIVED",
+          "RECEPTION",
+          "EMISSION",
+          "PENDING",
+          "IN_PROCESS",
+          "COMPLETED",
         ],
         optional: true,
       },
@@ -772,7 +968,10 @@ export const FileJSON = {
     },
   },
 
-  // Revisión y aprobación
+  // ============================================
+  // REVISIÓN Y APROBACIÓN
+  // ============================================
+
   review: {
     reviewedBy: {
       type: Schema.Types.ObjectId,
@@ -857,7 +1056,10 @@ export const FileJSON = {
   },
 };
 
-// Crear el esquema con campos base
+// ============================================
+// CREAR ESQUEMA
+// ============================================
+
 const FileSchema = new Schema(stripMetaFields(FileJSON), {
   timestamps: true,
   collection: "files",
@@ -866,11 +1068,13 @@ const FileSchema = new Schema(stripMetaFields(FileJSON), {
 // Aplicar configuración base
 setupBaseSchema(FileSchema);
 
-// === MIDDLEWARES PERSONALIZADOS EXTENDIDOS PARA RSYNC ===
+// ============================================
+// MIDDLEWARES PERSONALIZADOS
+// ============================================
 
-// Pre-save: generar nombre del sistema y configurar rsync
+// Pre-save: validaciones y configuraciones
 FileSchema.pre("save", async function (next) {
-  // Generar nombre del sistema si es nuevo
+  // 1. Generar nombre del sistema si es nuevo
   if (this.isNew && !this.systemName) {
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 8);
@@ -879,34 +1083,85 @@ FileSchema.pre("save", async function (next) {
     this.systemName = `${timestamp}_${random}${extension}`;
   }
 
-  // Configurar rsync si se especifica como proveedor de almacenamiento
+  // 2. Validación según módulo
+  if (this.module === "DIGITAL_RECORD") {
+    // Para expediente digital, contrato y fase son obligatorios
+    if (!this.contract) {
+      return next(
+        new Error(
+          "El contrato es obligatorio para documentos del expediente digital"
+        )
+      );
+    }
+    if (!this.phase) {
+      return next(
+        new Error(
+          "La fase es obligatoria para documentos del expediente digital"
+        )
+      );
+    }
+  }
+
+  // 3. Configurar rootDocument si es la primera versión
+  if (this.isNew && !this.versionInfo.rootDocument) {
+    this.versionInfo.rootDocument = this._id;
+  }
+
+  // 4. Configurar versionInfo al crear versiones
+  if (this.versionInfo.parentDocument && this.isNew) {
+    // Buscar el documento padre para obtener la información de versión
+    const parentDoc = await this.constructor.findById(
+      this.versionInfo.parentDocument
+    );
+
+    if (parentDoc) {
+      // Heredar el rootDocument del padre
+      if (!this.versionInfo.rootDocument) {
+        this.versionInfo.rootDocument =
+          parentDoc.versionInfo.rootDocument || parentDoc._id;
+      }
+
+      // Incrementar la versión
+      this.versionInfo.version = parentDoc.versionInfo.version + 1;
+
+      // Marcar el documento padre como versión no actual
+      parentDoc.versionInfo.isCurrentVersion = false;
+      await parentDoc.save({ validateBeforeSave: false });
+    }
+  }
+
+  // 5. Configurar rsync si se especifica como proveedor
   if (this.storage.storageProvider === "RSYNC") {
     if (!this.rsyncInfo) {
       this.rsyncInfo = {};
     }
 
-    // Configurar información de rsync por defecto
     if (!this.rsyncInfo.remoteHost) {
       this.rsyncInfo.remoteHost = process.env.RSYNC_REMOTE_HOST;
     }
 
     if (!this.rsyncInfo.remotePath) {
       const baseRemotePath = process.env.RSYNC_REMOTE_PATH || "/files";
-      this.rsyncInfo.remotePath = `${baseRemotePath}/${this.contract}/${this.phase}`;
+
+      // Construir ruta según el módulo
+      if (this.module === "DIGITAL_RECORD" && this.contract && this.phase) {
+        this.rsyncInfo.remotePath = `${baseRemotePath}/${this.contract}/${this.phase}`;
+      } else {
+        this.rsyncInfo.remotePath = `${baseRemotePath}/${this.department}`;
+      }
     }
 
     if (!this.rsyncInfo.remoteFileName) {
       this.rsyncInfo.remoteFileName = this.systemName;
     }
 
-    // Si es un archivo nuevo con rsync, marcarlo para sincronización
     if (this.isNew) {
       this.rsyncInfo.syncStatus = "PENDING";
-      this.rsyncInfo.autoSync = this.rsyncInfo.autoSync !== false; // true por defecto
+      this.rsyncInfo.autoSync = this.rsyncInfo.autoSync !== false;
     }
   }
 
-  // Validar tamaño según tipo de archivo
+  // 6. Validar tamaño según tipo de archivo
   const maxSizes = {
     pdf: 50 * 1024 * 1024, // 50MB
     doc: 25 * 1024 * 1024, // 25MB
@@ -920,7 +1175,7 @@ FileSchema.pre("save", async function (next) {
     rar: 100 * 1024 * 1024, // 100MB
   };
 
-  const maxSize = maxSizes[this.fileInfo.fileType] || 10 * 1024 * 1024; // 10MB por defecto
+  const maxSize = maxSizes[this.fileInfo.fileType] || 10 * 1024 * 1024;
 
   if (this.fileInfo.size > maxSize) {
     return next(
@@ -930,7 +1185,7 @@ FileSchema.pre("save", async function (next) {
     );
   }
 
-  // Validar que el hash sea único para evitar duplicados
+  // 7. Validar duplicados por hash
   if (this.isModified("fileInfo.hash")) {
     const existingFile = await this.constructor.findOne({
       _id: { $ne: this._id },
@@ -945,7 +1200,7 @@ FileSchema.pre("save", async function (next) {
     }
   }
 
-  // Actualizar fecha de último acceso si es nuevo
+  // 8. Actualizar fecha de último acceso si es nuevo
   if (this.isNew) {
     this.audit.lastAccessDate = new Date();
   }
@@ -955,7 +1210,6 @@ FileSchema.pre("save", async function (next) {
 
 // Post-save: sincronizar con rsync automáticamente
 FileSchema.post("save", async function (doc) {
-  // Solo sincronizar si es RSYNC y autoSync está habilitado
   if (
     doc.storage.storageProvider === "RSYNC" &&
     doc.rsyncInfo?.autoSync &&
@@ -965,7 +1219,6 @@ FileSchema.post("save", async function (doc) {
       `📤 Iniciando sincronización automática para archivo: ${doc.systemName}`
     );
 
-    // No esperar la sincronización para no bloquear el save
     setImmediate(async () => {
       try {
         await doc.syncToRsync();
@@ -978,18 +1231,21 @@ FileSchema.post("save", async function (doc) {
   }
 });
 
-// === MÉTODOS DE INSTANCIA EXTENDIDOS PARA RSYNC ===
+// ============================================
+// MÉTODOS DE INSTANCIA
+// ============================================
 
 FileSchema.methods.toJSON = function () {
   const obj = this.toObject();
   return stripMetaFields(obj);
 };
 
-// Métodos originales mantenidos
+// Obtener extensión del archivo
 FileSchema.methods.getFileExtension = function () {
   return path.extname(this.originalName).toLowerCase().substring(1);
 };
 
+// Obtener tamaño del archivo con unidad
 FileSchema.methods.getFileSize = function (unit = "MB") {
   const units = {
     B: 1,
@@ -1002,42 +1258,96 @@ FileSchema.methods.getFileSize = function (unit = "MB") {
   return Math.round(size * 100) / 100;
 };
 
-FileSchema.methods.isImage = function () {
-  const imageTypes = ["jpg", "jpeg", "png", "gif", "bmp", "webp"];
-  return imageTypes.includes(this.fileInfo.fileType);
+// Crear nueva versión del documento
+FileSchema.methods.createNewVersion = async function (fileData, options = {}) {
+  const {
+    userId,
+    changeType = "MINOR",
+    changeReason = "",
+    versionNotes = "",
+  } = options;
+
+  // Marcar esta versión como no actual
+  this.versionInfo.isCurrentVersion = false;
+  await this.save({ validateBeforeSave: false });
+
+  // Crear nuevo documento con los datos del archivo
+  const newVersion = new this.constructor({
+    ...fileData,
+    // Heredar información relevante del documento padre
+    module: this.module,
+    contract: this.contract,
+    phase: this.phase,
+    department: this.department,
+    unit: this.unit,
+    documentType: this.documentType,
+    document: {
+      ...this.document,
+      description: fileData.document?.description || this.document.description,
+    },
+    // Configurar información de versión
+    versionInfo: {
+      version: this.versionInfo.version + 1,
+      isCurrentVersion: true,
+      parentDocument: this._id,
+      rootDocument: this.versionInfo.rootDocument || this._id,
+      changeType,
+      changeReason,
+      versionNotes,
+      versionedBy: userId,
+      versionDate: new Date(),
+    },
+    // Configurar auditoría
+    audit: {
+      uploadedBy: userId,
+      uploadDate: new Date(),
+      ipAddress: fileData.audit?.ipAddress,
+      userAgent: fileData.audit?.userAgent,
+    },
+    // Iniciar en estado borrador
+    status: "DRAFT",
+  });
+
+  await newVersion.save();
+  return newVersion;
 };
 
-FileSchema.methods.isDocument = function () {
-  const docTypes = ["pdf", "doc", "docx", "txt", "rtf"];
-  return docTypes.includes(this.fileInfo.fileType);
+// Obtener todas las versiones del documento
+FileSchema.methods.getAllVersions = function () {
+  const rootId = this.versionInfo.rootDocument || this._id;
+
+  return this.constructor
+    .find({
+      $or: [{ _id: rootId }, { "versionInfo.rootDocument": rootId }],
+      isActive: true,
+    })
+    .sort({ "versionInfo.version": 1 });
 };
 
-FileSchema.methods.isSpreadsheet = function () {
-  const spreadsheetTypes = ["xls", "xlsx", "csv"];
-  return spreadsheetTypes.includes(this.fileInfo.fileType);
+// Obtener versión actual
+FileSchema.methods.getCurrentVersion = function () {
+  const rootId = this.versionInfo.rootDocument || this._id;
+
+  return this.constructor.findOne({
+    $or: [{ _id: rootId }, { "versionInfo.rootDocument": rootId }],
+    "versionInfo.isCurrentVersion": true,
+    isActive: true,
+  });
 };
 
-FileSchema.methods.isArchive = function () {
-  const archiveTypes = ["zip", "rar", "7z", "tar", "gz"];
-  return archiveTypes.includes(this.fileInfo.fileType);
-};
-
-// NUEVOS MÉTODOS PARA RSYNC
-
-// Sincronizar archivo con rsync
+// Sincronizar con rsync
 FileSchema.methods.syncToRsync = async function () {
   if (this.storage.storageProvider !== "RSYNC") {
     throw new Error("Este archivo no está configurado para usar rsync");
   }
 
-  if (!this.rsyncInfo) {
-    throw new Error("Información de rsync no configurada");
+  if (this.rsyncInfo.syncStatus === "SYNCING") {
+    throw new Error("Ya hay una sincronización en progreso");
   }
 
   const startTime = new Date();
 
   try {
-    // Actualizar estado a sincronizando
     this.rsyncInfo.syncStatus = "SYNCING";
     this.rsyncInfo.lastSyncAttempt = startTime;
     this.rsyncInfo.syncError = undefined;
@@ -1047,14 +1357,12 @@ FileSchema.methods.syncToRsync = async function () {
       `🔄 Sincronizando archivo ${this.systemName} a ${this.rsyncInfo.remoteHost}`
     );
 
-    // Realizar la transferencia
     const result = await rsyncClient.transferFile(
       this.storage.path,
       this.rsyncInfo.remoteFileName
     );
 
     if (result.success) {
-      // Actualizar estado exitoso
       this.rsyncInfo.syncStatus = "SYNCED";
       this.rsyncInfo.lastSyncSuccess = new Date();
       this.rsyncInfo.syncRetries = 0;
@@ -1064,7 +1372,6 @@ FileSchema.methods.syncToRsync = async function () {
       throw new Error("La sincronización no fue exitosa");
     }
   } catch (error) {
-    // Manejar error de sincronización
     this.rsyncInfo.syncStatus = "FAILED";
     this.rsyncInfo.syncError = error.message;
     this.rsyncInfo.syncRetries += 1;
@@ -1073,18 +1380,16 @@ FileSchema.methods.syncToRsync = async function () {
       `❌ Error sincronizando ${this.systemName}: ${error.message}`
     );
 
-    // Si no se han excedido los reintentos, programar otro intento
     if (this.rsyncInfo.syncRetries < this.rsyncInfo.maxRetries) {
       console.log(
         `🔄 Programando reintento ${this.rsyncInfo.syncRetries + 1}/${this.rsyncInfo.maxRetries}`
       );
       this.rsyncInfo.syncStatus = "PENDING";
 
-      // Programar reintento después de un delay exponencial
       const delay = Math.min(
         30000 * Math.pow(2, this.rsyncInfo.syncRetries),
         300000
-      ); // Max 5 min
+      );
       setTimeout(() => {
         this.syncToRsync().catch((err) =>
           console.error(`❌ Error en reintento: ${err.message}`)
@@ -1108,7 +1413,6 @@ FileSchema.methods.verifyRemoteIntegrity = async function () {
   }
 
   try {
-    // Listar archivos remotos para verificar existencia y tamaño
     const remoteFiles = await rsyncClient.listRemoteFiles();
     const remoteFile = remoteFiles.find((file) =>
       file.includes(this.rsyncInfo.remoteFileName)
@@ -1121,7 +1425,6 @@ FileSchema.methods.verifyRemoteIntegrity = async function () {
       };
     }
 
-    // Actualizar información de verificación
     this.rsyncInfo.verificationDate = new Date();
     await this.save({ validateBeforeSave: false });
 
@@ -1136,21 +1439,18 @@ FileSchema.methods.verifyRemoteIntegrity = async function () {
   }
 };
 
-// Obtener URL de acceso (local o indicador de remoto)
+// Obtener URL de acceso
 FileSchema.methods.getAccessUrl = function () {
   if (this.storage.storageProvider === "RSYNC") {
     if (this.rsyncInfo?.syncStatus === "SYNCED") {
-      // Para archivos rsync, devolver URL de descarga especial
       return `/api/files/${this._id}/download?source=remote`;
     } else {
-      // Si no está sincronizado, usar archivo local si existe
       return this.rsyncInfo?.keepLocal
         ? `/api/files/${this._id}/download?source=local`
         : null;
     }
   }
 
-  // Para otros proveedores, mantener lógica original
   return `/api/files/${this._id}/download`;
 };
 
@@ -1160,7 +1460,7 @@ FileSchema.methods.isAvailable = function () {
     return this.rsyncInfo?.syncStatus === "SYNCED" || this.rsyncInfo?.keepLocal;
   }
 
-  return true; // Para otros proveedores
+  return true;
 };
 
 // Forzar re-sincronización
@@ -1169,7 +1469,6 @@ FileSchema.methods.forceSyncToRsync = async function () {
     throw new Error("Este archivo no está configurado para usar rsync");
   }
 
-  // Resetear estado para forzar nueva sincronización
   this.rsyncInfo.syncStatus = "PENDING";
   this.rsyncInfo.syncRetries = 0;
   this.rsyncInfo.syncError = undefined;
@@ -1178,14 +1477,12 @@ FileSchema.methods.forceSyncToRsync = async function () {
   return await this.syncToRsync();
 };
 
-// Métodos originales mantenidos con adaptaciones
+// Verificar si un usuario puede acceder al archivo
 FileSchema.methods.canUserAccess = function (userId, userRole) {
-  // Verificar disponibilidad del archivo primero
   if (!this.isAvailable()) {
     return false;
   }
 
-  // Resto de la lógica original
   if (this.access.isPublic) return true;
   if (this.audit.uploadedBy.toString() === userId.toString()) return true;
   if (this.access.allowedRoles.includes(userRole)) return true;
@@ -1197,7 +1494,9 @@ FileSchema.methods.canUserAccess = function (userId, userRole) {
   return !!userAccess;
 };
 
-// === MÉTODOS ESTÁTICOS EXTENDIDOS PARA RSYNC ===
+// ============================================
+// MÉTODOS ESTÁTICOS
+// ============================================
 
 FileSchema.statics.isProtected = function (method) {
   const protectedMethods = [
@@ -1210,7 +1509,59 @@ FileSchema.statics.isProtected = function (method) {
   return protectedMethods.includes(method);
 };
 
-// Nuevos métodos estáticos para rsync
+// Buscar archivos por contrato
+FileSchema.statics.findByContract = function (contractId, options = {}) {
+  const { phase, documentType, status, currentVersionOnly = false } = options;
+
+  let query = { contract: contractId, isActive: true };
+
+  if (phase) query.phase = phase;
+  if (documentType) query.documentType = documentType.toUpperCase();
+  if (status) query.status = status.toUpperCase();
+  if (currentVersionOnly) query["versionInfo.isCurrentVersion"] = true;
+
+  return this.find(query).sort({ "audit.uploadDate": -1 });
+};
+
+// Buscar archivos por departamento
+FileSchema.statics.findByDepartment = function (departmentId, options = {}) {
+  const { module, documentType, status, currentVersionOnly = false } = options;
+
+  let query = { department: departmentId, isActive: true };
+
+  if (module) query.module = module.toUpperCase();
+  if (documentType) query.documentType = documentType.toUpperCase();
+  if (status) query.status = status.toUpperCase();
+  if (currentVersionOnly) query["versionInfo.isCurrentVersion"] = true;
+
+  return this.find(query).sort({ "audit.uploadDate": -1 });
+};
+
+// Buscar archivos por módulo
+FileSchema.statics.findByModule = function (module, options = {}) {
+  const { department, status, currentVersionOnly = false } = options;
+
+  let query = { module: module.toUpperCase(), isActive: true };
+
+  if (department) query.department = department;
+  if (status) query.status = status.toUpperCase();
+  if (currentVersionOnly) query["versionInfo.isCurrentVersion"] = true;
+
+  return this.find(query).sort({ "audit.uploadDate": -1 });
+};
+
+// Buscar todas las versiones de un documento
+FileSchema.statics.findAllVersions = function (rootDocumentId) {
+  return this.find({
+    $or: [
+      { _id: rootDocumentId },
+      { "versionInfo.rootDocument": rootDocumentId },
+    ],
+    isActive: true,
+  }).sort({ "versionInfo.version": 1 });
+};
+
+// Buscar documentos pendientes de sincronización
 FileSchema.statics.findPendingSync = function () {
   return this.findActive({
     "storage.storageProvider": "RSYNC",
@@ -1218,14 +1569,16 @@ FileSchema.statics.findPendingSync = function () {
   }).sort({ "rsyncInfo.priority": -1, createdAt: 1 });
 };
 
+// Buscar documentos con sincronización fallida
 FileSchema.statics.findFailedSync = function () {
   return this.findActive({
     "storage.storageProvider": "RSYNC",
     "rsyncInfo.syncStatus": "FAILED",
-    "rsyncInfo.syncRetries": { $lt: 3 }, // Aún con reintentos disponibles
+    "rsyncInfo.syncRetries": { $lt: 3 },
   });
 };
 
+// Buscar documentos sincronizados
 FileSchema.statics.findSyncedFiles = function () {
   return this.findActive({
     "storage.storageProvider": "RSYNC",
@@ -1233,6 +1586,7 @@ FileSchema.statics.findSyncedFiles = function () {
   });
 };
 
+// Obtener estadísticas de rsync
 FileSchema.statics.getRsyncStats = function () {
   return this.aggregate([
     { $match: { "storage.storageProvider": "RSYNC", isActive: true } },
@@ -1247,6 +1601,7 @@ FileSchema.statics.getRsyncStats = function () {
   ]);
 };
 
+// Procesar cola de sincronización
 FileSchema.statics.processRsyncQueue = async function (batchSize = 10) {
   const pendingFiles = await this.findPendingSync().limit(batchSize);
   const results = [];
@@ -1263,21 +1618,9 @@ FileSchema.statics.processRsyncQueue = async function (batchSize = 10) {
   return results;
 };
 
-// Métodos originales mantenidos
-FileSchema.statics.findByContract = function (contractId, options = {}) {
-  const { phase, documentType, status, currentVersionOnly = false } = options;
-
-  let query = { contract: contractId, isActive: true };
-
-  if (phase) query.phase = phase;
-  if (documentType) query.documentType = documentType.toUpperCase();
-  if (status) query.status = status.toUpperCase();
-  if (currentVersionOnly) query["versionInfo.isCurrentVersion"] = true;
-
-  return this.find(query).sort({ "audit.uploadDate": -1 });
-};
-
-// === VIRTUALES EXTENDIDOS ===
+// ============================================
+// VIRTUALES
+// ============================================
 
 FileSchema.virtual("displaySize").get(function () {
   return this.getFileSize() + " MB";
@@ -1312,24 +1655,44 @@ FileSchema.virtual("isRemoteAvailable").get(function () {
   );
 });
 
-// === ÍNDICES ADICIONALES PARA RSYNC ===
+// ============================================
+// ÍNDICES
+// ============================================
 
 FileSchema.index({ systemName: 1 }, { unique: true });
 FileSchema.index({ contract: 1, phase: 1 });
+FileSchema.index({ department: 1, module: 1 });
 FileSchema.index({ "storage.storageProvider": 1 });
 FileSchema.index({ "rsyncInfo.syncStatus": 1 });
 FileSchema.index({ "rsyncInfo.lastSyncSuccess": -1 });
 FileSchema.index({ "rsyncInfo.priority": -1 });
 FileSchema.index({ "rsyncInfo.autoSync": 1 });
+FileSchema.index({ "versionInfo.rootDocument": 1 });
+FileSchema.index({ "versionInfo.parentDocument": 1 });
+FileSchema.index({ "versionInfo.isCurrentVersion": 1 });
+FileSchema.index({ module: 1, status: 1 });
 
-// Índices compuestos para rsync
+// Índices compuestos
 FileSchema.index({
   "storage.storageProvider": 1,
   "rsyncInfo.syncStatus": 1,
   "rsyncInfo.priority": -1,
 });
 
-// === QUERY HELPERS EXTENDIDOS ===
+FileSchema.index({
+  module: 1,
+  department: 1,
+  status: 1,
+});
+
+FileSchema.index({
+  "versionInfo.rootDocument": 1,
+  "versionInfo.version": 1,
+});
+
+// ============================================
+// QUERY HELPERS
+// ============================================
 
 FileSchema.query.rsyncFiles = function () {
   return this.where({ "storage.storageProvider": "RSYNC" });
@@ -1351,9 +1714,26 @@ FileSchema.query.highPriority = function () {
   return this.where({ "rsyncInfo.priority": { $in: ["HIGH", "URGENT"] } });
 };
 
-// === HOOKS Y PLUGINS ===
+FileSchema.query.currentVersions = function () {
+  return this.where({ "versionInfo.isCurrentVersion": true });
+};
 
-// Plugin de paginación
+FileSchema.query.byModule = function (module) {
+  return this.where({ module: module.toUpperCase() });
+};
+
+FileSchema.query.byDepartment = function (departmentId) {
+  return this.where({ department: departmentId });
+};
+
+// ============================================
+// PLUGINS
+// ============================================
+
 FileSchema.plugin(mongoosePaginate);
+
+// ============================================
+// EXPORTAR MODELO
+// ============================================
 
 export const File = mongoose.model("File", FileSchema);
