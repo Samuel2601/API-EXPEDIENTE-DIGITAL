@@ -9,8 +9,16 @@ import { ContractConfigurationController } from "../controllers/contract-configu
 import { auth, verifyModuleAccess } from "#src/middlewares/auth.js";
 import { requirePermission } from "#src/middlewares/permission.middleware.js";
 
+import { FileController } from "../controllers/file.controller.js";
+
+import {
+  rsyncContractDocuments,
+  autoAddRsyncResponse,
+} from "#src/middlewares/rsync.middleware.js";
+
 const router = Router();
 const controller = new ContractConfigurationController();
+const file = new FileController();
 
 // =============================================================================
 // MIDDLEWARES DE AUTENTICACIÓN Y PERMISOS
@@ -19,6 +27,8 @@ const controller = new ContractConfigurationController();
 // Middleware de autenticación para todas las rutas
 router.use(auth);
 router.use(verifyModuleAccess);
+// ✨ Agregar automáticamente información de rsync a todas las respuestas JSON
+router.use(autoAddRsyncResponse);
 
 // =============================================================================
 // ENDPOINTS PARA TIPOS DE CONTRATACIÓN
@@ -129,6 +139,8 @@ router.put(
     errorMessage:
       "Solo los administradores pueden actualizar fases de contratación",
   }),*/
+  file.uploadMiddleware,
+  rsyncContractDocuments,
   controller.updateContractPhase
 );
 

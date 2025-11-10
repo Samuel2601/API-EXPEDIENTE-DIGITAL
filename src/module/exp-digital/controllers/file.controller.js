@@ -29,7 +29,7 @@ export class FileController {
     // Configurar middleware de archivos para documentos
     this.uploadMiddleware = crearMiddlewareArchivos({
       destino: "expediente-digital",
-      maxTamaño: 50, // 50MB para documentos
+      maxTamaño: 100, // 100MB para documentos
       campoNombre: "files",
       maxArchivos: 10,
       tiposPermitidos: [

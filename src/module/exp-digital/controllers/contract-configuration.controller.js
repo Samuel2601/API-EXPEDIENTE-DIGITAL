@@ -441,13 +441,15 @@ export class ContractConfigurationController {
    */
   updateContractPhase = async (req, res) => {
     try {
-      const { body, user, params } = req;
+      const { body, user, params, files } = req;
       const { id } = params;
 
       console.log(
         `📝 Usuario ${user.userId} actualizando fase de contratación: ${id}`
       );
-      console.log(body);
+      console.log(JSON.stringify(body, null, 3));
+      console.log(JSON.stringify(files, null, 3));
+
       validateObjectId(id, "ID de la fase de contratación");
 
       const updatedPhase = await this.configService.updateContractPhase(
