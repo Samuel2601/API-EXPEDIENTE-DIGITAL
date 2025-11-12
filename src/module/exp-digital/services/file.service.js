@@ -710,7 +710,7 @@ export class FileService {
    * @param {Object} options - Opciones de eliminación
    * @returns {Promise<Object>} Resultado de la eliminación
    */
-  async deleteFile(fileId, options = {}, userData = {}) {
+  async deleteFile(fileId, options = {}, userData = {}, forcedelete = false) {
     try {
       validateObjectId(fileId, "ID del archivo");
 
@@ -748,6 +748,19 @@ export class FileService {
         },
         userData
       );
+
+      if (forcedelete) {
+        console.log(`🗑️ Archivo eliminado FORZADA: ${file.originalName}`);
+        deletedFile.deletedAt = new Date();
+
+        return {
+          fileName: file.originalName,
+          systemName: file.systemName,
+          deletedAt: new Date(),
+          deletionResults,
+          reason,
+        };
+      }
 
       // Eliminar archivos físicos si se solicita
       const deletionResults = {

@@ -410,6 +410,7 @@ export class FileController {
         deleteLocal = false,
         deleteRemote = false,
         reason = "Eliminación solicitada por usuario",
+        forcedelete = false,
       } = body;
 
       console.log(`🗑️ Usuario ${user.userId} eliminando archivo: ${id}`);
@@ -426,7 +427,8 @@ export class FileController {
           deletedBy: user.userId,
           reason,
         },
-        user
+        user,
+        forcedelete
       );
 
       console.log(`✅ Archivo eliminado: ${result.fileName}`);
