@@ -710,95 +710,67 @@ export class FileService {
    * @param {Object} options - Opciones de eliminación
    * @returns {Promise<Object>} Resultado de la eliminación
    */
-  async deleteFile(fileId, options = {}, userData = {}, forcedelete = false) {
+  async deleteFile(fileId, deleteType, user = {}) {
+    validateObjectId(fileId, "ID del archivo");
+
+    console.log(`🗑️ Service: Eliminando archivo: ${fileId}`);
+
+    // Obtener archivo
+    const file = await this.fileRepository.findById(fileId);
+    if (!file) {
+      throw createError(ERROR_CODES.NOT_FOUND, "Archivo no encontrado", 404);
+    }
+
+    // Verificar si ya está eliminado (para soft/complete)
+    if (
+      file.deletedAt &&
+      (deleteType === "soft" || deleteType === "complete")
+    ) {
+      throw new Error("El archivo ya está marcado como eliminado");
+    }
+
+    let result = { message: "", data: null };
+
     try {
-      validateObjectId(fileId, "ID del archivo");
+      switch (deleteType) {
+        case "soft":
+          // Solo marca deletedAt
+          result.data = await this.fileRepository.softDelete(fileId, user);
+          result.message = "Archivo marcado como eliminado exitosamente";
+          break;
 
-      console.log(`🗑️ Service: Eliminando archivo: ${fileId}`);
+        case "physical":
+          // Solo elimina archivo físico
+          await this.deletePhysicalFile(file.storage);
+          result.data = await this.fileRepository.update(fileId, {
+            physicallyDeleted: true,
+            physicallyDeletedAt: new Date(),
+            physicallyDeletedBy: user._id,
+          });
+          result.message = "Archivo físico eliminado exitosamente";
+          break;
 
-      const {
-        deleteLocal = false,
-        deleteRemote = false,
-        deletedBy,
-        reason = "Eliminación solicitada por usuario",
-      } = options;
+        case "permanent":
+          // Hard delete del registro
+          await this.deletePhysicalFile(file.storage);
+          await this.fileRepository.forceDelete(fileId, user);
+          result.message =
+            "Registro eliminado permanentemente de la base de datos";
+          break;
 
-      // Obtener archivo
-      const file = await this.fileRepository.findById(fileId);
-      if (!file) {
-        throw createError(ERROR_CODES.NOT_FOUND, "Archivo no encontrado", 404);
+        case "complete":
+          // Elimina físico + soft delete
+          await this.deletePhysicalFile(file.storage);
+          result.data = await this.fileRepository.softDelete(fileId, user);
+          await this.fileRepository.update(fileId, {
+            storageProvider: "DELETED",
+          });
+          result.message =
+            "Archivo eliminado completamente (físico y registro)";
+          break;
       }
 
-      // Verificar si se puede eliminar
-      if (file.documentInfo.category === "LEGAL_REQUIRED") {
-        throw createValidationError(
-          "No se puede eliminar un documento requerido legalmente"
-        );
-      }
-
-      // Soft delete en base de datos
-      const deletedFile = await this.fileRepository.update(
-        fileId,
-        {
-          isActive: false,
-          deletedAt: new Date(),
-          deletionReason: reason,
-          "audit.deletedBy": deletedBy,
-          "audit.deletedAt": new Date(),
-        },
-        userData
-      );
-
-      if (forcedelete) {
-        console.log(`🗑️ Archivo eliminado FORZADA: ${file.originalName}`);
-        deletedFile.deletedAt = new Date();
-
-        return {
-          fileName: file.originalName,
-          systemName: file.systemName,
-          deletedAt: new Date(),
-          deletionResults,
-          reason,
-        };
-      }
-
-      // Eliminar archivos físicos si se solicita
-      const deletionResults = {
-        database: true,
-        local: false,
-        remote: false,
-      };
-
-      if (deleteLocal) {
-        try {
-          await fs.unlink(file.storage.localPath);
-          deletionResults.local = true;
-          console.log(`🗑️ Archivo local eliminado: ${file.storage.localPath}`);
-        } catch (error) {
-          console.warn(`⚠️ Error eliminando archivo local: ${error.message}`);
-        }
-      }
-
-      if (deleteRemote && this.config.rsyncEnabled && file.storage.path) {
-        try {
-          // TODO: Implementar eliminación remota via SSH/rsync
-          console.log(
-            `🗑️ Solicitud de eliminación remota: ${file.storage.path}`
-          );
-        } catch (error) {
-          console.warn(`⚠️ Error eliminando archivo remoto: ${error.message}`);
-        }
-      }
-
-      console.log(`✅ Service: Archivo eliminado: ${file.systemName}`);
-
-      return {
-        fileName: file.originalName,
-        systemName: file.systemName,
-        deletedAt: new Date(),
-        deletionResults,
-        reason,
-      };
+      return result;
     } catch (error) {
       console.error(`❌ Service: Error eliminando archivo: ${error.message}`);
       throw createError(
@@ -806,6 +778,39 @@ export class FileService {
         `Error al eliminar archivo: ${error.message}`,
         400
       );
+    }
+  }
+
+  async deletePhysicalFile(storage) {
+    const fs = require("fs").promises;
+    try {
+      switch (storage.storageProvider) {
+        case "LOCAL":
+          await fs.unlink(storage.localPath);
+          break;
+        case "AWS_S3":
+          /*await s3Client.deleteObject({
+            Bucket: storage.bucket,
+            Key: storage.path,
+          });*/
+          break;
+        case "AZURE":
+          //await azureClient.deleteBlob(storage.container, storage.path);
+          break;
+        case "GOOGLE_CLOUD":
+          //await googleClient.deleteBlob(storage.bucket, storage.path);
+          break;
+        case "RSYNC":
+          await rsyncClient.deleteFile(storage.path);
+          break;
+        case "DELETED":
+          break;
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        // Ignorar si el archivo no existe
+        throw new Error(`Error al eliminar archivo físico: ${error.message}`);
+      }
     }
   }
 

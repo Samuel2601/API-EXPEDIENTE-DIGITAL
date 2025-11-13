@@ -527,7 +527,7 @@ export const FileJSON = {
 
     storageProvider: {
       type: String,
-      enum: ["LOCAL", "AWS_S3", "AZURE", "GOOGLE_CLOUD", "RSYNC"],
+      enum: ["LOCAL", "AWS_S3", "AZURE", "GOOGLE_CLOUD", "RSYNC", "DELETED"],
       default: "LOCAL",
       uppercase: true,
     },

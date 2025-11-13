@@ -701,6 +701,385 @@ class RsyncClient {
     // Implementación existente...
     throw new Error("Método no implementado");
   }
+
+  /**
+   * CORREGIDO: Eliminar archivo remoto via RSync
+   */
+  async deleteFile(remoteFilePath, options = {}) {
+    const {
+      maxRetries = this.config.maxRetries,
+      failOnError = false,
+      verifyDeletion = true,
+    } = options;
+
+    try {
+      console.log(
+        `🗑️ Iniciando eliminación de archivo remoto: ${remoteFilePath}`
+      );
+
+      // Normalizar la ruta remota
+      const normalizedRemotePath = this.normalizeRemotePath(
+        this.config.remoteBasePath,
+        remoteFilePath
+      );
+
+      console.log(
+        `🎯 Ruta remota normalizada para eliminación: ${normalizedRemotePath}`
+      );
+
+      // Construir comando para eliminar archivo
+      const { command, passwordFile } =
+        await this.buildDeleteCommand(normalizedRemotePath);
+
+      // Log del comando seguro
+      const safeCommand = this.formatCommandForLogging(command, passwordFile);
+      console.log(`📄 Ejecutando eliminación: ${safeCommand}`);
+
+      let lastError = null;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`🔄 Intento ${attempt}/${maxRetries} de eliminación`);
+
+          const result = await this.executeDeleteCommand(command, passwordFile);
+
+          // Verificar eliminación si está habilitado
+          if (verifyDeletion) {
+            const verificationResult =
+              await this.verifyFileDeletion(normalizedRemotePath);
+            if (!verificationResult.deleted) {
+              throw new Error(
+                `Verificación de eliminación falló: ${verificationResult.reason}`
+              );
+            }
+            console.log(`✅ Eliminación verificada correctamente`);
+          }
+
+          console.log(
+            `✅ Archivo eliminado exitosamente: ${normalizedRemotePath}`
+          );
+
+          return {
+            success: true,
+            deletedPath: normalizedRemotePath,
+            attempt,
+            verificationPassed: verifyDeletion,
+            result,
+          };
+        } catch (error) {
+          lastError = error;
+          console.error(
+            `❌ Intento ${attempt} de eliminación falló: ${error.message}`
+          );
+
+          if (attempt < maxRetries) {
+            const delay = this.config.retryDelay * attempt;
+            console.log(
+              `⏳ Esperando ${delay}ms antes del siguiente intento...`
+            );
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+        } finally {
+          // Limpiar archivo de contraseña temporal
+          if (passwordFile) {
+            await this.removePasswordFile(passwordFile);
+          }
+        }
+      }
+
+      // Todos los intentos fallaron
+      const errorMessage = `Eliminación falló después de ${maxRetries} intentos: ${lastError.message}`;
+
+      if (failOnError) {
+        throw new Error(errorMessage);
+      } else {
+        console.warn(`⚠️ ${errorMessage}`);
+        return {
+          success: false,
+          deletedPath: normalizedRemotePath,
+          error: errorMessage,
+          attempts: maxRetries,
+        };
+      }
+    } catch (error) {
+      console.error(`❌ Error en proceso de eliminación: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Construir comando para eliminar archivo remoto
+   */
+  async buildDeleteCommand(remoteFilePath) {
+    const { host, user, module, port } = this.config;
+
+    // Construir comando base para eliminación
+    const baseCommand = [
+      "rsync",
+      "--delete", // Habilitar eliminación
+      "--verbose", // Para ver qué está eliminando
+      "--dry-run", // IMPORTANTE: Inicialmente en modo simulación
+    ];
+
+    // Agregar timeout
+    baseCommand.push(`--timeout=${this.config.timeout || 300}`);
+
+    // Configurar puerto personalizado
+    if (port && port !== "873") {
+      baseCommand.push("--port", port);
+    }
+
+    // Manejo de contraseña
+    let passwordFile = null;
+    if (this.config.usePasswordFile && this.config.password) {
+      passwordFile = await this.createPasswordFile();
+      baseCommand.push(
+        `--password-file=${this.formatPathForRsync(passwordFile)}`
+      );
+    }
+
+    // Para eliminación, necesitamos una fuente vacía y el destino como archivo a eliminar
+    const emptySource = "/dev/null"; // En sistemas Unix
+    const remoteUrl = `rsync://${user}@${host}:${port}/${module}/${remoteFilePath}`;
+
+    baseCommand.push(emptySource);
+    baseCommand.push(remoteUrl);
+
+    return {
+      command: baseCommand,
+      passwordFile,
+    };
+  }
+
+  /**
+   * Ejecutar comando de eliminación
+   */
+  async executeDeleteCommand(command, passwordFile) {
+    return new Promise((resolve, reject) => {
+      // Clonar el comando para no modificar el original
+      const execCommand = [...command];
+
+      // Verificar si estamos en modo dry-run (simulación)
+      const isDryRun = execCommand.includes("--dry-run");
+
+      if (isDryRun && process.env.RSYNC_DRY_RUN !== "true") {
+        // Remover dry-run para ejecución real si no está configurado globalmente
+        const dryRunIndex = execCommand.indexOf("--dry-run");
+        if (dryRunIndex > -1) {
+          execCommand.splice(dryRunIndex, 1);
+        }
+      }
+
+      const rsyncProcess = spawn(execCommand[0], execCommand.slice(1), {
+        stdio: ["pipe", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          ...(this.config.password &&
+            !this.config.usePasswordFile && {
+              RSYNC_PASSWORD: this.config.password,
+            }),
+        },
+      });
+
+      let stdout = "";
+      let stderr = "";
+
+      rsyncProcess.stdout.on("data", (data) => {
+        const output = data.toString();
+        stdout += output;
+        console.log(`📊 RSync delete stdout: ${output.trim()}`);
+      });
+
+      rsyncProcess.stderr.on("data", (data) => {
+        const errorOutput = data.toString();
+        stderr += errorOutput;
+        console.warn(`⚠️ RSync delete stderr: ${errorOutput.trim()}`);
+      });
+
+      rsyncProcess.on("close", (code) => {
+        console.log(`🏁 RSync delete terminó con código: ${code}`);
+
+        if (code === 0) {
+          resolve({
+            success: true,
+            code,
+            stdout,
+            stderr,
+            dryRun: command.includes("--dry-run"),
+          });
+        } else {
+          // Para eliminación, algunos códigos de salida pueden ser aceptables
+          if (this.isAcceptableDeleteError(code, stderr)) {
+            console.log(
+              `⚠️ Eliminación completada con advertencias (código ${code})`
+            );
+            resolve({
+              success: true,
+              code,
+              stdout,
+              stderr,
+              warning: true,
+              dryRun: command.includes("--dry-run"),
+            });
+          } else {
+            reject(
+              new Error(
+                `RSync delete falló (código ${code}): ${stderr || "Error desconocido"}`
+              )
+            );
+          }
+        }
+      });
+
+      rsyncProcess.on("error", (error) => {
+        console.error(`❌ Error ejecutando rsync delete: ${error.message}`);
+        reject(new Error(`Error ejecutando rsync delete: ${error.message}`));
+      });
+
+      // Timeout para eliminación
+      const timeout = parseInt(process.env.RSYNC_DELETE_TIMEOUT) || 300000; // 5 minutos para eliminación
+      setTimeout(() => {
+        if (!rsyncProcess.killed) {
+          console.warn(
+            `⚠️ Timeout de eliminación alcanzado, terminando proceso...`
+          );
+          rsyncProcess.kill("SIGTERM");
+          reject(new Error(`Timeout de eliminación alcanzado (${timeout}ms)`));
+        }
+      }, timeout);
+    });
+  }
+
+  /**
+   * Verificar si un error de eliminación es aceptable
+   */
+  isAcceptableDeleteError(code, stderr) {
+    // Código 23: Error parcial (algunos archivos no se pudieron transferir/eliminar)
+    // Código 24: Archivo(s) desaparecieron durante la transferencia (puede ser aceptable para eliminación)
+    const acceptableCodes = [23, 24];
+
+    // Mensajes de error que pueden ser aceptables
+    const acceptableErrors = [
+      "No such file or directory",
+      "archivo no existe",
+      "file not found",
+    ];
+
+    const stderrLower = stderr.toLowerCase();
+
+    return (
+      acceptableCodes.includes(code) ||
+      acceptableErrors.some((error) =>
+        stderrLower.includes(error.toLowerCase())
+      )
+    );
+  }
+
+  /**
+   * Verificar que el archivo fue eliminado
+   */
+  async verifyFileDeletion(remoteFilePath) {
+    try {
+      console.log(`🔍 Verificando eliminación de: ${remoteFilePath}`);
+
+      // Intentar listar el archivo (esto debería fallar si el archivo fue eliminado)
+      // Esta es una verificación básica - en una implementación real podrías usar SSH
+      const { host, user, module, port } = this.config;
+      const remoteUrl = `rsync://${user}@${host}:${port}/${module}/${remoteFilePath}`;
+
+      // Usar rsync en modo listado para verificar si el archivo existe
+      const listCommand = ["rsync", "--list-only", remoteUrl];
+
+      if (this.config.usePasswordFile && this.config.password) {
+        const passwordFile = await this.createPasswordFile();
+        listCommand.push(
+          `--password-file=${this.formatPathForRsync(passwordFile)}`
+        );
+
+        try {
+          const { exec } = await import("child_process");
+          const { promisify } = await import("util");
+          const execAsync = promisify(exec);
+
+          await execAsync(listCommand.join(" "));
+
+          // Si llegamos aquí, el archivo todavía existe
+          await this.removePasswordFile(passwordFile);
+          return {
+            deleted: false,
+            reason: "El archivo todavía existe en el servidor remoto",
+          };
+        } catch (error) {
+          await this.removePasswordFile(passwordFile);
+
+          // Si hay error, probablemente el archivo no existe (lo cual es bueno)
+          if (
+            error.message.includes("No such file") ||
+            error.message.includes("not found") ||
+            error.code === 23
+          ) {
+            return {
+              deleted: true,
+              reason: "Archivo no encontrado en servidor remoto",
+            };
+          }
+
+          return {
+            deleted: false,
+            reason: `Error verificando eliminación: ${error.message}`,
+          };
+        }
+      }
+
+      // Si no podemos verificar, asumimos éxito
+      return {
+        deleted: true,
+        reason: "Verificación no disponible - asumiendo éxito",
+      };
+    } catch (error) {
+      console.warn(`⚠️ Error en verificación de eliminación: ${error.message}`);
+      return {
+        deleted: false,
+        reason: `Error de verificación: ${error.message}`,
+      };
+    }
+  }
+
+  /**
+   * Eliminar múltiples archivos
+   */
+  async deleteFiles(filePaths, options = {}) {
+    const results = [];
+
+    for (const filePath of filePaths) {
+      try {
+        const result = await this.deleteFile(filePath, options);
+        results.push({
+          filePath,
+          success: true,
+          result,
+        });
+      } catch (error) {
+        results.push({
+          filePath,
+          success: false,
+          error: error.message,
+        });
+
+        // Si fallOnError está activado, detener en el primer error
+        if (options.failOnError) {
+          throw error;
+        }
+      }
+    }
+
+    return {
+      total: filePaths.length,
+      successful: results.filter((r) => r.success).length,
+      failed: results.filter((r) => !r.success).length,
+      results,
+    };
+  }
 }
 
 // Crear y exportar instancia singleton

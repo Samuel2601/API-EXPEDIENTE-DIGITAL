@@ -404,43 +404,28 @@ export class FileController {
    */
   deleteFile = async (req, res) => {
     try {
-      const { user, params, body } = req;
-      const { id } = params;
-      const {
-        deleteLocal = false,
-        deleteRemote = false,
-        reason = "Eliminación solicitada por usuario",
-        forcedelete = false,
-      } = body;
+      const { id } = req.params;
+      const { deleteType = "soft" } = req.query; // soft, physical, permanent, complete
 
-      console.log(`🗑️ Usuario ${user.userId} eliminando archivo: ${id}`);
-
-      validateObjectId(id, "ID del archivo");
-
-      // TODO: Verificar que el usuario sea propietario o tenga permisos especiales
+      // Validar deleteType
+      const validTypes = ["soft", "physical", "permanent", "complete"];
+      if (!validTypes.includes(deleteType)) {
+        return res.status(400).json({
+          success: false,
+          message: `Tipo de eliminación inválido. Valores permitidos: ${validTypes.join(", ")}`,
+        });
+      }
 
       const result = await this.fileService.deleteFile(
         id,
-        {
-          deleteLocal: deleteLocal === true,
-          deleteRemote: deleteRemote === true,
-          deletedBy: user.userId,
-          reason,
-        },
-        user,
-        forcedelete
+        deleteType,
+        req.user
       );
-
-      console.log(`✅ Archivo eliminado: ${result.fileName}`);
 
       res.status(200).json({
         success: true,
-        data: result,
-        message: "Archivo eliminado exitosamente",
-        metadata: {
-          deletedBy: user.userId,
-          deletedAt: new Date(),
-        },
+        message: result.message,
+        data: result.data,
       });
     } catch (error) {
       console.error(`❌ Error eliminando archivo: ${error.message}`);
